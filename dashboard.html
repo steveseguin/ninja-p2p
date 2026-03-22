@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NinjaClawd P2P Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --fg:#e6edf3;--fg2:#8b949e;--accent:#58a6ff;--green:#3fb950;
+  --red:#f85149;--yellow:#d29922;--purple:#bc8cff;
+  --font:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:13px;line-height:1.5;display:flex;height:100vh;overflow:hidden}
+a{color:var(--accent);text-decoration:none}
+button{font-family:var(--font);cursor:pointer;font-size:12px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);border-radius:6px;padding:4px 12px;transition:background .15s}
+button:hover{background:var(--border)}
+button.primary{background:var(--accent);color:#000;border-color:var(--accent)}
+button.primary:hover{opacity:.85}
+input,select{font-family:var(--font);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+
+/* Layout */
+#sidebar{width:240px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+#sidebar h1{font-size:14px;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+#sidebar h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0}
+#sidebar h1 .dot.on{background:var(--green)}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* Connection Panel */
+#conn-panel{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg2)}
+#conn-panel label{display:block;font-size:11px;color:var(--fg2);margin-bottom:2px;margin-top:8px}
+#conn-panel label:first-child{margin-top:0}
+#conn-panel input{width:100%;margin-bottom:2px}
+#conn-panel .row{display:flex;gap:6px;margin-top:10px}
+#conn-panel .row button{flex:1}
+#conn-panel .status{font-size:11px;color:var(--fg2);margin-top:6px;text-align:center}
+
+/* Peer List */
+#peer-section{flex:1;overflow-y:auto;padding:8px 0}
+#peer-section h2{font-size:11px;color:var(--fg2);padding:4px 16px;text-transform:uppercase;letter-spacing:.5px}
+.peer-item{padding:6px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+.peer-item:hover{background:var(--bg3)}
+.peer-item.selected{background:var(--bg3);border-left:2px solid var(--accent)}
+.peer-item .indicator{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.peer-item .indicator.online{background:var(--green)}
+.peer-item .indicator.offline{background:var(--fg2)}
+.peer-item .info{min-width:0}
+.peer-item .name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.peer-item .role{font-size:10px;color:var(--fg2)}
+
+/* Main content */
+#messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.msg{padding:2px 0;word-break:break-word}
+.msg .ts{color:var(--fg2);font-size:11px;margin-right:6px}
+.msg .sender{font-weight:600;margin-right:4px}
+.msg.type-chat .sender{color:var(--accent)}
+.msg.type-announce .sender{color:var(--green)}
+.msg.type-event .sender{color:var(--purple)}
+.msg.type-command .sender{color:var(--yellow)}
+.msg.type-command_response .sender{color:var(--yellow)}
+.msg.type-system{color:var(--fg2);font-style:italic}
+.msg.type-system .sender{color:var(--fg2)}
+.msg .body{color:var(--fg)}
+.msg .meta{color:var(--fg2);font-size:11px}
+
+/* Chat Input */
+#chat-bar{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:6px;align-items:center}
+#chat-bar input{flex:1}
+#chat-bar select{width:auto;min-width:100px}
+
+/* Skills panel */
+#skills-panel{padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--fg2);max-height:80px;overflow-y:auto}
+.skill-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
+
+/* Responsive */
+@media(max-width:600px){
+  #sidebar{width:100%;height:auto;max-height:40vh;border-right:none;border-bottom:1px solid var(--border)}
+  body{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1><span class="dot" id="conn-dot"></span> NinjaClawd</h1>
+
+  <div id="conn-panel">
+    <label>Room</label>
+    <input id="inp-room" placeholder="clawd_..." autocomplete="off">
+    <label>Password</label>
+    <input id="inp-password" placeholder="false = no encryption" autocomplete="off">
+    <label>Your Name</label>
+    <input id="inp-name" value="Dashboard" autocomplete="off">
+    <div class="row">
+      <button class="primary" id="btn-connect">Connect</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+    <div class="status" id="conn-status">Disconnected</div>
+  </div>
+
+  <div id="peer-section">
+    <h2>Peers (<span id="peer-count">0</span>)</h2>
+    <div id="peer-list"></div>
+  </div>
+
+  <div id="skills-panel"></div>
+</div>
+
+<div id="main">
+  <div id="messages"></div>
+  <div id="chat-bar">
+    <select id="chat-target">
+      <option value="">Broadcast</option>
+    </select>
+    <input id="chat-input" placeholder="Type a message... (/help for commands)" autocomplete="off">
+    <button class="primary" id="btn-send">Send</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@latest/vdoninja-sdk.min.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let sdk = null;
+  let connected = false;
+  let myStreamId = '';
+  let myIdentity = null;
+  const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
+  const messages = [];
+  const MAX_MESSAGES = 500;
+  let selectedPeer = ''; // empty = broadcast
+
+  // ── DOM refs ───────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const dot = $('conn-dot');
+  const statusEl = $('conn-status');
+  const peerCountEl = $('peer-count');
+  const peerListEl = $('peer-list');
+  const messagesEl = $('messages');
+  const chatInput = $('chat-input');
+  const chatTarget = $('chat-target');
+  const skillsPanel = $('skills-panel');
+  const btnConnect = $('btn-connect');
+  const btnDisconnect = $('btn-disconnect');
+  const btnSend = $('btn-send');
+  const inpRoom = $('inp-room');
+  const inpPassword = $('inp-password');
+  const inpName = $('inp-name');
+
+  // ── URL params ─────────────────────────────────────────────────────────
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('room')) inpRoom.value = params.get('room');
+  if (params.get('password')) inpPassword.value = params.get('password');
+  if (params.get('name')) inpName.value = params.get('name');
+
+  // Restore from localStorage
+  if (!inpRoom.value) inpRoom.value = localStorage.getItem('clawd_room') || '';
+  if (!inpPassword.value) inpPassword.value = localStorage.getItem('clawd_password') || 'false';
+  if (!inpName.value || inpName.value === 'Dashboard') inpName.value = localStorage.getItem('clawd_name') || 'Dashboard';
+
+  // ── Helpers ────────────────────────────────────────────────────────────
+  function randomId() {
+    const arr = new Uint8Array(8);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function instanceId() {
+    return randomId().slice(0, 8);
+  }
+
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── Message Display ────────────────────────────────────────────────────
+  function addMessage(type, sender, body, ts, meta) {
+    const msg = { type, sender, body, ts: ts || Date.now(), meta };
+    messages.push(msg);
+    if (messages.length > MAX_MESSAGES) messages.shift();
+    renderMessage(msg);
+  }
+
+  function renderMessage(msg) {
+    const div = document.createElement('div');
+    div.className = 'msg type-' + msg.type;
+    let html = '<span class="ts">' + fmtTime(msg.ts) + '</span>';
+    html += '<span class="sender">' + escHtml(msg.sender) + '</span> ';
+    html += '<span class="body">' + escHtml(String(msg.body)) + '</span>';
+    if (msg.meta) html += ' <span class="meta">' + escHtml(msg.meta) + '</span>';
+    div.innerHTML = html;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // ── Peer List ──────────────────────────────────────────────────────────
+  function renderPeers() {
+    peerListEl.innerHTML = '';
+    peerCountEl.textContent = peers.size;
+    // Update chat target dropdown
+    const curVal = chatTarget.value;
+    chatTarget.innerHTML = '<option value="">Broadcast</option>';
+
+    for (const [sid, p] of peers) {
+      // Peer list item
+      const div = document.createElement('div');
+      div.className = 'peer-item' + (sid === selectedPeer ? ' selected' : '');
+      const name = p.identity?.name || sid;
+      const role = p.identity?.role || 'unknown';
+      div.innerHTML = `
+        <div class="indicator ${p.connected ? 'online' : 'offline'}"></div>
+        <div class="info">
+          <div class="name">${escHtml(name)}</div>
+          <div class="role">${escHtml(role)}${p.status && p.status !== 'online' ? ' - ' + escHtml(p.status) : ''}</div>
+        </div>`;
+      div.addEventListener('click', () => {
+        selectedPeer = selectedPeer === sid ? '' : sid;
+        chatTarget.value = selectedPeer;
+        renderPeers();
+        renderSkills();
+      });
+      peerListEl.appendChild(div);
+
+      // Chat target option
+      const opt = document.createElement('option');
+      opt.value = sid;
+      opt.textContent = name;
+      chatTarget.appendChild(opt);
+    }
+    chatTarget.value = curVal || '';
+  }
+
+  function renderSkills() {
+    if (!selectedPeer) {
+      skillsPanel.innerHTML = '';
+      return;
+    }
+    const p = peers.get(selectedPeer);
+    if (!p || !p.skills || p.skills.length === 0) {
+      skillsPanel.innerHTML = '<em>No skills announced</em>';
+      return;
+    }
+    skillsPanel.innerHTML = '<strong>Skills:</strong> ' +
+      p.skills.map(s => '<span class="skill-tag">' + escHtml(s) + '</span>').join('');
+  }
+
+  // ── Envelope Protocol ──────────────────────────────────────────────────
+  function createEnvelope(type, payload, opts) {
+    return {
+      v: 1,
+      id: randomId(),
+      type: type,
+      from: myIdentity,
+      to: (opts && opts.to) || null,
+      topic: (opts && opts.topic) || null,
+      ts: Date.now(),
+      payload: payload
+    };
+  }
+
+  function parseEnvelope(data) {
+    try {
+      const obj = typeof data === 'string' ? JSON.parse(data) : data;
+      if (obj && obj.v === 1 && typeof obj.type === 'string' && obj.from) return obj;
+      return null;
+    } catch(e) { return null; }
+  }
+
+  // ── Connection ─────────────────────────────────────────────────────────
+  async function doConnect() {
+    const room = inpRoom.value.trim();
+    if (!room) { alert('Room name is required'); return; }
+
+    const pw = inpPassword.value.trim();
+    const password = pw === 'false' ? false : (pw || undefined);
+    const name = inpName.value.trim() || 'Dashboard';
+    myStreamId = 'dashboard_' + randomId().slice(0, 8);
+    myIdentity = {
+      streamId: myStreamId,
+      role: 'dashboard',
+      name: name,
+      instanceId: instanceId()
+    };
+
+    // Save to localStorage
+    localStorage.setItem('clawd_room', room);
+    localStorage.setItem('clawd_password', inpPassword.value.trim());
+    localStorage.setItem('clawd_name', name);
+
+    statusEl.textContent = 'Connecting...';
+    btnConnect.disabled = true;
+
+    try {
+      sdk = new VDONinjaSDK({
+        host: 'wss://wss.vdo.ninja',
+        debug: false
+      });
+
+      // Wire events
+      sdk.addEventListener('peerConnected', (e) => {
+        const uuid = e.detail?.uuid || 'unknown';
+        const sid = e.detail?.streamID || uuid;
+        if (!peers.has(sid)) {
+          peers.set(sid, { uuid, identity: null, skills: [], status: 'online', connected: true });
+        } else {
+          const p = peers.get(sid);
+          p.uuid = uuid;
+          p.connected = true;
+        }
+        renderPeers();
+      });
+
+      sdk.addEventListener('dataChannelOpen', (e) => {
+        const uuid = e.detail?.uuid;
+        // Send our announce
+        const announce = createEnvelope('announce', {
+          skills: ['dashboard-ui', 'chat'],
+          status: 'online',
+          version: '0.1.0',
+          topics: ['events', 'bots', 'support']
+        });
+        try { sdk.sendData(announce, { UUID: uuid }); } catch(err) {}
+      });
+
+      sdk.addEventListener('dataReceived', (e) => {
+        const raw = e.detail?.data;
+        const uuid = e.detail?.uuid || '';
+        const env = parseEnvelope(raw);
+        if (!env) return;
+
+        const sender = env.from.streamId;
+        // Update peer info
+        if (!peers.has(sender)) {
+          peers.set(sender, { uuid, identity: env.from, skills: [], status: 'online', connected: true });
+        }
+
+        switch (env.type) {
+          case 'announce': {
+            const p = peers.get(sender);
+            if (p) {
+              p.identity = env.from;
+              p.skills = env.payload?.skills || [];
+              p.status = env.payload?.status || 'online';
+            }
+            addMessage('announce', env.from.name || sender,
+              `joined as ${env.from.role || '?'} with skills: ${(env.payload?.skills || []).join(', ')}`,
+              env.ts);
+            renderPeers();
+            renderSkills();
+            break;
+          }
+          case 'skill_update': {
+            const p = peers.get(sender);
+            if (p) {
+              p.skills = env.payload?.skills || p.skills;
+              p.status = env.payload?.status || p.status;
+            }
+            addMessage('event', env.from.name || sender,
+              `status: ${env.payload?.status || '?'}${env.payload?.statusDetail ? ' - ' + env.payload.statusDetail : ''}`,
+              env.ts);
+            renderPeers();
+            renderSkills();
+            break;
+          }
+          case 'chat':
+            addMessage('chat', env.from.name || sender,
+              env.payload?.text || env.payload?.message || JSON.stringify(env.payload),
+              env.ts,
+              env.topic ? '[' + env.topic + ']' : undefined);
+            break;
+          case 'event':
+            addMessage('event', env.from.name || sender,
+              env.payload?.kind ? env.payload.kind + ': ' + JSON.stringify(env.payload) : JSON.stringify(env.payload),
+              env.ts,
+              env.topic ? '[' + env.topic + ']' : undefined);
+            break;
+          case 'command':
+            addMessage('command', env.from.name || sender,
+              'CMD: ' + (env.payload?.command || '?') + ' ' + JSON.stringify(env.payload?.args || {}),
+              env.ts);
+            break;
+          case 'command_response':
+            addMessage('command_response', env.from.name || sender,
+              JSON.stringify(env.payload, null, 2),
+              env.ts);
+            break;
+          case 'ping':
+            // Auto-respond with pong
+            try {
+              const pong = createEnvelope('pong', { pingId: env.id, pongTs: Date.now() }, { to: sender });
+              sdk.sendData(pong, { UUID: uuid });
+            } catch(err) {}
+            break;
+          case 'history_replay': {
+            // Replay contains an original message as payload
+            const orig = env.payload;
+            if (orig && orig.type) {
+              addMessage(orig.type, (orig.from?.name || 'replay'),
+                orig.payload?.text || orig.payload?.message || JSON.stringify(orig.payload),
+                orig.ts,
+                '[replay]');
+            }
+            break;
+          }
+          default:
+            addMessage(env.type, env.from.name || sender,
+              JSON.stringify(env.payload),
+              env.ts);
+        }
+      });
+
+      sdk.addEventListener('peerDisconnected', (e) => {
+        const uuid = e.detail?.uuid || '';
+        const sid = e.detail?.streamID || '';
+        // Find by uuid if no streamID
+        let key = sid;
+        if (!key) {
+          for (const [k, v] of peers) { if (v.uuid === uuid) { key = k; break; } }
+        }
+        if (key && peers.has(key)) {
+          const p = peers.get(key);
+          const name = p.identity?.name || key;
+          p.connected = false;
+          addMessage('system', name, 'disconnected', Date.now());
+          renderPeers();
+        }
+      });
+
+      sdk.addEventListener('listing', (e) => {
+        const list = e.detail?.list || [];
+        for (const entry of list) {
+          if (entry.streamID && entry.streamID !== myStreamId) {
+            sdk.view(entry.streamID, { audio: false, video: false });
+          }
+        }
+      });
+
+      sdk.addEventListener('disconnected', () => {
+        statusEl.textContent = 'WebSocket lost, reconnecting...';
+        dot.classList.remove('on');
+      });
+
+      sdk.addEventListener('reconnected', () => {
+        statusEl.textContent = 'Reconnected';
+        dot.classList.add('on');
+      });
+
+      // Connect
+      await sdk.connect();
+      const joinOpts = { room: room };
+      if (password !== undefined) joinOpts.password = password;
+      await sdk.joinRoom(joinOpts);
+      await sdk.announce({ streamID: myStreamId });
+
+      connected = true;
+      dot.classList.add('on');
+      statusEl.textContent = 'Connected as ' + myStreamId;
+      btnConnect.disabled = true;
+      btnDisconnect.disabled = false;
+      inpRoom.disabled = true;
+      inpPassword.disabled = true;
+
+      addMessage('system', 'System', 'Connected to room: ' + room, Date.now());
+
+      // Request history from any peers
+      setTimeout(() => {
+        if (sdk && connected) {
+          const req = createEnvelope('history_request', { count: 50 });
+          try { sdk.sendData(req); } catch(err) {}
+        }
+      }, 2000);
+
+    } catch(err) {
+      statusEl.textContent = 'Error: ' + err.message;
+      btnConnect.disabled = false;
+      console.error('Connection error:', err);
+    }
+  }
+
+  function doDisconnect() {
+    if (sdk) {
+      try { sdk.leaveRoom(); } catch(e) {}
+      try { sdk.disconnect(); } catch(e) {}
+    }
+    sdk = null;
+    connected = false;
+    peers.clear();
+    dot.classList.remove('on');
+    statusEl.textContent = 'Disconnected';
+    btnConnect.disabled = false;
+    btnDisconnect.disabled = true;
+    inpRoom.disabled = false;
+    inpPassword.disabled = false;
+    renderPeers();
+    addMessage('system', 'System', 'Disconnected', Date.now());
+  }
+
+  // ── Chat Commands ──────────────────────────────────────────────────────
+  function handleInput() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+
+    // Local commands
+    if (text.startsWith('/')) {
+      const parts = text.slice(1).split(' ');
+      const cmd = parts[0].toLowerCase();
+      switch (cmd) {
+        case 'help':
+          addMessage('system', 'System',
+            'Commands: /help, /peers, /status, /history [n], /health, /clear, /dm <peer> <msg>',
+            Date.now());
+          return;
+        case 'peers':
+          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
+          // Send command to all bots
+          sendEnvelope('command', { command: 'peers' });
+          return;
+        case 'status':
+          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
+          sendEnvelope('command', { command: 'status' });
+          return;
+        case 'history':
+          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
+          sendEnvelope('command', { command: 'history', args: { count: parseInt(parts[1]) || 50 } });
+          return;
+        case 'health':
+          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
+          sendEnvelope('command', { command: 'health' });
+          return;
+        case 'clear':
+          messagesEl.innerHTML = '';
+          messages.length = 0;
+          return;
+        case 'dm':
+          if (parts.length < 3) { addMessage('system', 'System', 'Usage: /dm <peer_stream_id> <message>', Date.now()); return; }
+          const target = parts[1];
+          const msg = parts.slice(2).join(' ');
+          sendEnvelope('chat', { text: msg }, { to: target });
+          addMessage('chat', myIdentity.name + ' -> ' + target, msg, Date.now());
+          return;
+        default:
+          addMessage('system', 'System', 'Unknown command: /' + cmd + '. Try /help', Date.now());
+          return;
+      }
+    }
+
+    // Regular chat message
+    if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
+    const target = chatTarget.value || null;
+    sendEnvelope('chat', { text: text }, target ? { to: target } : undefined);
+    addMessage('chat', myIdentity.name + (target ? ' -> ' + target : ''), text, Date.now());
+  }
+
+  function sendEnvelope(type, payload, opts) {
+    if (!sdk || !connected) return;
+    const env = createEnvelope(type, payload, opts);
+    try {
+      if (opts && opts.to) {
+        // Find the peer's UUID for targeted send
+        const p = peers.get(opts.to);
+        if (p) {
+          sdk.sendData(env, { UUID: p.uuid });
+        } else {
+          sdk.sendData(env, { streamID: opts.to });
+        }
+      } else {
+        sdk.sendData(env);
+      }
+    } catch(err) {
+      addMessage('system', 'System', 'Send error: ' + err.message, Date.now());
+    }
+  }
+
+  // ── Event Bindings ─────────────────────────────────────────────────────
+  btnConnect.addEventListener('click', doConnect);
+  btnDisconnect.addEventListener('click', doDisconnect);
+  btnSend.addEventListener('click', handleInput);
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleInput(); }
+  });
+  chatTarget.addEventListener('change', () => { selectedPeer = chatTarget.value; renderPeers(); });
+
+  // Auto-connect if room is provided via URL params
+  if (params.get('room') && params.get('autoconnect') !== 'false') {
+    setTimeout(doConnect, 500);
+  }
+})();
+</script>
+</body>
+</html>

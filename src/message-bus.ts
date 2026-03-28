@@ -233,8 +233,14 @@ export class MessageBus extends EventEmitter {
     if (!this.sendDataFn) return;
     const wire = envelopeToWire(envelope);
     if (target) {
-      // Send to specific peer — use streamId as target for sendData
-      this.sendDataFn(wire, { streamID: target });
+      // Prefer uuid targeting once we know it; streamID targeting can be ambiguous
+      // before announce/rekey completes on some SDK connection paths.
+      const peer = this.peers.getPeer(target);
+      if (peer?.uuid) {
+        this.sendDataFn(wire, { uuid: peer.uuid });
+      } else {
+        this.sendDataFn(wire, { streamID: target });
+      }
     } else {
       // Broadcast to all
       this.sendDataFn(wire);

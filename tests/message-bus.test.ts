@@ -64,6 +64,20 @@ test("send targets a specific peer", () => {
   const env = bus.send("other", "chat", { text: "hi" });
   assert.equal(env.to, "other");
   assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].target, { uuid: "uuid_other" });
+});
+
+test("send falls back to streamID when uuid is not known", () => {
+  const { bus, sent } = makeBus();
+  const env = bus.send("other", "chat", { text: "hi" });
+  assert.equal(env.to, "other");
+  assert.equal(sent.length, 0); // unknown peer is queued instead
+
+  bus.setSendDataFn((data, target) => {
+    sent.push({ data, target });
+  });
+  const directEnv = createEnvelope(myIdentity, "chat", { text: "manual" }, { to: "other" });
+  (bus as unknown as { rawSend: (env: MessageEnvelope, target: string | null) => void }).rawSend(directEnv, "other");
   assert.deepEqual(sent[0].target, { streamID: "other" });
 });
 
@@ -271,6 +285,7 @@ test("flushOfflineQueue sends queued messages and clears queue", () => {
   const flushed = bus.flushOfflineQueue("other");
   assert.equal(flushed.length, 1);
   assert.equal(sent.length, 1); // history_replay sent
+  assert.deepEqual(sent[0].target, { uuid: "uuid_other" });
   assert.equal(bus.getOfflineQueueSize("other"), 0);
 });
 

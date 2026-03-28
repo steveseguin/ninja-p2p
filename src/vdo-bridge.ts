@@ -220,7 +220,11 @@ export class VDOBridge extends EventEmitter {
     // Data channel opened — send our announce
     this.sdk.addEventListener("dataChannelOpen", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
-      const streamId = event.detail?.streamID ?? this.peers.streamIdForUuid(uuid) ?? uuid;
+      const mappedStreamId = this.peers.streamIdForUuid(uuid);
+      const eventStreamId = event.detail?.streamID;
+      const streamId = mappedStreamId ?? (
+        eventStreamId && eventStreamId !== this.options.streamId ? eventStreamId : uuid
+      );
 
       // Send announce to this specific peer
       const announce = createEnvelope(this.identity, "announce", this.getAnnouncePayload(), { to: streamId });
@@ -252,7 +256,12 @@ export class VDOBridge extends EventEmitter {
       // If we don't have a streamId mapping for this uuid, use the envelope's from
       const senderStreamId = envelope.from.streamId;
       if (!this.peers.getPeer(senderStreamId)) {
-        this.peers.addPeer(senderStreamId, uuid);
+        const orphanPeer = this.peers.getPeer(uuid);
+        if (orphanPeer && orphanPeer.streamId === uuid) {
+          this.peers.rekeyPeer(uuid, senderStreamId);
+        } else {
+          this.peers.addPeer(senderStreamId, uuid);
+        }
       }
 
       // Handle protocol-level messages

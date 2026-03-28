@@ -54,6 +54,16 @@ export class PeerRegistry extends EventEmitter {
       return existing;
     }
 
+    const existingByUuid = this.resolve(uuid);
+    if (existingByUuid) {
+      existingByUuid.connected = true;
+      existingByUuid.connectedAt = Date.now();
+      existingByUuid.lastSeenAt = Date.now();
+      this.uuidToStream.set(uuid, existingByUuid.streamId);
+      this.emit("peer:join", existingByUuid);
+      return existingByUuid;
+    }
+
     const peer: PeerRecord = {
       streamId,
       uuid,
@@ -93,6 +103,27 @@ export class PeerRegistry extends EventEmitter {
     return true;
   }
 
+  /** Rename a temporary uuid-keyed peer record once the real streamId is known. */
+  rekeyPeer(identifier: string, streamId: string): PeerRecord | undefined {
+    const peer = this.resolve(identifier);
+    if (!peer) return undefined;
+    if (peer.streamId === streamId) return peer;
+
+    const existing = this.peers.get(streamId);
+    if (existing && existing !== peer) {
+      this.peers.delete(peer.streamId);
+      this.uuidToStream.set(peer.uuid, existing.streamId);
+      return existing;
+    }
+
+    this.peers.delete(peer.streamId);
+    peer.streamId = streamId;
+    this.peers.set(streamId, peer);
+    this.uuidToStream.set(peer.uuid, streamId);
+    this.emit("peer:update", peer, "rekey");
+    return peer;
+  }
+
   /** Update identity and skills from an announce message. */
   updateFromAnnounce(identifier: string, identity: PeerIdentity, announce: AnnouncePayload): PeerRecord | undefined {
     const peer = this.resolve(identifier);
@@ -104,10 +135,6 @@ export class PeerRegistry extends EventEmitter {
     peer.topics = announce.topics ?? [];
     peer.version = announce.version ?? "";
     peer.lastSeenAt = Date.now();
-    // Also map the identity's streamId if different from our key
-    if (identity.streamId && identity.streamId !== peer.streamId) {
-      this.uuidToStream.set(identity.streamId, peer.streamId);
-    }
     this.emit("peer:update", peer, "announce");
     return peer;
   }

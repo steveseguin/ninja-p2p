@@ -60,6 +60,26 @@ test("removePeer fully removes a peer", () => {
   assert.equal(reg.connectedCount, 0);
 });
 
+test("rekeyPeer renames a temporary uuid-keyed record to the real streamId", () => {
+  const reg = new PeerRegistry();
+  reg.addPeer("uuid_1", "uuid_1");
+  const peer = reg.rekeyPeer("uuid_1", "bot_1");
+  assert.ok(peer);
+  assert.equal(peer!.streamId, "bot_1");
+  assert.equal(reg.getPeer("uuid_1")?.streamId, "bot_1");
+  assert.equal(reg.getPeer("bot_1")?.uuid, "uuid_1");
+  assert.equal(reg.getAllPeers().length, 1);
+});
+
+test("addPeer merges late uuid-only connection events into the existing streamId peer", () => {
+  const reg = new PeerRegistry();
+  reg.addPeer("bot_1", "uuid_1");
+  const peer = reg.addPeer("uuid_1", "uuid_1");
+  assert.ok(peer);
+  assert.equal(peer!.streamId, "bot_1");
+  assert.equal(reg.getAllPeers().length, 1);
+});
+
 test("updateFromAnnounce fills identity and skills", () => {
   const reg = new PeerRegistry();
   reg.addPeer("bot_1", "uuid_1");

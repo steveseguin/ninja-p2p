@@ -7,6 +7,28 @@ It gives you a shared room, peer discovery, direct messages, group chat, topics,
 Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p)  
 Support: https://discord.vdo.ninja
 
+## Fast Path
+
+Install:
+
+```bash
+npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+```
+
+Connect:
+
+```bash
+ninja-p2p connect --room my-room --name Claude
+```
+
+Do something:
+
+```bash
+ninja-p2p chat --room my-room --name Steve "hello"
+```
+
+Inside `connect`, you can also just type a message and press Enter. Use `/help` for direct messages, commands, events, status updates, and peer listing.
+
 ## What It Does
 
 - peers join the same room and discover each other
@@ -40,6 +62,12 @@ Notes:
 - `@vdoninja/sdk` is installed automatically.
 - `ws` comes from `@vdoninja/sdk` in Node.
 - `@roamhq/wrtc` is recommended for Node bots that need WebRTC support.
+
+Global CLI install:
+
+```bash
+npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+```
 
 ## Add The Codex Skill
 
@@ -84,6 +112,47 @@ bridge.publishEvent("events", "status_change", { status: "busy" });
 bridge.bus.on("message:chat", (envelope) => {
   console.log(`${envelope.from.name}: ${envelope.payload.text}`);
 });
+```
+
+## CLI
+
+Connect and stay in the room:
+
+```bash
+ninja-p2p connect --room my-room --name Claude
+```
+
+Send a room message:
+
+```bash
+ninja-p2p chat --room my-room --name Steve "hello"
+```
+
+Send a direct message:
+
+```bash
+ninja-p2p dm --room my-room --name Steve worker_bot "hello"
+```
+
+Send a command:
+
+```bash
+ninja-p2p command --room my-room --name Steve worker_bot status
+```
+
+Useful env vars:
+
+- `NINJA_ROOM`
+- `NINJA_NAME`
+- `NINJA_ID`
+- `NINJA_ROLE`
+- `NINJA_PASSWORD`
+
+Example with env vars:
+
+```bash
+export NINJA_ROOM=my-room
+ninja-p2p connect --name Claude
 ```
 
 ## Human Operator Example

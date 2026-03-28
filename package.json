@@ -1,10 +1,13 @@
 {
   "name": "@vdoninja/ninja-p2p",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Open source P2P agent messaging and coordination over VDO.Ninja WebRTC data channels",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "ninja-p2p": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -48,6 +51,7 @@
     "vdo.ninja",
     "agent",
     "agent-mesh",
+    "cli",
     "pub-sub",
     "data-channel",
     "bot",

@@ -22,6 +22,12 @@ npm install @vdoninja/ninja-p2p @roamhq/wrtc
 
 `@vdoninja/sdk` is installed automatically. `ws` comes from the SDK in Node.
 
+For the CLI:
+
+```bash
+npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+```
+
 ## Default Pattern
 
 1. Pick a shared `room`.
@@ -31,6 +37,13 @@ npm install @vdoninja/ninja-p2p @roamhq/wrtc
 5. Use `bridge.chat(..., targetStreamId)` or `bridge.command()` for direct messages.
 6. Use `bridge.publishEvent()` for topic messages.
 7. Use `bridge.commandResponse()`, `bridge.ack()`, or `bridge.reply()` when a peer should answer back.
+
+## Fast CLI Pattern
+
+```bash
+ninja-p2p connect --room my-room --name Claude
+ninja-p2p chat --room my-room --name Steve "hello"
+```
 
 ## Example
 
@@ -68,3 +81,4 @@ bridge.bus.on("message:chat", (envelope) => {
 - Topic messages are broadcast and filtered on the receiver side.
 - The offline queue is in memory, not durable storage.
 - `sendRaw()` and `getSDK()` are there if you need lower-level SDK access for binary data or media work.
+- The CLI supports `connect`, `chat`, `dm`, and `command`.

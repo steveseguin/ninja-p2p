@@ -57,7 +57,7 @@ export class VDOBridge extends EventEmitter {
   private skills: string[];
   private status = "idle";
   private statusDetail = "";
-  private version = "0.1.1";
+  private version = "0.1.2";
 
   constructor(options: VDOBridgeOptions) {
     super();
@@ -210,14 +210,14 @@ export class VDOBridge extends EventEmitter {
     if (!this.sdk) return false;
     try {
       if (!targetStreamId) {
-        this.sdk.sendData(data);
+        this.sdk.sendData(data, { allowFallback: true });
         return true;
       }
       const peer = this.peers.getPeer(targetStreamId);
       if (peer?.uuid) {
-        this.sdk.sendData(data, { UUID: peer.uuid });
+        this.sdk.sendData(data, { UUID: peer.uuid, allowFallback: true });
       } else {
-        this.sdk.sendData(data, { streamID: targetStreamId });
+        this.sdk.sendData(data, { streamID: targetStreamId, allowFallback: true });
       }
       return true;
     } catch (err) {

@@ -8,7 +8,7 @@ function makeIdentity(streamId: string): PeerIdentity {
 }
 
 function makeAnnounce(skills: string[] = []): AnnouncePayload {
-  return { skills, status: "idle", version: "0.1.1", topics: ["events"] };
+  return { skills, status: "idle", version: "0.1.2", topics: ["events"] };
 }
 
 test("addPeer creates and returns a peer record", () => {

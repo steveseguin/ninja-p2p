@@ -110,7 +110,7 @@ test("sendRaw broadcasts arbitrary data when connected", () => {
 
   assert.equal(ok, true);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].target, undefined);
+  assert.deepEqual(sent[0].target, { allowFallback: true });
   assert.ok(sent[0].data instanceof ArrayBuffer);
 });
 
@@ -126,7 +126,7 @@ test("sendRaw targets a known peer by UUID", () => {
 
   assert.equal(ok, true);
   assert.equal(sent.length, 1);
-  assert.deepEqual(sent[0].target, { UUID: "uuid_other" });
+  assert.deepEqual(sent[0].target, { UUID: "uuid_other", allowFallback: true });
 });
 
 test("getSDK returns null before connect", () => {

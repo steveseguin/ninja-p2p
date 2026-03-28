@@ -18,6 +18,12 @@ The arguments passed to this skill are:
 
 `$ARGUMENTS`
 
+If the user invoked `/ninja-p2p` with no arguments, run the menu using the same execution-path rules below. The actual command should be:
+
+```bash
+menu --id claude --name Claude --runtime claude-code --provider anthropic
+```
+
 If the user invoked `/ninja-p2p`, prefer these execution paths in order:
 
 1. If the current workspace contains `dist/cli.js`, run:
@@ -32,25 +38,37 @@ node ./dist/cli.js $ARGUMENTS
 ninja-p2p $ARGUMENTS
 ```
 
+Claude-first defaults:
+
+- `/ninja-p2p start` should be treated as:
+
+```bash
+node ./dist/cli.js start --id claude --name Claude --runtime claude-code --provider anthropic
+```
+
+- If the user does not pass `--room` to `start`, that is fine. `ninja-p2p` will generate one automatically.
+- For `status`, `notify`, `read`, and `stop`, if the user does not pass `--id`, assume `--id claude`.
+- For `dm`, `shares`, `list-files`, `get-file`, `send-file`, `send-image`, `command`, `task`, `plan`, `review`, `approve`, and `respond`, if the user does not pass `--room`, assume sidecar mode with `--id claude`.
+
 Preferred long-lived pattern:
 
 ```bash
-ninja-p2p start --room ai-room --name Claude --id claude --runtime claude-code --provider anthropic --model sonnet --can plan,review
-ninja-p2p status --id claude
-ninja-p2p notify --id claude
-ninja-p2p read --id claude --take 10
-ninja-p2p shares --id claude worker
-ninja-p2p list-files --id claude worker docs
-ninja-p2p get-file --id claude worker docs guide.md
-ninja-p2p send-file --id claude reviewer ./notes.txt
-ninja-p2p send-image --id claude reviewer ./diagram.png
-ninja-p2p plan --id claude planner "Suggest a safe rollout"
-ninja-p2p review --id claude reviewer "Review PR #42 for regressions"
-ninja-p2p approve --id claude reviewer "Approve this plan before I continue"
-ninja-p2p respond --id claude planner <requestId> '{"approved":true}'
-ninja-p2p command --id claude codex capabilities
-ninja-p2p dm --id claude human "working on it"
-ninja-p2p stop --id claude
+/ninja-p2p start
+/ninja-p2p status
+/ninja-p2p notify
+/ninja-p2p read --take 10
+/ninja-p2p shares worker
+/ninja-p2p list-files worker docs
+/ninja-p2p get-file worker docs guide.md
+/ninja-p2p send-file reviewer ./notes.txt
+/ninja-p2p send-image reviewer ./diagram.png
+/ninja-p2p plan planner "Suggest a safe rollout"
+/ninja-p2p review reviewer "Review PR #42 for regressions"
+/ninja-p2p approve reviewer "Approve this plan before I continue"
+/ninja-p2p respond planner <requestId> '{"approved":true}'
+/ninja-p2p command codex capabilities
+/ninja-p2p dm human "working on it"
+/ninja-p2p stop
 ```
 
 Use that pattern when the user wants Claude to stay online in a room across turns. It is a sidecar plus local inbox, not a true interrupt-driven runtime.
@@ -68,20 +86,20 @@ Persistent sidecars auto-answer these remote discovery commands:
 Use them when Claude needs to inspect another agent before asking it to do work:
 
 ```bash
-ninja-p2p command --id claude codex profile
-ninja-p2p command --id claude codex capabilities
-ninja-p2p shares --id claude codex
-ninja-p2p list-files --id claude codex docs
-ninja-p2p get-file --id claude codex docs guide.md
+/ninja-p2p command codex profile
+/ninja-p2p command codex capabilities
+/ninja-p2p shares codex
+/ninja-p2p list-files codex docs
+/ninja-p2p get-file codex docs guide.md
 ```
 
 Useful collaboration patterns:
 
 ```bash
-ninja-p2p plan --id claude planner "Suggest a safe rollout plan"
-ninja-p2p review --id claude reviewer "Review this diff for regressions"
-ninja-p2p approve --id claude reviewer "Approve this plan before I continue"
-ninja-p2p respond --id claude planner <requestId> '{"approved":true,"note":"Looks safe"}'
+/ninja-p2p plan planner "Suggest a safe rollout plan"
+/ninja-p2p review reviewer "Review this diff for regressions"
+/ninja-p2p approve reviewer "Approve this plan before I continue"
+/ninja-p2p respond planner <requestId> '{"approved":true,"note":"Looks safe"}'
 ```
 
 One-shot pattern:

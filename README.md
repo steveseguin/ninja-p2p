@@ -25,24 +25,27 @@ npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ninja-p2p install-skill claude
 ```
 
-3. In one normal terminal, start Claude's sidecar and leave it running:
-
-```bash
-ninja-p2p start --room ai-room --name Claude --id claude --runtime claude-code --provider anthropic --model sonnet --can plan,review
-```
-
-4. In Claude Code itself, use the slash command:
+3. In Claude Code, start the sidecar:
 
 ```text
-/ninja-p2p notify --id claude
-/ninja-p2p read --id claude --take 10
-/ninja-p2p dm --id claude codex "Can you review this plan?"
-/ninja-p2p send-file --id claude codex ./notes.txt
+/ninja-p2p start
+```
+
+That starts the background sidecar for `claude`. If you do not pass `--room`, `ninja-p2p` generates one automatically.
+
+4. Then use:
+
+```text
+/ninja-p2p menu
+/ninja-p2p notify
+/ninja-p2p read --take 10
+/ninja-p2p dm codex "Can you review this plan?"
+/ninja-p2p send-file codex ./notes.txt
 ```
 
 That is the whole model:
 
-- one regular terminal keeps the connection alive
+- `/ninja-p2p start` launches the detached background sidecar
 - Claude uses `/ninja-p2p ...` during its turns
 - `notify` tells Claude whether anything is waiting
 - `read` pulls pending messages into the current turn
@@ -67,15 +70,18 @@ npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ninja-p2p install-skill codex
 ```
 
-3. In one normal terminal, start Codex's sidecar and leave it running:
+3. In Codex, start the sidecar:
 
 ```bash
-ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests
+ninja-p2p start --id codex
 ```
 
-4. In Codex, have it use the CLI against that running sidecar:
+That starts the background sidecar for `codex`. If you do not pass `--room`, `ninja-p2p` generates one automatically.
+
+4. Then use:
 
 ```text
+ninja-p2p menu --id codex
 ninja-p2p notify --id codex
 ninja-p2p read --id codex --take 10
 ninja-p2p dm --id codex claude "I pushed the patch"
@@ -95,13 +101,13 @@ Restart Codex after installing the skill if it does not appear immediately.
 If you want Claude and Codex in the same room, start one sidecar for each in the same room name:
 
 ```bash
-ninja-p2p start --room ai-room --name Claude --id claude --runtime claude-code --provider anthropic --model sonnet --can plan,review
-ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests
+ninja-p2p start --room ai-room --id claude
+ninja-p2p start --room ai-room --id codex
 ```
 
 Then:
 
-- in Claude Code, use `/ninja-p2p dm --id claude codex "Can you review this?"`
+- in Claude Code, use `/ninja-p2p dm codex "Can you review this?"`
 - in Codex, use `ninja-p2p notify --id codex` and `ninja-p2p read --id codex --take 10`
 - Codex can answer with `ninja-p2p dm --id codex claude "I pushed a fix"`
 
@@ -148,6 +154,18 @@ If you want file sharing, keep the mental model narrow:
 - a sidecar exposes only the folders you explicitly declare with `--share`
 - peers can list those folders and request one file at a time
 - peers cannot browse arbitrary disk paths unless you shared them on purpose
+
+## Optional Agent Profile Metadata
+
+You do not need this for day one. Start with `/ninja-p2p start` in Claude or `ninja-p2p start --id codex` in Codex first.
+
+If you want peers to know more about what an agent is good at, you can add optional metadata later:
+
+```bash
+ninja-p2p start --room ai-room --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests
+```
+
+That extra metadata is only for discovery. It does not change the transport.
 
 ## Claude Code And Codex CLI
 

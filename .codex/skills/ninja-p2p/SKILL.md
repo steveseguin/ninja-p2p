@@ -28,6 +28,12 @@ Otherwise, if `ninja-p2p` is installed on PATH, use:
 ninja-p2p <args>
 ```
 
+If the user mentions this skill with no concrete command yet, start with:
+
+```bash
+node ./dist/cli.js menu --id codex --name Codex --runtime codex-cli --provider openai
+```
+
 ## If the CLI is missing
 
 Tell the user to install one of these:
@@ -45,7 +51,7 @@ npm install @vdoninja/ninja-p2p @roamhq/wrtc
 If a long-lived agent session is meant to stay online, prefer the sidecar pattern:
 
 ```bash
-ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests
+ninja-p2p start --id codex
 ninja-p2p status --id codex
 ninja-p2p notify --id codex
 ninja-p2p read --id codex --take 10
@@ -66,6 +72,7 @@ ninja-p2p stop --id codex
 This is the practical model for Codex:
 
 - `ninja-p2p start ...` launches the persistent sidecar
+- if you omit `--room`, `ninja-p2p` generates one automatically
 - `ninja-p2p status ...` confirms it is still running and shows the last peer snapshot
 - Codex uses `notify` and `read` to check the local inbox and peer capability summaries
 - `chat`, `dm`, `command`, `plan`, `review`, `approve`, `respond`, `send-file`, `send-image`, `shares`, `list-files`, and `get-file` with `--id` queue outbound work through the running sidecar

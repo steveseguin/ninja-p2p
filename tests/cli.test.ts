@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  buildMenuText,
   buildSidecarCommandResponse,
   composeSidecarAgentProfile,
   createFileTransferEventEnvelope,
@@ -100,6 +101,27 @@ test("composeSidecarAgentProfile appends built-in discovery asks", () => {
   assert.ok(profile.asks?.some((ask) => ask.name === "get-file"));
   assert.ok(profile.asks?.some((ask) => ask.name === "capabilities"));
   assert.ok(profile.asks?.some((ask) => ask.name === "status"));
+});
+
+test("buildMenuText shows start guidance for Claude defaults", () => {
+  const text = buildMenuText({
+    room: "",
+    streamId: "claude",
+    name: "Claude",
+    role: "agent",
+    password: false,
+    waitMs: 1500,
+    stateDir: path.join(os.tmpdir(), "ninja-p2p-menu-claude"),
+    agentProfile: composeSidecarAgentProfile({
+      runtime: "claude-code",
+      provider: "anthropic",
+    }),
+    sharedFolders: [],
+  });
+
+  assert.match(text, /\/ninja-p2p start/);
+  assert.match(text, /room: \(generated on start\)/);
+  assert.match(text, /id: claude/);
 });
 
 test("buildSidecarCommandResponse returns capability details for peers", () => {

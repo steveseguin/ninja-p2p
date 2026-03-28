@@ -1,5 +1,5 @@
 import path from "node:path";
-import { createMessageId, type AgentAsk, type AgentProfile } from "./protocol.js";
+import { createMessageId, generateRoomName, type AgentAsk, type AgentProfile } from "./protocol.js";
 import { parseSharedFolderSpecs, toSharedFolderSummaries, type SharedFolderConfig } from "./shared-folders.js";
 
 export type CliCommonOptions = {
@@ -18,6 +18,7 @@ export type SkillRuntime = "claude" | "codex";
 
 export type CliCommand =
   | { kind: "help" }
+  | { kind: "menu"; options: CliCommonOptions }
   | { kind: "install-skill"; runtime: SkillRuntime }
   | { kind: "start"; options: CliCommonOptions }
   | { kind: "stop"; stateDir: string }
@@ -45,17 +46,22 @@ export function helpText(): string {
   return [
     "ninja-p2p",
     "",
+    "Start here:",
+    "  ninja-p2p menu",
+    "  ninja-p2p start --id claude",
+    "  ninja-p2p start --id codex",
+    "",
     "Install:",
     "  npm install -g @vdoninja/ninja-p2p @roamhq/wrtc",
     "  ninja-p2p install-skill codex",
     "  ninja-p2p install-skill claude",
     "",
     "Agent mode:",
-    "  ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --can review,tests",
+    "  ninja-p2p start --room ai-room --id codex",
     "  ninja-p2p status --id codex",
     "  ninja-p2p notify --id codex",
     "  ninja-p2p read --id codex --take 10",
-    "  ninja-p2p start --room ai-room --name Codex --id codex --share docs=./docs",
+    "  ninja-p2p start --room ai-room --id codex --share docs=./docs",
     "  ninja-p2p shares --id codex worker",
     "  ninja-p2p list-files --id codex worker docs",
     "  ninja-p2p get-file --id codex worker docs guide.md",
@@ -111,6 +117,18 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
     return { kind: "help" };
   }
 
+  if (kind === "menu") {
+    const parsed = parseOptions(args, env);
+    const options = buildCommonOptions(parsed.values, env, { requireRoom: false, requireStateDir: false, allowGeneratedRoom: false });
+    return {
+      kind,
+      options: {
+        ...options,
+        stateDir: resolveStateDir(parsed.values, env, options.streamId),
+      },
+    };
+  }
+
   if (kind === "install-skill") {
     const runtime = (args.shift() ?? "").toLowerCase();
     if (runtime !== "codex" && runtime !== "claude") {
@@ -124,25 +142,31 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
 
   switch (kind) {
     case "start":
-      return {
-        kind,
-        options: {
-          ...buildCommonOptions(parsed.values, env, { requireRoom: true, requireStateDir: false }),
-          stateDir: resolveStateDir(parsed.values, env),
-        },
-      };
+      {
+        const options = buildCommonOptions(parsed.values, env, { requireRoom: false, requireStateDir: false, allowGeneratedRoom: true });
+        return {
+          kind,
+          options: {
+            ...options,
+            stateDir: resolveStateDir(parsed.values, env, options.streamId),
+          },
+        };
+      }
     case "stop":
       return { kind, stateDir: resolveStateDir(parsed.values, env) };
     case "status":
       return { kind, stateDir: resolveStateDir(parsed.values, env) };
     case "agent":
-      return {
-        kind,
-        options: {
-          ...buildCommonOptions(parsed.values, env, { requireRoom: true, requireStateDir: false }),
-          stateDir: resolveStateDir(parsed.values, env),
-        },
-      };
+      {
+        const options = buildCommonOptions(parsed.values, env, { requireRoom: false, requireStateDir: false, allowGeneratedRoom: true });
+        return {
+          kind,
+          options: {
+            ...options,
+            stateDir: resolveStateDir(parsed.values, env, options.streamId),
+          },
+        };
+      }
     case "notify":
       return { kind, stateDir: resolveStateDir(parsed.values, env) };
     case "read":
@@ -153,7 +177,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
         peek: getSingleValue(parsed.values, "peek") === "true",
       };
     case "connect":
-      return { kind, options: buildCommonOptions(parsed.values, env, { requireRoom: true, requireStateDir: false }) };
+      return { kind, options: buildCommonOptions(parsed.values, env, { requireRoom: false, requireStateDir: false, allowGeneratedRoom: true }) };
     case "chat":
       if (positional.length < 1) {
         throw new Error("chat requires text");
@@ -376,6 +400,21 @@ export function defaultStreamId(name: string): string {
   return `${base}_${createMessageId().slice(0, 6)}`;
 }
 
+export function defaultNameForRuntime(runtime: string | undefined): string {
+  const value = (runtime || "").trim().toLowerCase();
+  if (value.includes("claude")) return "Claude";
+  if (value.includes("codex")) return "Codex";
+  return "Agent";
+}
+
+export function defaultStreamIdForRuntime(name: string, runtime: string | undefined): string {
+  const runtimeValue = (runtime || "").trim().toLowerCase();
+  const normalizedName = name.trim().toLowerCase();
+  if (runtimeValue.includes("claude") || normalizedName === "claude") return "claude";
+  if (runtimeValue.includes("codex") || normalizedName === "codex") return "codex";
+  return defaultStreamId(name);
+}
+
 export function parseJsonMaybe(value: string): unknown {
   try {
     return JSON.parse(value);
@@ -470,16 +509,17 @@ function parseOptions(argv: string[], env: NodeJS.ProcessEnv): { values: CliOpti
 function buildCommonOptions(
   values: CliOptionValues,
   env: NodeJS.ProcessEnv,
-  options?: { requireRoom?: boolean; requireStateDir?: boolean },
+  options?: { requireRoom?: boolean; requireStateDir?: boolean; allowGeneratedRoom?: boolean },
 ): CliCommonOptions {
   const requireRoom = options?.requireRoom ?? true;
-  const room = getSingleValue(values, "room") || env.NINJA_ROOM || "";
+  const room = getSingleValue(values, "room") || env.NINJA_ROOM || (options?.allowGeneratedRoom ? generateRoomName() : "");
   if (requireRoom && !room) {
     throw new Error("missing room; use --room my-room");
   }
 
-  const name = getSingleValue(values, "name") || env.NINJA_NAME || "Agent";
-  const streamId = getSingleValue(values, "id") || env.NINJA_ID || defaultStreamId(name);
+  const runtime = getSingleValue(values, "runtime") || env.NINJA_RUNTIME;
+  const name = getSingleValue(values, "name") || env.NINJA_NAME || defaultNameForRuntime(runtime);
+  const streamId = getSingleValue(values, "id") || env.NINJA_ID || defaultStreamIdForRuntime(name, runtime);
   const role = getSingleValue(values, "role") || env.NINJA_ROLE || "agent";
   const passwordValue = getSingleValue(values, "password") ?? env.NINJA_PASSWORD;
   const password = passwordValue === "false" ? false : (passwordValue || false);
@@ -510,11 +550,11 @@ function buildCommonOptions(
   };
 }
 
-function resolveStateDir(values: CliOptionValues, env: NodeJS.ProcessEnv): string {
+function resolveStateDir(values: CliOptionValues, env: NodeJS.ProcessEnv, fallbackStreamId?: string): string {
   const explicit = getSingleValue(values, "state-dir") || env.NINJA_STATE_DIR;
   if (explicit) return explicit;
 
-  const streamId = getSingleValue(values, "id") || env.NINJA_ID;
+  const streamId = getSingleValue(values, "id") || env.NINJA_ID || fallbackStreamId;
   if (!streamId) {
     throw new Error("missing state dir; use --state-dir or --id");
   }

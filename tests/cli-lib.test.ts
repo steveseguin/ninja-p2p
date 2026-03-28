@@ -2,13 +2,24 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
-import { defaultStreamId, getDefaultStateDir, getSkillInstallTarget, getSkillInstallTargets, helpText, parseCliArgs } from "../src/cli-lib.js";
+import {
+  defaultNameForRuntime,
+  defaultStreamId,
+  defaultStreamIdForRuntime,
+  getDefaultStateDir,
+  getSkillInstallTarget,
+  getSkillInstallTargets,
+  helpText,
+  parseCliArgs,
+} from "../src/cli-lib.js";
 
 test("help text includes the simple install and connect flow", () => {
   const text = helpText();
+  assert.match(text, /ninja-p2p menu/);
+  assert.match(text, /ninja-p2p start --id claude/);
   assert.match(text, /npm install -g @vdoninja\/ninja-p2p @roamhq\/wrtc/);
   assert.match(text, /ninja-p2p connect --room my-room --name Claude/);
-  assert.match(text, /ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --can review,tests/);
+  assert.match(text, /ninja-p2p start --room ai-room --id codex/);
   assert.match(text, /ninja-p2p command --id codex claude capabilities/);
   assert.match(text, /ninja-p2p shares --id codex worker/);
   assert.match(text, /ninja-p2p list-files --id codex worker docs/);
@@ -36,6 +47,17 @@ test("parseCliArgs parses install-skill command", () => {
   assert.equal(parsed.kind, "install-skill");
   if (parsed.kind !== "install-skill") return;
   assert.equal(parsed.runtime, "codex");
+});
+
+test("parseCliArgs parses menu command with default state dir", () => {
+  const parsed = parseCliArgs(["menu", "--runtime", "claude-code"], {
+    HOME: "/home/steve",
+  } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "menu");
+  if (parsed.kind !== "menu") return;
+  assert.equal(parsed.options.name, "Claude");
+  assert.equal(parsed.options.streamId, "claude");
+  assert.equal(parsed.options.stateDir, path.join("/home/steve", ".ninja-p2p", "claude"));
 });
 
 test("parseCliArgs parses agent command with default state dir", () => {
@@ -85,6 +107,18 @@ test("parseCliArgs parses start command with default state dir", () => {
   assert.deepEqual(parsed.options.sharedFolders, [
     { name: "docs", path: path.join(process.cwd(), "docs") },
   ]);
+});
+
+test("parseCliArgs start generates a room and stable Claude defaults", () => {
+  const parsed = parseCliArgs(["start", "--runtime", "claude-code"], {
+    HOME: "/home/steve",
+  } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "start");
+  if (parsed.kind !== "start") return;
+  assert.match(parsed.options.room, /^clawd_[a-f0-9]{32}$/);
+  assert.equal(parsed.options.name, "Claude");
+  assert.equal(parsed.options.streamId, "claude");
+  assert.equal(parsed.options.stateDir, path.join("/home/steve", ".ninja-p2p", "claude"));
 });
 
 test("parseCliArgs parses status command", () => {
@@ -297,6 +331,13 @@ test("defaultStreamId creates a readable id", () => {
   assert.match(id, /^claude_code_[A-Za-z0-9_-]{6}$/);
 });
 
+test("runtime defaults pick friendly names and stable ids for Claude and Codex", () => {
+  assert.equal(defaultNameForRuntime("claude-code"), "Claude");
+  assert.equal(defaultNameForRuntime("codex-cli"), "Codex");
+  assert.equal(defaultStreamIdForRuntime("Claude", "claude-code"), "claude");
+  assert.equal(defaultStreamIdForRuntime("Codex", "codex-cli"), "codex");
+});
+
 test("getSkillInstallTarget uses tool-specific user directories", () => {
   assert.equal(
     getSkillInstallTarget("codex", { USERPROFILE: "C:\\Users\\steve" } as NodeJS.ProcessEnv),
@@ -329,8 +370,15 @@ test("getDefaultStateDir uses the per-user ninja-p2p folder", () => {
   );
 });
 
-test("parseCliArgs rejects missing room", () => {
-  assert.throws(() => parseCliArgs(["connect"]), /missing room/);
+test("parseCliArgs connect generates a room when omitted", () => {
+  const parsed = parseCliArgs(["connect", "--runtime", "claude-code"], {
+    HOME: "/home/steve",
+  } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "connect");
+  if (parsed.kind !== "connect") return;
+  assert.match(parsed.options.room, /^clawd_[a-f0-9]{32}$/);
+  assert.equal(parsed.options.name, "Claude");
+  assert.equal(parsed.options.streamId, "claude");
 });
 
 test("parseCliArgs rejects invalid install-skill target", () => {

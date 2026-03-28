@@ -46,6 +46,7 @@ import {
   writePeersSnapshot,
 } from "./agent-state.js";
 import {
+  getDefaultStateDir,
   getSkillInstallTarget,
   getSkillInstallTargets,
   helpText,
@@ -98,6 +99,9 @@ async function main(argv: string[]): Promise<void> {
   switch (parsed.kind) {
     case "help":
       console.log(helpText());
+      return;
+    case "menu":
+      console.log(buildMenuText(parsed.options));
       return;
     case "install-skill":
       installSkill(parsed.runtime);
@@ -352,6 +356,41 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
+export function buildMenuText(options: CliCommonOptions): string {
+  const prefix = getCommandPrefix(options);
+  const stateDir = options.stateDir ?? getDefaultStateDir(options.streamId);
+  const status = existsSync(path.join(stateDir, "session.json")) ? getAgentStatus(stateDir) : null;
+  const room = typeof status?.room === "string" && status.room ? status.room : options.room;
+  const running = Boolean(status?.running);
+
+  const lines = [
+    "ninja-p2p",
+    "",
+    `id: ${options.streamId}`,
+    `room: ${room || "(generated on start)"}`,
+    running ? "status: running" : "status: not started",
+    "",
+  ];
+
+  if (!running) {
+    lines.push("Start from Claude or Codex:");
+    lines.push(`  ${prefix} start`);
+    lines.push(`  ${prefix} start --room my-room`);
+    lines.push("");
+    lines.push("If you do not pass --room, ninja-p2p generates one for you.");
+  } else {
+    lines.push("Useful commands:");
+    lines.push(`  ${prefix} status`);
+    lines.push(`  ${prefix} notify`);
+    lines.push(`  ${prefix} read`);
+    lines.push(`  ${prefix} dm <peer> "hello"`);
+    lines.push(`  ${prefix} shares <peer>`);
+    lines.push(`  ${prefix} stop`);
+  }
+
+  return lines.join("\n");
+}
+
 function installSkill(runtime: SkillRuntime): void {
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const sourceCandidates = runtime === "codex"
@@ -424,7 +463,17 @@ function startAgent(options: CliCommonOptions): void {
   child.unref();
 
   console.log(`started agent pid=${child.pid} state=${options.stateDir}`);
+  console.log(`room: ${options.room}`);
+  console.log(`id: ${options.streamId}`);
   console.log(`log: ${logFile}`);
+  const prefix = getCommandPrefix(options);
+  if (prefix === "/ninja-p2p") {
+    console.log(`next: ${prefix} notify`);
+    console.log(`next: ${prefix} read --take 10`);
+  } else {
+    console.log(`next: ${prefix} notify --id ${options.streamId}`);
+    console.log(`next: ${prefix} read --id ${options.streamId} --take 10`);
+  }
 }
 
 function stopAgent(stateDir: string): void {
@@ -1324,6 +1373,10 @@ function resolveCliEntryPath(): string {
     }
   }
   return current;
+}
+
+function getCommandPrefix(options: CliCommonOptions): string {
+  return options.agentProfile?.runtime?.includes("claude") ? "/ninja-p2p" : "ninja-p2p";
 }
 
 function buildAgentArgs(options: CliCommonOptions): string[] {

@@ -148,7 +148,9 @@ input:focus,select:focus{border-color:var(--accent)}
   let connected = false;
   let myStreamId = '';
   let myIdentity = null;
+  const DASHBOARD_VERSION = '0.1.2';
   const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
+  const peerUuidToStream = new Map();
   const messages = [];
   const MAX_MESSAGES = 500;
   let selectedPeer = ''; // empty = broadcast
@@ -239,6 +241,45 @@ input:focus,select:focus{border-color:var(--accent)}
 
   function getSelectedPeerRecord() {
     return selectedPeer ? peers.get(selectedPeer) : null;
+  }
+
+  function getPeerKeyByUuid(uuid) {
+    if (!uuid) return '';
+    return peerUuidToStream.get(uuid) || '';
+  }
+
+  function upsertPeer(streamId, uuid, identity) {
+    const key = streamId || uuid;
+    if (!key) return null;
+
+    const knownKey = uuid ? getPeerKeyByUuid(uuid) : '';
+    if (uuid && streamId && knownKey && knownKey !== streamId && peers.has(knownKey)) {
+      const existing = peers.get(knownKey);
+      peers.delete(knownKey);
+      peers.set(streamId, Object.assign(existing || {}, { uuid, identity: identity || existing?.identity || null }));
+      peerUuidToStream.set(uuid, streamId);
+      return peers.get(streamId);
+    }
+
+    const provisional = uuid && uuid !== key && peers.has(uuid) ? peers.get(uuid) : null;
+    if (provisional && !peers.has(key)) {
+      peers.delete(uuid);
+      peers.set(key, Object.assign(provisional, { uuid, identity: identity || provisional.identity || null }));
+      peerUuidToStream.set(uuid, key);
+      return peers.get(key);
+    }
+
+    if (!peers.has(key)) {
+      peers.set(key, { uuid, identity: identity || null, skills: [], status: 'online', connected: true });
+    } else {
+      const peer = peers.get(key);
+      peer.uuid = uuid || peer.uuid || '';
+      peer.identity = identity || peer.identity || null;
+      peer.connected = true;
+    }
+
+    if (uuid) peerUuidToStream.set(uuid, key);
+    return peers.get(key);
   }
 
   // ── Message Display ────────────────────────────────────────────────────
@@ -676,13 +717,7 @@ input:focus,select:focus{border-color:var(--accent)}
       sdk.addEventListener('peerConnected', (e) => {
         const uuid = e.detail?.uuid || 'unknown';
         const sid = e.detail?.streamID || uuid;
-        if (!peers.has(sid)) {
-          peers.set(sid, { uuid, identity: null, skills: [], status: 'online', connected: true });
-        } else {
-          const p = peers.get(sid);
-          p.uuid = uuid;
-          p.connected = true;
-        }
+        upsertPeer(sid, uuid, null);
         renderPeers();
       });
 
@@ -692,7 +727,7 @@ input:focus,select:focus{border-color:var(--accent)}
         const announce = createEnvelope('announce', {
           skills: ['dashboard-ui', 'chat'],
           status: 'online',
-          version: '0.1.0',
+          version: DASHBOARD_VERSION,
           topics: ['events', 'bots', 'support'],
           agent: {
             runtime: 'dashboard-ui',
@@ -716,10 +751,9 @@ input:focus,select:focus{border-color:var(--accent)}
         if (!env) return;
 
         const sender = env.from.streamId;
+        if (!sender || sender === myStreamId) return;
         // Update peer info
-        if (!peers.has(sender)) {
-          peers.set(sender, { uuid, identity: env.from, skills: [], status: 'online', connected: true });
-        }
+        upsertPeer(sender, uuid, env.from);
 
         switch (env.type) {
           case 'announce': {
@@ -822,7 +856,7 @@ input:focus,select:focus{border-color:var(--accent)}
         // Find by uuid if no streamID
         let key = sid;
         if (!key) {
-          for (const [k, v] of peers) { if (v.uuid === uuid) { key = k; break; } }
+          key = getPeerKeyByUuid(uuid);
         }
         if (key && peers.has(key)) {
           const p = peers.get(key);

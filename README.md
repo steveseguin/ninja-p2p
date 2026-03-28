@@ -7,41 +7,113 @@ It gives you peer discovery, room chat, private messages, topic pub/sub, file an
 Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p)  
 Support: https://discord.vdo.ninja
 
-## Fast Path
+## Quick Start For Claude Code
 
-Install:
+Do not use `connect` for Claude Code. Use a persistent sidecar.
+
+This is the actual Claude Code setup:
+
+1. Install the CLI:
 
 ```bash
 npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ```
 
-Join a room:
+2. Install the Claude skill:
 
 ```bash
-ninja-p2p connect --room my-room --name Claude --id claude
+ninja-p2p install-skill claude
 ```
 
-Send a room message:
+3. In one normal terminal, start Claude's sidecar and leave it running:
 
 ```bash
+ninja-p2p start --room ai-room --name Claude --id claude --runtime claude-code --provider anthropic --model sonnet --can plan,review
+```
+
+4. In Claude Code itself, use the slash command:
+
+```text
+/ninja-p2p notify --id claude
+/ninja-p2p read --id claude --take 10
+/ninja-p2p dm --id claude codex "Can you review this plan?"
+/ninja-p2p send-file --id claude codex ./notes.txt
+```
+
+That is the whole model:
+
+- one regular terminal keeps the connection alive
+- Claude uses `/ninja-p2p ...` during its turns
+- `notify` tells Claude whether anything is waiting
+- `read` pulls pending messages into the current turn
+
+Restart Claude Code after installing the skill if it does not appear immediately.
+
+## Quick Start For Codex CLI
+
+Do not use `connect` for Codex CLI either. Use a persistent sidecar.
+
+This is the actual Codex CLI setup:
+
+1. Install the CLI:
+
+```bash
+npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+```
+
+2. Install the Codex skill:
+
+```bash
+ninja-p2p install-skill codex
+```
+
+3. In one normal terminal, start Codex's sidecar and leave it running:
+
+```bash
+ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests
+```
+
+4. In Codex, have it use the CLI against that running sidecar:
+
+```text
+ninja-p2p notify --id codex
+ninja-p2p read --id codex --take 10
+ninja-p2p dm --id codex claude "I pushed the patch"
+ninja-p2p shares --id codex claude
+```
+
+Important:
+
+- Codex does not get `/ninja-p2p`
+- the skill teaches Codex when and how to use the CLI
+- the CLI is the thing that actually runs
+
+Restart Codex after installing the skill if it does not appear immediately.
+
+## Claude And Codex Talking To Each Other
+
+If you want Claude and Codex in the same room, start one sidecar for each in the same room name:
+
+```bash
+ninja-p2p start --room ai-room --name Claude --id claude --runtime claude-code --provider anthropic --model sonnet --can plan,review
+ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests
+```
+
+Then:
+
+- in Claude Code, use `/ninja-p2p dm --id claude codex "Can you review this?"`
+- in Codex, use `ninja-p2p notify --id codex` and `ninja-p2p read --id codex --take 10`
+- Codex can answer with `ninja-p2p dm --id codex claude "I pushed a fix"`
+
+## Raw CLI
+
+If you just want the lower-level shell commands without Claude Code or Codex in the loop:
+
+```bash
+ninja-p2p connect --room my-room --name Steve --id steve
 ninja-p2p chat --room my-room --name Steve --id steve "hello"
-```
-
-Send a direct message:
-
-```bash
 ninja-p2p dm --room my-room --name Steve --id steve claude "ping"
-```
-
-Send a file:
-
-```bash
 ninja-p2p send-file --room my-room --name Steve --id steve claude ./notes.txt
-```
-
-Expose a folder and let another peer pull from it:
-
-```bash
 ninja-p2p start --room my-room --name Claude --id claude --share docs=./docs
 ninja-p2p shares --id steve claude
 ninja-p2p list-files --id steve claude docs

@@ -1,17 +1,35 @@
 # ninja-p2p
 
-Reusable bot-to-bot P2P communication layer built on [VDO.Ninja](https://vdo.ninja) WebRTC data channels. It lets agents discover each other inside a room, announce skills and status, send room-wide or private messages, and keep lightweight message history without a central relay.
+`ninja-p2p` is a small TypeScript library for peer-to-peer agent messaging on top of the [VDO.Ninja](https://vdo.ninja) SDK.
 
-## What This Repo Is
+It gives you a shared room, peer discovery, direct messages, group chat, topics, in-memory history, and a simple browser dashboard. The transport is WebRTC data channels. You do not need to open inbound ports just to let agents talk to each other.
 
-- A TypeScript/Node library for room-based peer discovery and messaging
-- A standalone `dashboard.html` monitor/chat client
-- A Codex skill at `skills/ninja-p2p`
-- An npm package published as `@vdoninja/ninja-p2p`
+Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p)  
+Support: https://discord.vdo.ninja
 
-## Install The Library
+## What It Does
 
-Install it from npm:
+- peers join the same room and discover each other
+- direct messages between named peers
+- room-wide chat
+- topic-based pub/sub
+- peer status, skills, and presence tracking
+- in-memory history replay
+- in-memory offline queue for peers that drop and reconnect
+- a standalone `dashboard.html` room monitor/chat client
+
+## What It Does Not Do
+
+- it is not a VPN
+- it is not a generic TCP tunnel
+- it is not a generic HTTP tunnel
+- it does not provide durable storage
+- it does not guarantee message delivery
+- it does not turn the dashboard into a remote shell
+
+This package is for agent coordination. If you want to expose a whole private network or front a public website, use a VPN or a tunnel made for that job.
+
+## Install
 
 ```bash
 npm install @vdoninja/ninja-p2p @roamhq/wrtc
@@ -19,10 +37,9 @@ npm install @vdoninja/ninja-p2p @roamhq/wrtc
 
 Notes:
 
-- `@vdoninja/sdk` is pulled in automatically as a dependency.
-- `ws` comes from `@vdoninja/sdk` in Node environments.
-- `@roamhq/wrtc` is recommended for Node-based bots that need WebRTC support.
-- This package is configured for public scoped publishing via `publishConfig.access = "public"`.
+- `@vdoninja/sdk` is installed automatically.
+- `ws` comes from `@vdoninja/sdk` in Node.
+- `@roamhq/wrtc` is recommended for Node bots that need WebRTC support.
 
 ## Add The Codex Skill
 
@@ -60,48 +77,136 @@ const bridge = new VDOBridge({
 
 await bridge.connect();
 
-// Send to everyone in the room
 bridge.chat("Planner online");
-
-// Send a private message to a specific peer
 bridge.chat("sync now", "worker_bot");
-
-// Publish a topic event
 bridge.publishEvent("events", "status_change", { status: "busy" });
 
-// Listen for incoming chat
 bridge.bus.on("message:chat", (envelope) => {
   console.log(`${envelope.from.name}: ${envelope.payload.text}`);
 });
 ```
 
-## Core Features
+## Human Operator Example
 
-- **Peer Registry**: Track peers, identity, skills, topics, and status
-- **Pub/Sub Messaging**: Broadcast, direct send, and topic fanout
-- **Offline Queue**: Queue messages for peers that are temporarily disconnected
-- **Message History**: Replay recent messages to late joiners
-- **Keyword Triggers**: Wake async bots from chat patterns
-- **Identity Protocol**: Peers announce skills and status changes
-- **Heartbeat**: Detect stale peers
-- **Browser Dashboard**: Monitor peers and chat from a single HTML file
+One simple pattern is to put a human-operated process in the same room as the bots.
 
-## Core Patterns
+Agent:
 
-- Room-wide chat: `bridge.chat("hello")`
-- Private message: `bridge.chat("hello", "target_stream_id")`
-- Targeted command: `bridge.command("target_stream_id", "do_work", { jobId: 123 })`
-- Topic event: `bridge.publishEvent("events", "status_change", { status: "busy" })`
+```ts
+import { VDOBridge } from "@vdoninja/ninja-p2p";
 
-## Browser Dashboard
+const worker = new VDOBridge({
+  room: "agents_room",
+  streamId: "worker_bot",
+  identity: {
+    streamId: "worker_bot",
+    role: "agent",
+    name: "Worker",
+  },
+  password: false,
+  skills: ["status", "say"],
+});
 
-`dashboard.html` is a standalone single-file SPA that connects to the same VDO.Ninja room. Open it locally in a browser or host it anywhere static files are supported.
+await worker.connect();
 
-Example:
+worker.bus.on("message:command", (envelope) => {
+  const payload = envelope.payload as { command?: string; args?: { text?: string } };
+
+  if (payload.command === "status") {
+    worker.commandResponse(envelope, {
+      status: "idle",
+      peers: worker.peers.toJSON(),
+    });
+    return;
+  }
+
+  if (payload.command === "say") {
+    console.log(payload.args?.text ?? "");
+    worker.commandResponse(envelope, { ok: true });
+    return;
+  }
+
+  worker.commandResponse(envelope, undefined, `unknown command: ${payload.command ?? "?"}`);
+});
+```
+
+Operator:
+
+```ts
+import { VDOBridge } from "@vdoninja/ninja-p2p";
+
+const operator = new VDOBridge({
+  room: "agents_room",
+  streamId: "steve_operator",
+  identity: {
+    streamId: "steve_operator",
+    role: "operator",
+    name: "Steve",
+  },
+  password: false,
+});
+
+await operator.connect();
+
+operator.command("worker_bot", "status");
+operator.command("worker_bot", "say", { text: "hello from the operator" });
+
+operator.bus.on("message:command_response", (envelope) => {
+  console.log(envelope.payload);
+});
+```
+
+The browser dashboard can also join the same room:
 
 ```text
 dashboard.html?room=agents_room&password=false&name=Steve&autoconnect=true
 ```
+
+The dashboard can chat, DM a peer, and send simple slash-command messages like `/status`, `/health`, `/history`, and `/peers`.
+
+## Coordination Helpers
+
+- `bridge.chat(text, to?)`
+- `bridge.chatTopic(topic, text)`
+- `bridge.command(targetStreamId, command, args?)`
+- `bridge.commandResponse(message, result?, error?)`
+- `bridge.publishEvent(topic, kind, data?)`
+- `bridge.reply(message, type, payload)`
+- `bridge.ack(message, payload?)`
+- `bridge.requestHistory(targetStreamId, count?)`
+
+These are lightweight coordination messages. They are useful, but they are not hard delivery guarantees.
+
+## Raw Data, Media, and Advanced SDK Access
+
+This package focuses on data-channel messaging.
+
+The underlying VDO.Ninja SDK goes further than that. It can also:
+
+- publish and view audio/video tracks
+- emit `track` events
+- send binary payloads over the data channel
+
+This wrapper exposes two escape hatches for that:
+
+- `bridge.sendRaw(data, targetStreamId?)` sends arbitrary data without wrapping it in the message envelope
+- `bridge.getSDK()` returns the underlying VDO.Ninja SDK instance after `connect()`
+
+Example:
+
+```ts
+const sdk = bridge.getSDK();
+
+sdk?.addEventListener("track", (event) => {
+  const track = event.detail?.track;
+  console.log("track", track?.kind);
+});
+
+const chunk = new Uint8Array([1, 2, 3]).buffer;
+bridge.sendRaw(chunk, "worker_bot");
+```
+
+If you want to turn video into frames for ingestion, or build a file-transfer layer, do it on top of the SDK or on top of `sendRaw`. That is possible with the current stack, but it is not wrapped into a higher-level API in this package yet.
 
 ## Public API
 
@@ -118,20 +223,27 @@ import { VDOBridge } from "@vdoninja/ninja-p2p/vdo-bridge";
 import { createEnvelope } from "@vdoninja/ninja-p2p/protocol";
 ```
 
-## Architecture
+## Files
 
-```text
-VDOBridge
-  |- PeerRegistry
-  |- MessageBus
-  `- Protocol helpers
-```
+- `src/vdo-bridge.ts`: connection lifecycle and SDK integration
+- `src/message-bus.ts`: chat, direct messages, topics, history, offline queue
+- `src/peer-registry.ts`: peer state and presence
+- `src/protocol.ts`: message envelope format
+- `dashboard.html`: browser monitor/chat client
+- `skills/ninja-p2p`: Codex skill
 
 ## Tests
 
 ```bash
 npm test
+npm run build
 ```
+
+## Support
+
+- Discord: https://discord.vdo.ninja
+- VDO.Ninja: https://vdo.ninja
+- Social Stream Ninja: https://socialstream.ninja
 
 ## License
 

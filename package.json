@@ -1,7 +1,7 @@
 {
   "name": "@vdoninja/ninja-p2p",
-  "version": "0.1.0",
-  "description": "Reusable P2P agent communication module using VDO.Ninja WebRTC data channels",
+  "version": "0.1.1",
+  "description": "Open source P2P agent messaging and coordination over VDO.Ninja WebRTC data channels",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -42,7 +42,19 @@
     "build": "tsc -p tsconfig.json",
     "prepare": "npm run build"
   },
-  "keywords": ["p2p", "webrtc", "vdo.ninja", "agent", "pub-sub", "data-channel", "bot"],
+  "keywords": [
+    "p2p",
+    "webrtc",
+    "vdo.ninja",
+    "agent",
+    "agent-mesh",
+    "pub-sub",
+    "data-channel",
+    "bot",
+    "nat-traversal",
+    "hole-punching",
+    "remote-control"
+  ],
   "author": "Steve Seguin",
   "license": "MIT",
   "publishConfig": {

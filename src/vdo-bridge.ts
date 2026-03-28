@@ -18,6 +18,7 @@ import {
   parseEnvelope,
   type AnnouncePayload,
   type MessageEnvelope,
+  type MessageType,
   type PeerIdentity,
   type SkillUpdatePayload,
 } from "./protocol.js";
@@ -56,7 +57,7 @@ export class VDOBridge extends EventEmitter {
   private skills: string[];
   private status = "idle";
   private statusDetail = "";
-  private version = "0.1.0";
+  private version = "0.1.1";
 
   constructor(options: VDOBridgeOptions) {
     super();
@@ -202,6 +203,67 @@ export class VDOBridge extends EventEmitter {
   /** Publish an event to a topic. */
   publishEvent(topic: string, kind: string, data?: unknown): MessageEnvelope {
     return this.bus.publish(topic, "event", { kind, ...((data && typeof data === "object") ? data : { data }) });
+  }
+
+  /** Send raw data through the underlying SDK without envelope wrapping. */
+  sendRaw(data: unknown, targetStreamId?: string): boolean {
+    if (!this.sdk) return false;
+    try {
+      if (!targetStreamId) {
+        this.sdk.sendData(data);
+        return true;
+      }
+      const peer = this.peers.getPeer(targetStreamId);
+      if (peer?.uuid) {
+        this.sdk.sendData(data, { UUID: peer.uuid });
+      } else {
+        this.sdk.sendData(data, { streamID: targetStreamId });
+      }
+      return true;
+    } catch (err) {
+      this.emit("error", err);
+      return false;
+    }
+  }
+
+  /** Reply to a received message using its sender as the target. */
+  reply(message: MessageEnvelope, type: MessageType, payload: unknown): MessageEnvelope {
+    return this.bus.send(message.from.streamId, type, payload);
+  }
+
+  /** Acknowledge receipt of a received message. */
+  ack(message: MessageEnvelope, payload?: unknown): MessageEnvelope {
+    const ackPayload: Record<string, unknown> = { messageId: message.id };
+    if (payload !== undefined) {
+      ackPayload.data = payload;
+    }
+    return this.bus.send(message.from.streamId, "ack", ackPayload);
+  }
+
+  /** Respond to a command or request-style message. */
+  commandResponse(message: MessageEnvelope, result?: unknown, error?: string): MessageEnvelope {
+    if (error) {
+      return this.bus.send(message.from.streamId, "command_response", {
+        requestId: message.id,
+        ok: false,
+        error,
+      });
+    }
+    return this.bus.send(message.from.streamId, "command_response", {
+      requestId: message.id,
+      ok: true,
+      result: result ?? null,
+    });
+  }
+
+  /** Ask a peer to replay recent message history to this bridge. */
+  requestHistory(targetStreamId: string, count = 50): MessageEnvelope {
+    return this.bus.send(targetStreamId, "history_request", { count });
+  }
+
+  /** Access the underlying VDO.Ninja SDK instance for advanced media workflows. */
+  getSDK(): InstanceType<typeof import("@vdoninja/sdk")> | null {
+    return this.sdk;
   }
 
   // ── SDK Event Wiring ─────────────────────────────────────────────────────

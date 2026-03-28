@@ -1,41 +1,36 @@
 ---
 name: ninja-p2p
-description: Build bot-to-bot communication over VDO.Ninja WebRTC data channels. Use this skill when the user wants agents or services to meet in a room, discover peers, send private messages, broadcast events, or keep lightweight P2P presence without a central relay.
+description: Use VDO.Ninja WebRTC data channels for agent messaging, peer discovery, room presence, direct messages, topics, and lightweight operator control.
 ---
 
 # ninja-p2p
 
-Use this skill when a project needs room-based peer discovery and direct messaging between bots over WebRTC.
+Use this when a project needs agents to meet in a room and talk to each other over WebRTC.
 
-## What This Repo Provides
+## What It Gives You
 
-- `VDOBridge` for connection lifecycle, room join, announce, heartbeat, and SDK wiring
-- `PeerRegistry` for presence, skills, topics, and status tracking
-- `MessageBus` for broadcast, direct messages, topic-based fanout, history replay, and offline queueing
-- `dashboard.html` for a browser-side room monitor and chat UI
+- `VDOBridge` for connection lifecycle and SDK wiring
+- `PeerRegistry` for presence, skills, topics, and status
+- `MessageBus` for room chat, direct messages, topic fanout, history replay, and the in-memory offline queue
+- `dashboard.html` for a browser room monitor/chat client
 
-## Install The Library In A Project
-
-Install it from npm:
+## Install
 
 ```bash
 npm install @vdoninja/ninja-p2p @roamhq/wrtc
 ```
 
-`@vdoninja/sdk` is installed transitively. `ws` comes from the SDK in Node environments.
+`@vdoninja/sdk` is installed automatically. `ws` comes from the SDK in Node.
 
-## Add This Skill To Codex
+## Default Pattern
 
-Use Codex's built-in `skill-installer` helper and install the `skills/ninja-p2p` path from this repo, then restart Codex.
-
-## Default Integration Pattern
-
-1. Pick a shared `room` for the bots that should discover each other.
-2. Give each bot a unique `streamId`.
+1. Pick a shared `room`.
+2. Give each peer a unique `streamId`.
 3. Connect with `VDOBridge`.
-4. Use `bridge.chat(text)` for room-wide messages.
-5. Use `bridge.chat(text, targetStreamId)` or `bridge.command(targetStreamId, command, args)` for private messages.
-6. Use `bridge.publishEvent(topic, kind, data)` for topic fanout.
+4. Use `bridge.chat()` for room messages.
+5. Use `bridge.chat(..., targetStreamId)` or `bridge.command()` for direct messages.
+6. Use `bridge.publishEvent()` for topic messages.
+7. Use `bridge.commandResponse()`, `bridge.ack()`, or `bridge.reply()` when a peer should answer back.
 
 ## Example
 
@@ -68,7 +63,8 @@ bridge.bus.on("message:chat", (envelope) => {
 
 ## Notes
 
-- `room` and `streamId` should be stable and human-readable, but unique enough to avoid collisions.
+- `room` and `streamId` should be stable and human-readable.
 - Private messages target peer `streamId`s.
 - Topic messages are broadcast and filtered on the receiver side.
-- The browser dashboard can sit in the same room as the bots for live inspection.
+- The offline queue is in memory, not durable storage.
+- `sendRaw()` and `getSDK()` are there if you need lower-level SDK access for binary data or media work.

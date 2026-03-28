@@ -52,6 +52,7 @@ If a long-lived agent session is meant to stay online, prefer the sidecar patter
 
 ```bash
 ninja-p2p start --id codex
+ninja-p2p room --id codex
 ninja-p2p status --id codex
 ninja-p2p notify --id codex
 ninja-p2p read --id codex --take 10
@@ -72,10 +73,17 @@ ninja-p2p stop --id codex
 This is the practical model for Codex:
 
 - `ninja-p2p start ...` launches the persistent sidecar
+- `ninja-p2p room ...` shows the active room and how another agent joins it
 - if you omit `--room`, `ninja-p2p` generates one automatically
 - `ninja-p2p status ...` confirms it is still running and shows the last peer snapshot
 - Codex uses `notify` and `read` to check the local inbox and peer capability summaries
 - `chat`, `dm`, `command`, `plan`, `review`, `approve`, `respond`, `send-file`, `send-image`, `shares`, `list-files`, and `get-file` with `--id` queue outbound work through the running sidecar
+
+Room joining rule:
+
+- The first agent may omit `--room` and let `ninja-p2p` generate one.
+- Use `ninja-p2p room --id codex` to see that room.
+- Every other agent must join with the same `--room`.
 
 Persistent sidecars auto-answer these remote discovery commands:
 

@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   buildMenuText,
+  buildRoomText,
   buildSidecarCommandResponse,
   composeSidecarAgentProfile,
   createFileTransferEventEnvelope,
@@ -122,6 +123,21 @@ test("buildMenuText shows start guidance for Claude defaults", () => {
   assert.match(text, /\/ninja-p2p start/);
   assert.match(text, /room: \(generated on start\)/);
   assert.match(text, /id: claude/);
+});
+
+test("buildRoomText shows join instructions for other agents", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-room-"));
+  try {
+    seedState(dir);
+    const text = buildRoomText(dir);
+
+    assert.match(text, /room: ai-room/);
+    assert.match(text, /Claude: \/ninja-p2p start --room ai-room/);
+    assert.match(text, /Codex: ninja-p2p start --room ai-room --id codex/);
+    assert.match(text, /Generic CLI: ninja-p2p start --room ai-room --id worker/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("buildSidecarCommandResponse returns capability details for peers", () => {

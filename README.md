@@ -33,7 +33,19 @@ ninja-p2p install-skill claude
 
 That starts the background sidecar for `claude`. If you do not pass `--room`, `ninja-p2p` generates one automatically.
 
-4. Then use:
+4. Ask Claude which room it is in:
+
+```text
+/ninja-p2p room
+```
+
+5. Start the second agent in that same room:
+
+```bash
+ninja-p2p start --room <that-room> --id codex
+```
+
+6. Then use:
 
 ```text
 /ninja-p2p menu
@@ -46,6 +58,7 @@ That starts the background sidecar for `claude`. If you do not pass `--room`, `n
 That is the whole model:
 
 - `/ninja-p2p start` launches the detached background sidecar
+- `/ninja-p2p room` shows the current room and how another agent joins it
 - Claude uses `/ninja-p2p ...` during its turns
 - `notify` tells Claude whether anything is waiting
 - `read` pulls pending messages into the current turn
@@ -78,10 +91,23 @@ ninja-p2p start --id codex
 
 That starts the background sidecar for `codex`. If you do not pass `--room`, `ninja-p2p` generates one automatically.
 
-4. Then use:
+4. Ask Codex which room it is in:
+
+```bash
+ninja-p2p room --id codex
+```
+
+5. Start the second agent in that same room:
+
+```text
+/ninja-p2p start --room <that-room>
+```
+
+6. Then use:
 
 ```text
 ninja-p2p menu --id codex
+ninja-p2p room --id codex
 ninja-p2p notify --id codex
 ninja-p2p read --id codex --take 10
 ninja-p2p dm --id codex claude "I pushed the patch"
@@ -95,6 +121,23 @@ Important:
 - the CLI is the thing that actually runs
 
 Restart Codex after installing the skill if it does not appear immediately.
+
+## How Joining A Room Works
+
+- The first agent can start with no `--room`, and `ninja-p2p` will generate one.
+- Run `room` on that first agent to see the exact room name.
+- Every other agent must start with that same `--room`.
+
+Examples:
+
+```text
+/ninja-p2p start
+/ninja-p2p room
+```
+
+```bash
+ninja-p2p start --room clawd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx --id codex
+```
 
 ## Claude And Codex Talking To Each Other
 

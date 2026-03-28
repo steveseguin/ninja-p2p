@@ -47,13 +47,14 @@ node ./dist/cli.js start --id claude --name Claude --runtime claude-code --provi
 ```
 
 - If the user does not pass `--room` to `start`, that is fine. `ninja-p2p` will generate one automatically.
-- For `status`, `notify`, `read`, and `stop`, if the user does not pass `--id`, assume `--id claude`.
+- For `room`, `status`, `notify`, `read`, and `stop`, if the user does not pass `--id`, assume `--id claude`.
 - For `dm`, `shares`, `list-files`, `get-file`, `send-file`, `send-image`, `command`, `task`, `plan`, `review`, `approve`, and `respond`, if the user does not pass `--room`, assume sidecar mode with `--id claude`.
 
 Preferred long-lived pattern:
 
 ```bash
 /ninja-p2p start
+/ninja-p2p room
 /ninja-p2p status
 /ninja-p2p notify
 /ninja-p2p read --take 10
@@ -72,6 +73,12 @@ Preferred long-lived pattern:
 ```
 
 Use that pattern when the user wants Claude to stay online in a room across turns. It is a sidecar plus local inbox, not a true interrupt-driven runtime.
+
+Room joining rule:
+
+- The first agent may omit `--room` and let `ninja-p2p` generate one.
+- Use `/ninja-p2p room` to see that room.
+- Every other agent must join with the same `--room`.
 
 Persistent sidecars auto-answer these remote discovery commands:
 

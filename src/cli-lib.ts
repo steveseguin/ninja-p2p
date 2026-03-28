@@ -23,6 +23,7 @@ export type CliCommand =
   | { kind: "start"; options: CliCommonOptions }
   | { kind: "stop"; stateDir: string }
   | { kind: "status"; stateDir: string }
+  | { kind: "room"; stateDir: string }
   | { kind: "agent"; options: CliCommonOptions }
   | { kind: "notify"; stateDir: string }
   | { kind: "read"; stateDir: string; take: number; peek: boolean }
@@ -58,6 +59,7 @@ export function helpText(): string {
     "",
     "Agent mode:",
     "  ninja-p2p start --room ai-room --id codex",
+    "  ninja-p2p room --id codex",
     "  ninja-p2p status --id codex",
     "  ninja-p2p notify --id codex",
     "  ninja-p2p read --id codex --take 10",
@@ -155,6 +157,8 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
     case "stop":
       return { kind, stateDir: resolveStateDir(parsed.values, env) };
     case "status":
+      return { kind, stateDir: resolveStateDir(parsed.values, env) };
+    case "room":
       return { kind, stateDir: resolveStateDir(parsed.values, env) };
     case "agent":
       {

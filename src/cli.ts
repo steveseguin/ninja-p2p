@@ -115,6 +115,9 @@ async function main(argv: string[]): Promise<void> {
     case "status":
       console.log(JSON.stringify(getAgentStatus(parsed.stateDir), null, 2));
       return;
+    case "room":
+      console.log(buildRoomText(parsed.stateDir));
+      return;
     case "agent":
       await runAgent(parsed.options);
       return;
@@ -380,15 +383,41 @@ export function buildMenuText(options: CliCommonOptions): string {
     lines.push("If you do not pass --room, ninja-p2p generates one for you.");
   } else {
     lines.push("Useful commands:");
+    lines.push(`  ${prefix} room`);
     lines.push(`  ${prefix} status`);
     lines.push(`  ${prefix} notify`);
     lines.push(`  ${prefix} read`);
     lines.push(`  ${prefix} dm <peer> "hello"`);
     lines.push(`  ${prefix} shares <peer>`);
     lines.push(`  ${prefix} stop`);
+    lines.push("");
+    lines.push(`Another agent joins with: --room ${room}`);
   }
 
   return lines.join("\n");
+}
+
+export function buildRoomText(stateDir: string): string {
+  const status = getAgentStatus(stateDir);
+  const room = typeof status.room === "string" ? status.room : "";
+  const streamId = typeof status.streamId === "string" ? status.streamId : "";
+
+  if (!room) {
+    return [
+      "room: not set",
+      "start the sidecar first, or start it with --room my-room",
+    ].join("\n");
+  }
+
+  return [
+    `room: ${room}`,
+    `id: ${streamId || "unknown"}`,
+    "",
+    "Join this room from another agent:",
+    `  Claude: /ninja-p2p start --room ${room}`,
+    `  Codex: ninja-p2p start --room ${room} --id codex`,
+    `  Generic CLI: ninja-p2p start --room ${room} --id worker`,
+  ].join("\n");
 }
 
 function installSkill(runtime: SkillRuntime): void {
@@ -466,11 +495,15 @@ function startAgent(options: CliCommonOptions): void {
   console.log(`room: ${options.room}`);
   console.log(`id: ${options.streamId}`);
   console.log(`log: ${logFile}`);
+  console.log(`join from Claude: /ninja-p2p start --room ${options.room}`);
+  console.log(`join from Codex: ninja-p2p start --room ${options.room} --id codex`);
   const prefix = getCommandPrefix(options);
   if (prefix === "/ninja-p2p") {
+    console.log(`next: ${prefix} room`);
     console.log(`next: ${prefix} notify`);
     console.log(`next: ${prefix} read --take 10`);
   } else {
+    console.log(`next: ${prefix} room --id ${options.streamId}`);
     console.log(`next: ${prefix} notify --id ${options.streamId}`);
     console.log(`next: ${prefix} read --id ${options.streamId} --take 10`);
   }

@@ -17,6 +17,7 @@ test("help text includes the simple install and connect flow", () => {
   const text = helpText();
   assert.match(text, /ninja-p2p menu/);
   assert.match(text, /ninja-p2p start --id claude/);
+  assert.match(text, /ninja-p2p room --id codex/);
   assert.match(text, /npm install -g @vdoninja\/ninja-p2p @roamhq\/wrtc/);
   assert.match(text, /ninja-p2p connect --room my-room --name Claude/);
   assert.match(text, /ninja-p2p start --room ai-room --id codex/);
@@ -127,6 +128,15 @@ test("parseCliArgs parses status command", () => {
   } as NodeJS.ProcessEnv);
   assert.equal(parsed.kind, "status");
   if (parsed.kind !== "status") return;
+  assert.equal(parsed.stateDir, path.join("/home/steve", ".ninja-p2p", "codex"));
+});
+
+test("parseCliArgs parses room command", () => {
+  const parsed = parseCliArgs(["room", "--id", "codex"], {
+    HOME: "/home/steve",
+  } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "room");
+  if (parsed.kind !== "room") return;
   assert.equal(parsed.stateDir, path.join("/home/steve", ".ninja-p2p", "codex"));
 });
 

@@ -1,31 +1,58 @@
 # ninja-p2p
 
-Reusable P2P agent communication module built on [VDO.Ninja](https://vdo.ninja) WebRTC data channels. Enables bots and dashboards to discover each other, exchange messages, and coordinate in real time over peer-to-peer connections.
+Reusable bot-to-bot P2P communication layer built on [VDO.Ninja](https://vdo.ninja) WebRTC data channels. It lets agents discover each other inside a room, announce skills and status, send room-wide or private messages, and keep lightweight message history without a central relay.
 
-## Features
+## What This Repo Is
 
-- **Peer Registry** - Track who's online, their role, skills, and status
-- **Pub/Sub Messaging** - Topic-based subscriptions with broadcast and targeted sends
-- **Offline Queue** - Messages to disconnected peers are queued and delivered on reconnect
-- **Message History** - Ring buffer of recent messages, replayable to new joiners
-- **Keyword Triggers** - Register patterns that wake up async bots on matching messages
-- **Identity Protocol** - Peers announce themselves, their skills, and status changes
-- **Heartbeat** - Periodic pings detect stale connections
-- **Browser Dashboard** - Standalone HTML file for monitoring and chatting with peers
+- A TypeScript/Node library for room-based peer discovery and messaging
+- A standalone `dashboard.html` monitor/chat client
+- A Codex skill at `skills/ninja-p2p`
+
+This repo is **not published to npm yet**. The old `npm install ninja-p2p ...` instructions were wrong.
+
+## Install The Library
+
+Install it directly from GitHub:
+
+```bash
+npm install github:steveseguin/ninja-p2p @roamhq/wrtc
+```
+
+Notes:
+
+- `@vdoninja/sdk` is pulled in automatically as a dependency.
+- `ws` comes from `@vdoninja/sdk` in Node environments.
+- `@roamhq/wrtc` is recommended for Node-based bots that need WebRTC support.
+
+## Add The Codex Skill
+
+Install the skill from this repo's `skills/ninja-p2p` folder, then restart Codex.
+
+### PowerShell
+
+```powershell
+python $HOME\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py --repo steveseguin/ninja-p2p --path skills/ninja-p2p
+```
+
+### Bash
+
+```bash
+python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --repo steveseguin/ninja-p2p --path skills/ninja-p2p
+```
 
 ## Quick Start
 
-```bash
-npm install ninja-p2p @vdoninja/sdk ws @roamhq/wrtc
-```
-
-```typescript
-import { VDOBridge } from "ninja-p2p/src/vdo-bridge.js";
+```ts
+import { VDOBridge } from "ninja-p2p";
 
 const bridge = new VDOBridge({
-  room: "my_secret_room_name",
-  streamId: "my_bot_1",
-  identity: { streamId: "my_bot_1", role: "agent", name: "MyBot" },
+  room: "agents_room",
+  streamId: "planner_bot",
+  identity: {
+    streamId: "planner_bot",
+    role: "agent",
+    name: "Planner",
+  },
   password: false,
   skills: ["chat", "search"],
   topics: ["events"],
@@ -33,71 +60,78 @@ const bridge = new VDOBridge({
 
 await bridge.connect();
 
-// Send a chat message to everyone
-bridge.chat("Hello from MyBot!");
+// Send to everyone in the room
+bridge.chat("Planner online");
 
-// Listen for incoming messages
+// Send a private message to a specific peer
+bridge.chat("sync now", "worker_bot");
+
+// Publish a topic event
+bridge.publishEvent("events", "status_change", { status: "busy" });
+
+// Listen for incoming chat
 bridge.bus.on("message:chat", (envelope) => {
   console.log(`${envelope.from.name}: ${envelope.payload.text}`);
 });
+```
 
-// Send to a specific peer
-bridge.chat("Hey there!", "other_bot_stream_id");
+## Core Features
 
-// Publish to a topic
-bridge.publishEvent("events", "status_change", { status: "busy" });
+- **Peer Registry**: Track peers, identity, skills, topics, and status
+- **Pub/Sub Messaging**: Broadcast, direct send, and topic fanout
+- **Offline Queue**: Queue messages for peers that are temporarily disconnected
+- **Message History**: Replay recent messages to late joiners
+- **Keyword Triggers**: Wake async bots from chat patterns
+- **Identity Protocol**: Peers announce skills and status changes
+- **Heartbeat**: Detect stale peers
+- **Browser Dashboard**: Monitor peers and chat from a single HTML file
 
-// Register a keyword trigger
-bridge.bus.onKeyword(/@mybot/i, (msg) => {
-  bridge.chat(`You called? I heard: ${msg.payload.text}`, msg.from.streamId);
-});
+## Core Patterns
+
+- Room-wide chat: `bridge.chat("hello")`
+- Private message: `bridge.chat("hello", "target_stream_id")`
+- Targeted command: `bridge.command("target_stream_id", "do_work", { jobId: 123 })`
+- Topic event: `bridge.publishEvent("events", "status_change", { status: "busy" })`
+
+## Browser Dashboard
+
+`dashboard.html` is a standalone single-file SPA that connects to the same VDO.Ninja room. Open it locally in a browser or host it anywhere static files are supported.
+
+Example:
+
+```text
+dashboard.html?room=agents_room&password=false&name=Steve&autoconnect=true
+```
+
+## Public API
+
+Main entrypoint:
+
+```ts
+import { VDOBridge, MessageBus, PeerRegistry } from "ninja-p2p";
+```
+
+Subpath entrypoints:
+
+```ts
+import { VDOBridge } from "ninja-p2p/vdo-bridge";
+import { createEnvelope } from "ninja-p2p/protocol";
 ```
 
 ## Architecture
 
+```text
+VDOBridge
+  |- PeerRegistry
+  |- MessageBus
+  `- Protocol helpers
 ```
-VDOBridge (connection lifecycle, SDK wrapper)
-  ├── PeerRegistry (track peers, identity, skills, presence)
-  ├── MessageBus (pub/sub, history, offline queue, triggers)
-  └── Protocol (envelope types, serialization)
-```
-
-All modules use Node.js `EventEmitter` and have zero external dependencies beyond `@vdoninja/sdk`.
-
-## Browser Dashboard
-
-`dashboard.html` is a standalone single-file SPA that connects to the same VDO.Ninja room. Open it in a browser or host on GitHub Pages. Supports URL params:
-
-```
-dashboard.html?room=my_room&password=false&name=Steve&autoconnect=true
-```
-
-## Message Envelope
-
-Every message uses a typed envelope:
-
-```json
-{
-  "v": 1,
-  "id": "unique_msg_id",
-  "type": "chat",
-  "from": { "streamId": "bot_1", "role": "agent", "name": "MyBot", "instanceId": "abc123" },
-  "to": null,
-  "topic": null,
-  "ts": 1711100000000,
-  "payload": { "text": "Hello!" }
-}
-```
-
-Message types: `chat`, `announce`, `skill_update`, `command`, `command_response`, `event`, `ping`, `pong`, `ack`, `history_replay`, `history_request`
 
 ## Tests
 
 ```bash
 npm test
 ```
-
-59 tests covering protocol, peer registry, and message bus.
 
 ## License
 

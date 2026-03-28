@@ -9,7 +9,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import type { AnnouncePayload, PeerIdentity, SkillUpdatePayload } from "./protocol.js";
+import type { AgentProfile, AnnouncePayload, PeerIdentity, SkillUpdatePayload } from "./protocol.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,7 @@ export type PeerRecord = {
   statusDetail: string;
   topics: string[];
   version: string;
+  agentProfile: AgentProfile | null;
   connectedAt: number;
   lastSeenAt: number;
   connected: boolean;
@@ -73,6 +74,7 @@ export class PeerRegistry extends EventEmitter {
       statusDetail: "",
       topics: [],
       version: "",
+      agentProfile: null,
       connectedAt: Date.now(),
       lastSeenAt: Date.now(),
       connected: true,
@@ -134,6 +136,7 @@ export class PeerRegistry extends EventEmitter {
     peer.statusDetail = announce.statusDetail ?? "";
     peer.topics = announce.topics ?? [];
     peer.version = announce.version ?? "";
+    peer.agentProfile = announce.agent ?? peer.agentProfile;
     peer.lastSeenAt = Date.now();
     this.emit("peer:update", peer, "announce");
     return peer;
@@ -146,6 +149,7 @@ export class PeerRegistry extends EventEmitter {
     peer.skills = update.skills ?? peer.skills;
     peer.status = update.status ?? peer.status;
     peer.statusDetail = update.statusDetail ?? peer.statusDetail;
+    peer.agentProfile = update.agent ?? peer.agentProfile;
     peer.lastSeenAt = Date.now();
     this.emit("peer:update", peer, "skill_update");
     return peer;
@@ -229,6 +233,7 @@ export class PeerRegistry extends EventEmitter {
       skills: p.skills,
       status: p.status,
       statusDetail: p.statusDetail,
+      agentProfile: p.agentProfile,
       connected: p.connected,
       connectedAt: p.connectedAt,
       lastSeenAt: p.lastSeenAt,

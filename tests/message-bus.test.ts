@@ -358,6 +358,35 @@ test("removeTrigger stops the trigger from firing", () => {
   assert.equal(count, 1); // should not increment
 });
 
+test("keyword trigger errors do not crash when no error listener is attached", () => {
+  const { bus, peers } = makeBus();
+  peers.addPeer("other", "uuid_other");
+  bus.onKeyword("boom", () => {
+    throw new Error("trigger failed");
+  });
+
+  assert.doesNotThrow(() => {
+    bus.handleIncoming(createEnvelope(otherIdentity, "chat", { text: "boom now" }));
+  });
+});
+
+test("keyword trigger errors still emit error when a listener is attached", () => {
+  const { bus, peers } = makeBus();
+  peers.addPeer("other", "uuid_other");
+  const errors: unknown[] = [];
+  bus.on("error", (err) => {
+    errors.push(err);
+  });
+  bus.onKeyword("boom", () => {
+    throw new Error("trigger failed");
+  });
+
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", { text: "boom now" }));
+
+  assert.equal(errors.length, 1);
+  assert.equal((errors[0] as Error).message, "trigger failed");
+});
+
 // ── Clear ────────────────────────────────────────────────────────────────
 
 test("clear resets all state", () => {

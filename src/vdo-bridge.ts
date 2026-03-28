@@ -9,12 +9,15 @@
  */
 
 import { EventEmitter } from "node:events";
+import { sendFileFromPath } from "./file-transfer.js";
 import { MessageBus, type MessageBusOptions } from "./message-bus.js";
 import { PeerRegistry } from "./peer-registry.js";
 import {
+  type AgentProfile,
   createEnvelope,
   createInstanceId,
   envelopeToWire,
+  type FileOfferPayload,
   parseEnvelope,
   type AnnouncePayload,
   type MessageEnvelope,
@@ -37,6 +40,8 @@ export type VDOBridgeOptions = {
   skills?: string[];
   /** Topics to subscribe to. */
   topics?: string[];
+  /** Optional agent profile advertised to peers. */
+  agentProfile?: AgentProfile;
   /** Heartbeat interval in ms. Default: 30000. */
   heartbeatMs?: number;
   /** MessageBus options. */
@@ -58,6 +63,8 @@ export class VDOBridge extends EventEmitter {
   private status = "idle";
   private statusDetail = "";
   private version = "0.1.2";
+  private agentProfile: AgentProfile | undefined;
+  private readonly viewedStreamIds = new Set<string>();
 
   constructor(options: VDOBridgeOptions) {
     super();
@@ -69,6 +76,7 @@ export class VDOBridge extends EventEmitter {
       instanceId: createInstanceId(),
     };
     this.skills = options.skills ?? [];
+    this.agentProfile = options.agentProfile;
     this.peers = new PeerRegistry();
     this.bus = new MessageBus(this.identity, this.peers, options.busOptions);
 
@@ -101,7 +109,7 @@ export class VDOBridge extends EventEmitter {
       try {
         this.sdk.sendData(data, target ?? undefined);
       } catch (err) {
-        this.emit("error", err);
+        this.emitBridgeError(err);
       }
     });
 
@@ -145,6 +153,7 @@ export class VDOBridge extends EventEmitter {
 
     this.connected = false;
     this.sdk = null;
+    this.viewedStreamIds.clear();
     this.peers.clear();
     console.log("[P2P] Disconnected.");
     this.emit("disconnected");
@@ -152,6 +161,14 @@ export class VDOBridge extends EventEmitter {
 
   isConnected(): boolean {
     return this.connected;
+  }
+
+  private emitBridgeError(err: unknown): void {
+    if (this.listenerCount("error") > 0) {
+      this.emit("error", err);
+      return;
+    }
+    console.error("[P2P] Bridge error:", err);
   }
 
   // ── Identity Management ──────────────────────────────────────────────────
@@ -169,6 +186,12 @@ export class VDOBridge extends EventEmitter {
     this.broadcastSkillUpdate();
   }
 
+  /** Update the advertised agent profile and broadcast the change. */
+  updateAgentProfile(profile: AgentProfile): void {
+    this.agentProfile = profile;
+    this.broadcastSkillUpdate();
+  }
+
   /** Get current announce payload. */
   getAnnouncePayload(): AnnouncePayload {
     return {
@@ -177,6 +200,7 @@ export class VDOBridge extends EventEmitter {
       statusDetail: this.statusDetail,
       version: this.version,
       topics: this.bus.getSubscriptions(),
+      agent: this.agentProfile,
     };
   }
 
@@ -205,6 +229,16 @@ export class VDOBridge extends EventEmitter {
     return this.bus.publish(topic, "event", { kind, ...((data && typeof data === "object") ? data : { data }) });
   }
 
+  /** Send a file to a connected peer. */
+  sendFile(targetStreamId: string, filePath: string): FileOfferPayload {
+    return sendFileFromPath(this, targetStreamId, filePath, "file");
+  }
+
+  /** Send an image to a connected peer. */
+  sendImage(targetStreamId: string, filePath: string): FileOfferPayload {
+    return sendFileFromPath(this, targetStreamId, filePath, "image");
+  }
+
   /** Send raw data through the underlying SDK without envelope wrapping. */
   sendRaw(data: unknown, targetStreamId?: string): boolean {
     if (!this.sdk) return false;
@@ -221,7 +255,7 @@ export class VDOBridge extends EventEmitter {
       }
       return true;
     } catch (err) {
-      this.emit("error", err);
+      this.emitBridgeError(err);
       return false;
     }
   }
@@ -370,6 +404,7 @@ export class VDOBridge extends EventEmitter {
     this.sdk.addEventListener("peerDisconnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
       const streamId = event.detail?.streamID ?? this.peers.streamIdForUuid(uuid) ?? uuid;
+      this.viewedStreamIds.delete(streamId);
       this.peers.markDisconnected(streamId);
       console.log(`[P2P] Peer disconnected: ${streamId}`);
       this.emit("peer:disconnected", { streamId, uuid });
@@ -391,16 +426,23 @@ export class VDOBridge extends EventEmitter {
       const list = event.detail?.list ?? [];
       for (const entry of list) {
         if (entry.streamID && entry.streamID !== this.options.streamId) {
-          // View each existing peer to establish data channels
-          this.sdk!.view(entry.streamID, { audio: false, video: false });
+          this.maybeViewPeer(entry.streamID);
         }
       }
+    });
+
+    this.sdk.addEventListener("videoaddedtoroom", (event: { detail?: { streamID?: string } }) => {
+      this.maybeViewPeer(event.detail?.streamID);
+    });
+
+    this.sdk.addEventListener("streamAdded", (event: { detail?: { streamID?: string } }) => {
+      this.maybeViewPeer(event.detail?.streamID);
     });
 
     // Error handling
     this.sdk.addEventListener("error", (event: { detail?: { error?: unknown } }) => {
       console.error("[P2P] SDK error:", event.detail?.error);
-      this.emit("error", event.detail?.error);
+      this.emitBridgeError(event.detail?.error);
     });
   }
 
@@ -447,6 +489,21 @@ export class VDOBridge extends EventEmitter {
       skills: this.skills,
       status: this.status,
       statusDetail: this.statusDetail,
+      agent: this.agentProfile,
     } satisfies SkillUpdatePayload);
+  }
+
+  private maybeViewPeer(streamId?: string): void {
+    if (!this.sdk || !streamId || streamId === this.options.streamId || this.viewedStreamIds.has(streamId)) {
+      return;
+    }
+
+    this.viewedStreamIds.add(streamId);
+    try {
+      this.sdk.view(streamId, { audio: false, video: false });
+    } catch (err) {
+      this.viewedStreamIds.delete(streamId);
+      this.emitBridgeError(err);
+    }
   }
 }

@@ -35,6 +35,38 @@ function setFakeSDK(bridge: VDOBridge, sendData: (data: unknown, target?: unknow
   (bridge as unknown as { sdk: { sendData: (data: unknown, target?: unknown) => void } }).sdk = { sendData };
 }
 
+test("wireSDKEvents views existing and newly added peers without duplicating view calls", () => {
+  const bridge = makeBridge();
+  const handlers = new Map<string, (event: { detail?: { list?: Array<{ streamID?: string }>; streamID?: string } }) => void>();
+  const viewed: Array<{ streamId: string; options: { audio: boolean; video: boolean } }> = [];
+
+  (bridge as unknown as {
+    sdk: {
+      addEventListener: (name: string, handler: (event: { detail?: { list?: Array<{ streamID?: string }>; streamID?: string } }) => void) => void;
+      view: (streamId: string, options: { audio: boolean; video: boolean }) => void;
+    };
+    wireSDKEvents: () => void;
+  }).sdk = {
+    addEventListener(name, handler) {
+      handlers.set(name, handler);
+    },
+    view(streamId, options) {
+      viewed.push({ streamId, options });
+    },
+  };
+
+  (bridge as unknown as { wireSDKEvents: () => void }).wireSDKEvents();
+
+  handlers.get("listing")?.({ detail: { list: [{ streamID: other.streamId }, { streamID: me.streamId }] } });
+  handlers.get("videoaddedtoroom")?.({ detail: { streamID: other.streamId } });
+  handlers.get("streamAdded")?.({ detail: { streamID: "reviewer_bot" } });
+
+  assert.deepEqual(viewed, [
+    { streamId: other.streamId, options: { audio: false, video: false } },
+    { streamId: "reviewer_bot", options: { audio: false, video: false } },
+  ]);
+});
+
 test("reply targets the sender of the original message", () => {
   const bridge = makeBridge();
   const incoming = createEnvelope(other, "chat", { text: "hello" });
@@ -129,7 +161,98 @@ test("sendRaw targets a known peer by UUID", () => {
   assert.deepEqual(sent[0].target, { UUID: "uuid_other", allowFallback: true });
 });
 
+test("sendRaw does not crash when the SDK throws and no error listener is attached", () => {
+  const bridge = makeBridge();
+  setFakeSDK(bridge, () => {
+    throw new Error("boom");
+  });
+
+  const ok = bridge.sendRaw({ test: true }, other.streamId);
+
+  assert.equal(ok, false);
+});
+
+test("sendRaw still emits error when a listener is attached", () => {
+  const bridge = makeBridge();
+  const errors: unknown[] = [];
+  bridge.on("error", (err) => {
+    errors.push(err);
+  });
+  setFakeSDK(bridge, () => {
+    throw new Error("boom");
+  });
+
+  const ok = bridge.sendRaw({ test: true }, other.streamId);
+
+  assert.equal(ok, false);
+  assert.equal(errors.length, 1);
+  assert.equal((errors[0] as Error).message, "boom");
+});
+
 test("getSDK returns null before connect", () => {
   const bridge = makeBridge();
   assert.equal(bridge.getSDK(), null);
+});
+
+test("getAnnouncePayload includes the configured agent profile", () => {
+  const bridge = new VDOBridge({
+    room: "agents_room",
+    streamId: me.streamId,
+    identity: {
+      streamId: me.streamId,
+      role: me.role,
+      name: me.name,
+    },
+    password: false,
+    skills: ["chat", "command"],
+    topics: ["events"],
+    agentProfile: {
+      runtime: "claude-code",
+      can: ["review"],
+      asks: [{ name: "review", description: "Review a patch" }],
+    },
+  });
+
+  assert.deepEqual(bridge.getAnnouncePayload(), {
+    skills: ["chat", "command"],
+    status: "idle",
+    statusDetail: "",
+    version: "0.1.2",
+    topics: ["events"],
+    agent: {
+      runtime: "claude-code",
+      can: ["review"],
+      asks: [{ name: "review", description: "Review a patch" }],
+    },
+  });
+});
+
+test("updateAgentProfile broadcasts a skill update when connected", () => {
+  const bridge = makeBridge();
+  const broadcasts: Array<{ type: string; payload: unknown }> = [];
+  (bridge as unknown as { connected: boolean }).connected = true;
+  (bridge as unknown as {
+    bus: { broadcast: (type: string, payload: unknown) => void };
+  }).bus = {
+    broadcast(type: string, payload: unknown) {
+      broadcasts.push({ type, payload });
+    },
+  };
+
+  bridge.updateAgentProfile({
+    provider: "openai",
+    can: ["edit"],
+  });
+
+  assert.equal(broadcasts.length, 1);
+  assert.equal(broadcasts[0].type, "skill_update");
+  assert.deepEqual(broadcasts[0].payload, {
+    skills: [],
+    status: "idle",
+    statusDetail: "",
+    agent: {
+      provider: "openai",
+      can: ["edit"],
+    },
+  });
 });

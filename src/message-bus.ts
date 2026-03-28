@@ -70,6 +70,14 @@ export class MessageBus extends EventEmitter {
     this.sendDataFn = fn;
   }
 
+  private emitBusError(err: unknown): void {
+    if (this.listenerCount("error") > 0) {
+      this.emit("error", err);
+      return;
+    }
+    console.error("[P2P] Message bus error:", err);
+  }
+
   // ── Subscriptions ────────────────────────────────────────────────────────
 
   subscribe(topic: string): void {
@@ -248,8 +256,8 @@ export class MessageBus extends EventEmitter {
   }
 
   private addToHistory(envelope: MessageEnvelope): void {
-    // Don't store pings/pongs in history
-    if (envelope.type === "ping" || envelope.type === "pong") return;
+    // Don't store heartbeat or file chunk traffic in history.
+    if (envelope.type === "ping" || envelope.type === "pong" || envelope.type === "file_chunk") return;
     this.history.push(envelope);
     while (this.history.length > this.historySize) {
       this.history.shift();
@@ -281,7 +289,7 @@ export class MessageBus extends EventEmitter {
         try {
           trigger.handler(envelope);
         } catch (err) {
-          this.emit("error", err);
+          this.emitBusError(err);
         }
       }
     }

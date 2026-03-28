@@ -1,0 +1,5 @@
+interface:
+  display_name: "ninja-p2p"
+  short_description: "Use the ninja-p2p CLI for WebRTC room chat, DMs, commands, and peer inspection."
+policy:
+  allow_implicit_invocation: false

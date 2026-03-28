@@ -25,6 +25,18 @@
       "types": "./dist/peer-registry.d.ts",
       "import": "./dist/peer-registry.js"
     },
+    "./file-transfer": {
+      "types": "./dist/file-transfer.d.ts",
+      "import": "./dist/file-transfer.js"
+    },
+    "./agent-state": {
+      "types": "./dist/agent-state.d.ts",
+      "import": "./dist/agent-state.js"
+    },
+    "./shared-folders": {
+      "types": "./dist/shared-folders.d.ts",
+      "import": "./dist/shared-folders.js"
+    },
     "./protocol": {
       "types": "./dist/protocol.d.ts",
       "import": "./dist/protocol.js"
@@ -36,13 +48,17 @@
     "dist",
     "dashboard.html",
     "README.md",
-    "skills/ninja-p2p"
+    ".codex/skills/ninja-p2p",
+    ".agents/skills/ninja-p2p",
+    ".claude/skills/ninja-p2p"
   ],
   "sideEffects": false,
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.json",
+    "validate:live": "node ./scripts/validate-live.mjs",
+    "sync:docs": "node -e \"const fs=require('node:fs'); fs.mkdirSync('docs',{recursive:true}); fs.copyFileSync('dashboard.html','docs/index.html');\"",
     "prepare": "npm run build"
   },
   "keywords": [
@@ -52,6 +68,9 @@
     "agent",
     "agent-mesh",
     "cli",
+    "codex",
+    "claude-code",
+    "skill",
     "pub-sub",
     "data-channel",
     "bot",

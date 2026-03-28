@@ -16,6 +16,10 @@ export type MessageType =
   | "skill_update"
   | "command"
   | "command_response"
+  | "file_offer"
+  | "file_chunk"
+  | "file_complete"
+  | "file_ack"
   | "event"
   | "ping"
   | "pong"
@@ -28,6 +32,68 @@ export type PeerIdentity = {
   role: string;
   name: string;
   instanceId: string;
+};
+
+export type AgentAsk = {
+  name: string;
+  description: string;
+  via?: "command" | "chat" | "event";
+  example?: string;
+};
+
+export type SharedFolderSummary = {
+  name: string;
+  description?: string;
+};
+
+export type AgentProfile = {
+  runtime?: string;
+  provider?: string;
+  model?: string;
+  summary?: string;
+  workspace?: string;
+  can?: string[];
+  asks?: AgentAsk[];
+  shares?: SharedFolderSummary[];
+};
+
+export type FileTransferKind = "file" | "image";
+
+export type FileOfferPayload = {
+  transferId: string;
+  name: string;
+  mimeType: string;
+  kind: FileTransferKind;
+  size: number;
+  sha256: string;
+  chunkSize: number;
+  totalChunks: number;
+};
+
+export type FileChunkPayload = {
+  transferId: string;
+  index: number;
+  totalChunks: number;
+  data: string;
+};
+
+export type FileCompletePayload = {
+  transferId: string;
+  totalChunks: number;
+  size: number;
+  sha256: string;
+};
+
+export type FileAckPayload = {
+  transferId: string;
+  ok: boolean;
+  name?: string;
+  mimeType?: string;
+  kind?: FileTransferKind;
+  size?: number;
+  sha256?: string;
+  savedPath?: string;
+  error?: string;
 };
 
 export type MessageEnvelope = {
@@ -47,12 +113,14 @@ export type AnnouncePayload = {
   statusDetail?: string;
   version: string;
   topics: string[];
+  agent?: AgentProfile;
 };
 
 export type SkillUpdatePayload = {
   skills: string[];
   status: string;
   statusDetail?: string;
+  agent?: AgentProfile;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -84,13 +84,21 @@ test("updateFromAnnounce fills identity and skills", () => {
   const reg = new PeerRegistry();
   reg.addPeer("bot_1", "uuid_1");
   const identity = makeIdentity("bot_1");
-  const announce = makeAnnounce(["skill_a", "skill_b"]);
+  const announce = {
+    ...makeAnnounce(["skill_a", "skill_b"]),
+    agent: {
+      runtime: "codex-cli",
+      can: ["review"],
+      asks: [{ name: "review", description: "Review a patch" }],
+    },
+  };
   const peer = reg.updateFromAnnounce("bot_1", identity, announce);
   assert.ok(peer);
   assert.deepEqual(peer!.identity, identity);
   assert.deepEqual(peer!.skills, ["skill_a", "skill_b"]);
   assert.equal(peer!.status, "idle");
   assert.deepEqual(peer!.topics, ["events"]);
+  assert.deepEqual(peer!.agentProfile, announce.agent);
 });
 
 test("updateFromSkillUpdate changes skills and status", () => {
@@ -98,12 +106,21 @@ test("updateFromSkillUpdate changes skills and status", () => {
   reg.addPeer("bot_1", "uuid_1");
   reg.updateFromAnnounce("bot_1", makeIdentity("bot_1"), makeAnnounce(["old"]));
 
-  const update: SkillUpdatePayload = { skills: ["new_a", "new_b"], status: "busy", statusDetail: "working" };
+  const update: SkillUpdatePayload = {
+    skills: ["new_a", "new_b"],
+    status: "busy",
+    statusDetail: "working",
+    agent: {
+      provider: "anthropic",
+      can: ["plan", "review"],
+    },
+  };
   const peer = reg.updateFromSkillUpdate("bot_1", update);
   assert.ok(peer);
   assert.deepEqual(peer!.skills, ["new_a", "new_b"]);
   assert.equal(peer!.status, "busy");
   assert.equal(peer!.statusDetail, "working");
+  assert.deepEqual(peer!.agentProfile, update.agent);
 });
 
 test("getConnectedPeers filters by connected status", () => {
@@ -170,7 +187,13 @@ test("pruneStale removes old disconnected peers", () => {
 test("toJSON returns serializable snapshot", () => {
   const reg = new PeerRegistry();
   reg.addPeer("bot_1", "uuid_1");
-  reg.updateFromAnnounce("bot_1", makeIdentity("bot_1"), makeAnnounce(["chat"]));
+  reg.updateFromAnnounce("bot_1", makeIdentity("bot_1"), {
+    ...makeAnnounce(["chat"]),
+    agent: {
+      runtime: "claude-code",
+      asks: [{ name: "status", description: "Return current status" }],
+    },
+  });
   const json = reg.toJSON();
   assert.ok(Array.isArray(json));
   assert.equal(json.length, 1);
@@ -179,6 +202,10 @@ test("toJSON returns serializable snapshot", () => {
   assert.equal(entry.name, "Test bot_1");
   assert.equal(entry.role, "test");
   assert.ok(entry.connected);
+  assert.deepEqual(entry.agentProfile, {
+    runtime: "claude-code",
+    asks: [{ name: "status", description: "Return current status" }],
+  });
 });
 
 test("clear removes all peers", () => {

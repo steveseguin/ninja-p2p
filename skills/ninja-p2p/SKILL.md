@@ -16,10 +16,10 @@ Use this skill when a project needs room-based peer discovery and direct messagi
 
 ## Install The Library In A Project
 
-This repo is not published to npm yet. Install it directly from GitHub:
+Install it from npm:
 
 ```bash
-npm install github:steveseguin/ninja-p2p @roamhq/wrtc
+npm install @vdoninja/ninja-p2p @roamhq/wrtc
 ```
 
 `@vdoninja/sdk` is installed transitively. `ws` comes from the SDK in Node environments.
@@ -40,7 +40,7 @@ Use Codex's built-in `skill-installer` helper and install the `skills/ninja-p2p`
 ## Example
 
 ```ts
-import { VDOBridge } from "ninja-p2p";
+import { VDOBridge } from "@vdoninja/ninja-p2p";
 
 const bridge = new VDOBridge({
   room: "agents_room",

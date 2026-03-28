@@ -1,5 +1,5 @@
 {
-  "name": "ninja-p2p",
+  "name": "@vdoninja/ninja-p2p",
   "version": "0.1.0",
   "description": "Reusable P2P agent communication module using VDO.Ninja WebRTC data channels",
   "type": "module",
@@ -45,6 +45,12 @@
   "keywords": ["p2p", "webrtc", "vdo.ninja", "agent", "pub-sub", "data-channel", "bot"],
   "author": "Steve Seguin",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/steveseguin/ninja-p2p.git"

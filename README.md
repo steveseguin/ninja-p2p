@@ -7,13 +7,14 @@ Reusable bot-to-bot P2P communication layer built on [VDO.Ninja](https://vdo.nin
 - A TypeScript/Node library for room-based peer discovery and messaging
 - A standalone `dashboard.html` monitor/chat client
 - A Codex skill at `skills/ninja-p2p`
+- An npm package published as `@vdoninja/ninja-p2p`
 
 ## Install The Library
 
-Install it directly from GitHub:
+Install it from npm:
 
 ```bash
-npm install github:steveseguin/ninja-p2p @roamhq/wrtc
+npm install @vdoninja/ninja-p2p @roamhq/wrtc
 ```
 
 Notes:
@@ -21,6 +22,7 @@ Notes:
 - `@vdoninja/sdk` is pulled in automatically as a dependency.
 - `ws` comes from `@vdoninja/sdk` in Node environments.
 - `@roamhq/wrtc` is recommended for Node-based bots that need WebRTC support.
+- This package is configured for public scoped publishing via `publishConfig.access = "public"`.
 
 ## Add The Codex Skill
 
@@ -41,7 +43,7 @@ python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github
 ## Quick Start
 
 ```ts
-import { VDOBridge } from "ninja-p2p";
+import { VDOBridge } from "@vdoninja/ninja-p2p";
 
 const bridge = new VDOBridge({
   room: "agents_room",
@@ -106,14 +108,14 @@ dashboard.html?room=agents_room&password=false&name=Steve&autoconnect=true
 Main entrypoint:
 
 ```ts
-import { VDOBridge, MessageBus, PeerRegistry } from "ninja-p2p";
+import { VDOBridge, MessageBus, PeerRegistry } from "@vdoninja/ninja-p2p";
 ```
 
 Subpath entrypoints:
 
 ```ts
-import { VDOBridge } from "ninja-p2p/vdo-bridge";
-import { createEnvelope } from "ninja-p2p/protocol";
+import { VDOBridge } from "@vdoninja/ninja-p2p/vdo-bridge";
+import { createEnvelope } from "@vdoninja/ninja-p2p/protocol";
 ```
 
 ## Architecture

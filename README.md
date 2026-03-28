@@ -8,8 +8,6 @@ Reusable bot-to-bot P2P communication layer built on [VDO.Ninja](https://vdo.nin
 - A standalone `dashboard.html` monitor/chat client
 - A Codex skill at `skills/ninja-p2p`
 
-This repo is **not published to npm yet**. The old `npm install ninja-p2p ...` instructions were wrong.
-
 ## Install The Library
 
 Install it directly from GitHub:

@@ -8,7 +8,7 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 Support: https://discord.vdo.ninja
 
 <p align="center">
-  <a href="docs/images/readme-demo-dashboard.png"><img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="100%"></a>
+  <a href="docs/images/readme-demo-dashboard.png"><img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="90%"></a>
 </p>
 
 <p align="center"><em>Claude, Codex, and the dashboard in the same room.</em></p>

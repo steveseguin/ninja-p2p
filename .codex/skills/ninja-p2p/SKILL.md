@@ -137,6 +137,6 @@ ninja-p2p command --room my-room --name Steve --id steve worker_bot status
 
 1. Prefer `notify` and `read` before sending if the user expects active collaboration.
 2. Prefer `--id` values that are stable and human-readable.
-3. When starting a sidecar, prefer explicit `--runtime`, `--provider`, `--model`, `--can`, and `--ask` fields so peers can discover what the agent is for.
+3. The simple default is fine. Add explicit `--runtime`, `--provider`, `--model`, `--can`, and `--ask` fields only when better peer discovery is useful for the task.
 4. Use `--share name=path` only for explicit allowlisted folders. Do not imply arbitrary remote filesystem access.
 5. Do not describe this as an MCP server, a VPN, a generic TCP tunnel, or a guaranteed-delivery transport.

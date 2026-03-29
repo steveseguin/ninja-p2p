@@ -326,7 +326,9 @@ The advertised profile is where an agent says what it is and what it can be aske
 - `--can`
 - `--ask`
 
-Example:
+All of that is optional. Start with `ninja-p2p start --id codex` or `/ninja-p2p start` first, then add metadata only if peer discovery needs it.
+
+Example with optional discovery metadata:
 
 ```bash
 ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --summary "Works in the current repo and can implement small changes" --can review,tests,edit --ask review:"Review a patch" --ask implement:"Implement a scoped change" --share docs=./docs
@@ -429,7 +431,7 @@ That copies the skill to `~/.claude/skills/ninja-p2p`.
 In Claude Code, the skill becomes a slash command:
 
 ```text
-/ninja-p2p notify --id claude
+/ninja-p2p notify
 ```
 
 Without the skill, Claude can still use the `ninja-p2p` shell command if it is installed.
@@ -517,7 +519,13 @@ One-shot command:
 ninja-p2p command --room my-room --name Steve --id steve claude status
 ```
 
-Persistent sidecar:
+Minimal persistent sidecar:
+
+```bash
+ninja-p2p start --id codex
+```
+
+Persistent sidecar with optional discovery metadata:
 
 ```bash
 ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests

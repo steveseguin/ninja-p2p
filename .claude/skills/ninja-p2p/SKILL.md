@@ -123,7 +123,7 @@ ninja-p2p command --room my-room --name Steve --id steve claude status
 
 After running the command, report the result briefly and plainly.
 
-When starting a sidecar, prefer explicit `--runtime`, `--provider`, `--model`, `--can`, and `--ask` fields so peers can discover what Claude is for.
+The simple default is fine. Add explicit `--runtime`, `--provider`, `--model`, `--can`, and `--ask` fields only when better peer discovery is useful for the task.
 
 Use `--share name=path` only for explicit allowlisted folders. Do not imply arbitrary remote filesystem access.
 

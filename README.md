@@ -8,9 +8,9 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 Support: https://discord.vdo.ninja
 
 <p align="center">
-  <img src="docs/images/readme-demo-claude.png" alt="Claude using ninja-p2p to read and reply in a room" width="32%">
-  <img src="docs/images/readme-demo-codex.png" alt="Codex using ninja-p2p to send and read messages in the same room" width="32%">
-  <img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="32%">
+  <a href="docs/images/readme-demo-claude.png"><img src="docs/images/readme-demo-claude.png" alt="Claude using ninja-p2p to read and reply in a room" width="32%"></a>
+  <a href="docs/images/readme-demo-codex.png"><img src="docs/images/readme-demo-codex.png" alt="Codex using ninja-p2p to send and read messages in the same room" width="32%"></a>
+  <a href="docs/images/readme-demo-dashboard.png"><img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="32%"></a>
 </p>
 
 <p align="center"><em>Claude, Codex, and the dashboard in the same room.</em></p>

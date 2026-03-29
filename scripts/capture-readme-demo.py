@@ -25,6 +25,10 @@ HWND_NOTOPMOST = -2
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
+TERMINAL_WIDTH = 2460
+TERMINAL_HEIGHT = 1400
+DASHBOARD_WIDTH = 2200
+DASHBOARD_HEIGHT = 1400
 
 CHROME_CANDIDATES = [
     Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
@@ -81,15 +85,6 @@ def start_sidecar(room: str, stream_id: str, runtime: str, state_dir: Path) -> N
 
 def stop_sidecar(state_dir: Path) -> None:
     run(["node", ".\\dist\\cli.js", "stop", "--state-dir", str(state_dir)])
-
-
-def cmd_window(command: list[str]) -> subprocess.Popen[str]:
-    return subprocess.Popen(
-        command,
-        cwd=str(REPO_ROOT),
-        creationflags=CREATE_NEW_CONSOLE,
-        text=True,
-    )
 
 
 def launch_browser(browser: Path, room: str) -> subprocess.Popen[str]:
@@ -173,7 +168,7 @@ def build_codex_command(state_dir: Path, title: str) -> str:
     return "\n".join([
         "@echo off",
         f"title {title}",
-        "mode con: cols=88 lines=36",
+        "mode con: cols=180 lines=52",
         f'cd /d "{REPO_ROOT}"',
         "echo Room info",
         f'node .\\dist\\cli.js room --state-dir "{state_dir}"',
@@ -203,7 +198,7 @@ def build_claude_command(state_dir: Path, title: str) -> str:
     return "\n".join([
         "@echo off",
         f"title {title}",
-        "mode con: cols=88 lines=36",
+        "mode con: cols=180 lines=52",
         f'cd /d "{REPO_ROOT}"',
         "echo Room info",
         f'node .\\dist\\cli.js room --state-dir "{state_dir}"',
@@ -260,31 +255,36 @@ def main() -> None:
     codex_script = write_demo_script(base_dir / "codex-demo.cmd", build_codex_command(codex_state, "CODEX_PANE"))
     claude_script = write_demo_script(base_dir / "claude-demo.cmd", build_claude_command(claude_state, terminal_title))
 
-    cmd_window([
-        "wt.exe",
-        "new-tab",
-        "--title",
-        "CODEX_PANE",
-        "--suppressApplicationTitle",
-        "cmd",
-        "/k",
-        str(codex_script),
-        ";",
-        "split-pane",
-        "-V",
-        "--title",
-        terminal_title,
-        "--suppressApplicationTitle",
-        "cmd",
-        "/k",
-        str(claude_script),
-    ])
+    subprocess.Popen(
+        [
+            "wt.exe",
+            "new-tab",
+            "--title",
+            "CODEX_PANE",
+            "--suppressApplicationTitle",
+            "cmd",
+            "/k",
+            str(codex_script),
+            ";",
+            "split-pane",
+            "-V",
+            "--title",
+            terminal_title,
+            "--suppressApplicationTitle",
+            "cmd",
+            "/k",
+            str(claude_script),
+        ],
+        cwd=str(REPO_ROOT),
+        creationflags=CREATE_NEW_CONSOLE,
+        text=True,
+    )
 
     terminal_hwnd = wait_for_window(terminal_title)
     dashboard_hwnd = wait_for_window("Ninja P2P Dashboard")
 
-    move_window(terminal_hwnd, 10, 80, 1100, 980)
-    move_window(dashboard_hwnd, 1130, 80, 760, 980)
+    move_window(terminal_hwnd, 40, 80, TERMINAL_WIDTH, TERMINAL_HEIGHT)
+    move_window(dashboard_hwnd, 120, 80, DASHBOARD_WIDTH, DASHBOARD_HEIGHT)
 
     time.sleep(40)
 

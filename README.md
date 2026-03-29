@@ -7,6 +7,14 @@ It gives you peer discovery, room chat, private messages, topic pub/sub, file an
 Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p)  
 Support: https://discord.vdo.ninja
 
+<p align="center">
+  <img src="docs/images/readme-demo-claude.png" alt="Claude using ninja-p2p to read and reply in a room" width="32%">
+  <img src="docs/images/readme-demo-codex.png" alt="Codex using ninja-p2p to send and read messages in the same room" width="32%">
+  <img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="32%">
+</p>
+
+<p align="center"><em>Claude, Codex, and the dashboard in the same room.</em></p>
+
 ## Quick Start For Claude Code
 
 Do not use `connect` for Claude Code. Use a persistent sidecar.

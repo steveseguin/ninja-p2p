@@ -22,11 +22,11 @@ input,select{font-family:var(--font);font-size:12px;background:var(--bg);color:v
 input:focus,select:focus{border-color:var(--accent)}
 
 /* Layout */
-#sidebar{width:240px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+#sidebar{width:240px;min-width:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 #sidebar h1{font-size:14px;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 #sidebar h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0}
 #sidebar h1 .dot.on{background:var(--green)}
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 
 /* Connection Panel */
 #conn-panel{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg2)}
@@ -34,7 +34,7 @@ input:focus,select:focus{border-color:var(--accent)}
 #conn-panel label:first-child{margin-top:0}
 #conn-panel input{width:100%;margin-bottom:2px}
 #conn-panel .row{display:flex;gap:6px;margin-top:10px}
-#conn-panel .row button{flex:1}
+#conn-panel .row button{flex:1;min-width:0}
 #conn-panel .status{font-size:11px;color:var(--fg2);margin-top:6px;text-align:center}
 
 /* Peer List */
@@ -51,7 +51,7 @@ input:focus,select:focus{border-color:var(--accent)}
 .peer-item .role{font-size:10px;color:var(--fg2)}
 
 /* Main content */
-#messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+#messages{flex:1;min-width:0;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
 .msg{padding:2px 0;word-break:break-word}
 .msg .ts{color:var(--fg2);font-size:11px;margin-right:6px}
 .msg .sender{font-weight:600;margin-right:4px}
@@ -62,41 +62,55 @@ input:focus,select:focus{border-color:var(--accent)}
 .msg.type-command_response .sender{color:var(--yellow)}
 .msg.type-system{color:var(--fg2);font-style:italic}
 .msg.type-system .sender{color:var(--fg2)}
-.msg .body{color:var(--fg)}
-.msg .meta{color:var(--fg2);font-size:11px}
+.msg .body{color:var(--fg);overflow-wrap:anywhere}
+.msg .meta{color:var(--fg2);font-size:11px;overflow-wrap:anywhere}
 
 /* Chat Input */
 #chat-bar{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:6px;align-items:center}
-#chat-bar input{flex:1}
-#chat-bar select{width:auto;min-width:100px}
+#chat-bar input{flex:1;min-width:0}
+#chat-bar select{width:auto;min-width:100px;max-width:100%}
 
 /* Peer details panel */
-#details-panel{padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--fg2);max-height:280px;overflow-y:auto}
+#details-panel{padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--fg2);max-height:280px;min-width:0;overflow-y:auto;overflow-x:hidden}
 .details-title{font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .details-block{margin-bottom:8px}
 .details-label{color:var(--fg2);display:block;margin-bottom:2px}
-.details-value{color:var(--fg);word-break:break-word}
+.details-value{color:var(--fg);word-break:break-word;overflow-wrap:anywhere}
 .skill-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
-.share-tag{display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
+.share-tag{display:inline-flex;max-width:100%;align-items:center;gap:4px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
 .share-tag button{padding:1px 6px;font-size:10px}
 .ask-item{margin:3px 0;padding-left:10px;position:relative}
 .ask-item::before{content:'>';position:absolute;left:0;color:var(--fg2)}
 .details-actions,.share-browser-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.details-actions button,.share-browser-actions button{padding:3px 8px}
+.details-actions button,.share-browser-actions button{padding:3px 8px;flex:1 1 calc(50% - 3px);min-width:0}
 .share-browser{border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--bg)}
 .share-browser .row{display:flex;gap:6px;align-items:center;margin-top:6px}
 .share-browser .row:first-child{margin-top:0}
-.share-browser .row input,.share-browser .row select{flex:1}
+.share-browser .row input,.share-browser .row select{flex:1;min-width:0}
 .share-list{margin-top:8px;border-top:1px solid var(--border);padding-top:6px}
-.share-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
+.share-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:4px 0}
 .share-entry .path{flex:1;color:var(--fg);word-break:break-word}
 .share-entry .meta{color:var(--fg2);font-size:10px;white-space:nowrap}
 .share-empty{color:var(--fg2)}
 
 /* Responsive */
-@media(max-width:600px){
-  #sidebar{width:100%;height:auto;max-height:40vh;border-right:none;border-bottom:1px solid var(--border)}
-  body{flex-direction:column}
+@media(max-width:960px){
+  body{flex-direction:column;height:auto;min-height:100vh;overflow:auto}
+  #sidebar{width:100%;height:auto;max-height:none;border-right:none;border-bottom:1px solid var(--border)}
+  #peer-section{flex:none;max-height:180px}
+  #details-panel{max-height:220px}
+  #chat-bar{flex-wrap:wrap;align-items:stretch}
+  #chat-bar select{flex:1 1 160px;min-width:0}
+  #chat-bar input{flex:1 1 100%}
+  #chat-bar button{flex:0 0 auto}
+}
+
+@media(max-width:700px){
+  #conn-panel .row,
+  .share-browser .row{flex-direction:column;align-items:stretch}
+  .details-actions button,
+  .share-browser-actions button,
+  #chat-bar button{flex:1 1 100%}
 }
 </style>
 </head>

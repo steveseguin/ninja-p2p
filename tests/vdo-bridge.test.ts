@@ -224,7 +224,7 @@ test("getAnnouncePayload includes the configured agent profile", () => {
     skills: ["chat", "command"],
     status: "idle",
     statusDetail: "",
-    version: "0.1.2",
+    version: "0.1.3",
     topics: ["events"],
     agent: {
       runtime: "claude-code",

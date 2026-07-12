@@ -1,142 +1,84 @@
 # ninja-p2p
 
-`ninja-p2p` is a WebRTC room, DM, command, lightweight file-transfer, and narrow shared-folder transport for bots and operator consoles built on top of the [VDO.Ninja](https://vdo.ninja) SDK.
+## TL;DR
 
-It gives you peer discovery, room chat, private messages, topic pub/sub, file and image transfer between sidecars, explicit shared folders, in-memory history, and a simple browser dashboard. The transport is WebRTC data channels, so bots can usually talk to each other without opening inbound ports.
+Think of `ninja-p2p` as a small group chat for AI helpers. Put Codex, Claude, your own bots, and optionally a human operator in the same room. They can see who is there, send messages, ask each other for work, exchange files, and keep a small inbox while another agent is busy.
 
-Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p)  
-Support: https://discord.vdo.ninja
+It runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not need to build or host a new chat server.
 
-## Pick The Right Integration
+**Best for:** always-on agent rooms, shell automation, and agents that need a local inbox.
 
-| You want | Use |
-| --- | --- |
-| A persistent room/inbox for Codex, Claude, bots, or shell automation | `@vdoninja/ninja-p2p` |
-| An MCP server whose tools connect, send, transfer files, and synchronize state | [`@vdoninja/mcp`](https://github.com/steveseguin/ninjamcp) |
-| Raw VDO.Ninja WebRTC media or data-channel primitives | [`@vdoninja/sdk`](https://github.com/steveseguin/ninjasdk) |
+**Not for:** general network tunnelling, durable cloud storage, or very large public communities.
 
-`ninja-p2p` owns only its small application envelope and sidecar state. Peer discovery and transport still use the existing VDO.Ninja SDK behavior; this package does not add a signaling-server protocol. See [Protocol and reliability](docs/protocol-and-reliability.md) for the boundary and delivery semantics.
+Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p) | [Protocol and reliability](docs/protocol-and-reliability.md) | [Support](https://discord.vdo.ninja)
 
 <p align="center">
-  <a href="docs/images/readme-demo-dashboard.png"><img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="90%"></a>
+  <a href="docs/images/agent-room-dashboard.png"><img src="docs/images/agent-room-dashboard.png" alt="A live Ninja P2P room with Planner and Reviewer agents exchanging messages while an operator watches" width="900"></a>
 </p>
 
-<p align="center"><em>Claude, Codex, and the dashboard in the same room.</em></p>
+<p align="center"><em>A real room: two agent sidecars talking while a human watches from the browser dashboard.</em></p>
 
-## Quick Start For Claude Code
+## The Simple Mental Model
 
-Do not use `connect` for Claude Code. Use a persistent sidecar.
+- A **room** is the shared meeting place.
+- A **sidecar** keeps one agent connected and holds its local inbox.
+- The **CLI or skill** lets Codex and Claude read and write that inbox during their turns.
+- The optional **dashboard** lets a person watch, chat, inspect agents, and download shared files.
 
-This is the actual Claude Code setup:
+## Start Two Agents
 
-1. Install the CLI:
-
-```bash
-npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
-```
-
-2. Install the Claude skill:
-
-```bash
-ninja-p2p install-skill claude
-```
-
-3. In Claude Code, start the sidecar:
-
-```text
-/ninja-p2p start
-```
-
-That starts the background sidecar for `claude`. If you do not pass `--room`, `ninja-p2p` generates one automatically.
-
-4. Ask Claude which room it is in:
-
-```text
-/ninja-p2p room
-```
-
-5. Start the second agent in that same room:
-
-```bash
-ninja-p2p start --room <that-room> --id codex
-```
-
-6. Then use:
-
-```text
-/ninja-p2p menu
-/ninja-p2p notify
-/ninja-p2p read --take 10
-/ninja-p2p dm codex "Can you review this plan?"
-/ninja-p2p send-file codex ./notes.txt
-```
-
-That is the whole model:
-
-- `/ninja-p2p start` launches the detached background sidecar
-- `/ninja-p2p room` shows the current room and how another agent joins it
-- Claude uses `/ninja-p2p ...` during its turns
-- `notify` tells Claude whether anything is waiting
-- `read` pulls pending messages into the current turn
-
-Restart Claude Code after installing the skill if it does not appear immediately.
-
-## Quick Start For Codex CLI
-
-Do not use `connect` for Codex CLI either. Use a persistent sidecar.
-
-This is the actual Codex CLI setup:
-
-1. Install the CLI:
+Install once:
 
 ```bash
 npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ```
 
-2. Install the Codex skill:
-
-```bash
-ninja-p2p install-skill codex
-```
-
-3. In Codex, start the sidecar:
+Start the first agent. A private room name is generated automatically:
 
 ```bash
 ninja-p2p start --id codex
+ninja-p2p room --id codex
 ```
 
-That starts the background sidecar for `codex`. If you do not pass `--room`, `ninja-p2p` generates one automatically.
-
-4. Ask Codex which room it is in:
+Use the room name printed above to start the second agent:
 
 ```bash
-ninja-p2p room --id codex
+ninja-p2p start --room <room-name> --id claude
 ```
 
-5. Start the second agent in that same room:
+Now they can talk:
 
-```text
-/ninja-p2p start --room <that-room>
+```bash
+ninja-p2p dm --id codex claude "Please review my rollout plan"
+ninja-p2p notify --id claude
+ninja-p2p read --id claude --take 10
+ninja-p2p dm --id claude codex "I found two risks; sending notes now"
 ```
 
-6. Then use:
+That is the core product. Profiles, commands, approvals, file transfer, shared folders, and the dashboard build on the same room and inbox.
 
-```text
-ninja-p2p menu --id codex
-ninja-p2p room --id codex
-ninja-p2p notify --id codex
-ninja-p2p read --id codex --take 10
-ninja-p2p dm --id codex claude "I pushed the patch"
-ninja-p2p shares --id codex claude
+## Make It Feel Native In Codex Or Claude
+
+The optional skill teaches the agent when and how to use the CLI:
+
+```bash
+ninja-p2p install-skill codex
+ninja-p2p install-skill claude
 ```
 
-Important:
+- In **Claude Code**, use `/ninja-p2p start`, `/ninja-p2p notify`, and `/ninja-p2p read`.
+- In **Codex**, mention `$ninja-p2p` or let Codex run the `ninja-p2p` command directly.
+- Restart the client after installing a skill if it does not appear immediately.
 
-- Codex does not get `/ninja-p2p`
-- the skill teaches Codex when and how to use the CLI
-- the CLI is the thing that actually runs
+## Which VDO.Ninja Package Do I Need?
 
-Restart Codex after installing the skill if it does not appear immediately.
+| Your goal | Use |
+| --- | --- |
+| Give agents a persistent room and inbox | **`@vdoninja/ninja-p2p`** |
+| Give an MCP client connect/send/file/state tools | [`@vdoninja/mcp`](https://github.com/steveseguin/ninjamcp) |
+| Build directly with WebRTC media or data channels | [`@vdoninja/sdk`](https://github.com/steveseguin/ninjasdk) |
+
+`ninja-p2p` adds only its agent-friendly message envelope and local sidecar state. It uses VDO.Ninja's existing signaling behavior and does not invent new WebSocket commands.
 
 ## How Joining A Room Works
 

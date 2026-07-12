@@ -48,6 +48,7 @@
     "dist",
     "dashboard.html",
     "README.md",
+    "docs/images/agent-room-dashboard.png",
     "docs/protocol-and-reliability.md",
     ".codex/skills/ninja-p2p",
     ".agents/skills/ninja-p2p",

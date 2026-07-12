@@ -105,11 +105,12 @@ export class VDOBridge extends EventEmitter {
 
     // Set the send function on the bus
     this.bus.setSendDataFn((data, target) => {
-      if (!this.sdk) return;
+      if (!this.sdk) return false;
       try {
-        this.sdk.sendData(data, target ?? undefined);
+        return this.sdk.sendData(data, target ?? undefined) !== false;
       } catch (err) {
         this.emitBridgeError(err);
+        return false;
       }
     });
 
@@ -244,16 +245,14 @@ export class VDOBridge extends EventEmitter {
     if (!this.sdk) return false;
     try {
       if (!targetStreamId) {
-        this.sdk.sendData(data, { allowFallback: true });
-        return true;
+        return this.sdk.sendData(data, { allowFallback: true }) !== false;
       }
       const peer = this.peers.getPeer(targetStreamId);
       if (peer?.uuid) {
-        this.sdk.sendData(data, { UUID: peer.uuid, allowFallback: true });
+        return this.sdk.sendData(data, { uuid: peer.uuid, allowFallback: true }) !== false;
       } else {
-        this.sdk.sendData(data, { streamID: targetStreamId, allowFallback: true });
+        return this.sdk.sendData(data, { streamID: targetStreamId, allowFallback: true }) !== false;
       }
-      return true;
     } catch (err) {
       this.emitBridgeError(err);
       return false;
@@ -364,6 +363,7 @@ export class VDOBridge extends EventEmitter {
       switch (envelope.type) {
         case "announce":
           this.peers.updateFromAnnounce(senderStreamId, envelope.from, envelope.payload as AnnouncePayload);
+          this.bus.flushOfflineQueue(senderStreamId);
           this.emit("peer:announce", { streamId: senderStreamId, identity: envelope.from, announce: envelope.payload });
           break;
 

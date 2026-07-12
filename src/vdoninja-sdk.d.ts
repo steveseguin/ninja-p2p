@@ -17,7 +17,7 @@ declare module "@vdoninja/sdk" {
     leaveRoom(): void;
     announce(options?: { streamID?: string; label?: string; meta?: string }): Promise<void>;
     view(streamID: string, options?: { audio?: boolean; video?: boolean; label?: string }): Promise<void>;
-    sendData(data: unknown, target?: unknown): void;
+    sendData(data: unknown, target?: unknown): boolean;
     sendPing(uuid: string): void;
     publish(stream: unknown, options?: Record<string, unknown>): Promise<void>;
     stopPublishing(): void;

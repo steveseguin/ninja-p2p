@@ -31,8 +31,8 @@ function makeBridge(): VDOBridge {
   });
 }
 
-function setFakeSDK(bridge: VDOBridge, sendData: (data: unknown, target?: unknown) => void): void {
-  (bridge as unknown as { sdk: { sendData: (data: unknown, target?: unknown) => void } }).sdk = { sendData };
+function setFakeSDK(bridge: VDOBridge, sendData: (data: unknown, target?: unknown) => boolean | void): void {
+  (bridge as unknown as { sdk: { sendData: (data: unknown, target?: unknown) => boolean | void } }).sdk = { sendData };
 }
 
 test("wireSDKEvents views existing and newly added peers without duplicating view calls", () => {
@@ -158,7 +158,14 @@ test("sendRaw targets a known peer by UUID", () => {
 
   assert.equal(ok, true);
   assert.equal(sent.length, 1);
-  assert.deepEqual(sent[0].target, { UUID: "uuid_other", allowFallback: true });
+  assert.deepEqual(sent[0].target, { uuid: "uuid_other", allowFallback: true });
+});
+
+test("sendRaw reports an SDK-level rejected send", () => {
+  const bridge = makeBridge();
+  setFakeSDK(bridge, () => false);
+
+  assert.equal(bridge.sendRaw({ test: true }), false);
 });
 
 test("sendRaw does not crash when the SDK throws and no error listener is attached", () => {

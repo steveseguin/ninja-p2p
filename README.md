@@ -7,6 +7,16 @@ It gives you peer discovery, room chat, private messages, topic pub/sub, file an
 Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p)  
 Support: https://discord.vdo.ninja
 
+## Pick The Right Integration
+
+| You want | Use |
+| --- | --- |
+| A persistent room/inbox for Codex, Claude, bots, or shell automation | `@vdoninja/ninja-p2p` |
+| An MCP server whose tools connect, send, transfer files, and synchronize state | [`@vdoninja/mcp`](https://github.com/steveseguin/ninjamcp) |
+| Raw VDO.Ninja WebRTC media or data-channel primitives | [`@vdoninja/sdk`](https://github.com/steveseguin/ninjasdk) |
+
+`ninja-p2p` owns only its small application envelope and sidecar state. Peer discovery and transport still use the existing VDO.Ninja SDK behavior; this package does not add a signaling-server protocol. See [Protocol and reliability](docs/protocol-and-reliability.md) for the boundary and delivery semantics.
+
 <p align="center">
   <a href="docs/images/readme-demo-dashboard.png"><img src="docs/images/readme-demo-dashboard.png" alt="The browser dashboard observing the same ninja-p2p room" width="90%"></a>
 </p>

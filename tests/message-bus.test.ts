@@ -91,6 +91,17 @@ test("send to offline peer queues the message", () => {
   assert.equal(bus.getOfflineQueueSize("other"), 1);
 });
 
+test("send queues when a connected peer data channel is not ready", () => {
+  const peers = new PeerRegistry();
+  const bus = new MessageBus(myIdentity, peers);
+  peers.addPeer("other", "uuid_other");
+  bus.setSendDataFn(() => false);
+
+  bus.send("other", "chat", { text: "race-safe" });
+
+  assert.equal(bus.getOfflineQueueSize("other"), 1);
+});
+
 test("publish sends with topic", () => {
   const { bus, sent } = makeBus();
   const env = bus.publish("events", "event", { kind: "test" });
@@ -277,21 +288,36 @@ test("flushOfflineQueue sends queued messages and clears queue", () => {
   peers.addPeer("other", "uuid_other");
   peers.markDisconnected("other");
 
-  bus.send("other", "chat", { text: "queued" });
+  const queued = bus.send("other", "chat", { text: "queued" });
   assert.equal(sent.length, 0);
 
   // Simulate reconnect
   peers.addPeer("other", "uuid_other");
   const flushed = bus.flushOfflineQueue("other");
   assert.equal(flushed.length, 1);
-  assert.equal(sent.length, 1); // history_replay sent
+  assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].target, { uuid: "uuid_other" });
+  assert.equal((sent[0].data as MessageEnvelope).type, "chat");
+  assert.equal((sent[0].data as MessageEnvelope).id, queued.id);
   assert.equal(bus.getOfflineQueueSize("other"), 0);
 });
 
 test("flushOfflineQueue returns empty for peer with no queue", () => {
   const { bus } = makeBus();
   assert.deepEqual(bus.flushOfflineQueue("nonexistent"), []);
+});
+
+test("flushOfflineQueue preserves messages when the channel rejects them", () => {
+  const peers = new PeerRegistry();
+  const bus = new MessageBus(myIdentity, peers);
+  peers.addPeer("other", "uuid_other");
+  peers.markDisconnected("other");
+  bus.send("other", "chat", { text: "keep me" });
+  peers.addPeer("other", "uuid_other");
+  bus.setSendDataFn(() => false);
+
+  assert.deepEqual(bus.flushOfflineQueue("other"), []);
+  assert.equal(bus.getOfflineQueueSize("other"), 1);
 });
 
 // ── Keyword Triggers ─────────────────────────────────────────────────────
@@ -330,6 +356,18 @@ test("keyword trigger works with RegExp", () => {
 
   bus.handleIncoming(createEnvelope(otherIdentity, "chat", { text: "hey @StevesBot wake up" }));
   assert.ok(triggered);
+});
+
+test("global keyword triggers match consistently across messages", () => {
+  const { bus, peers } = makeBus();
+  peers.addPeer("other", "uuid_other");
+  let triggered = 0;
+  bus.onKeyword(/help/gi, () => { triggered += 1; });
+
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", { text: "help once" }));
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", { text: "help twice" }));
+
+  assert.equal(triggered, 2);
 });
 
 test("keyword trigger reads text from payload.message too", () => {

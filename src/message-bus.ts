@@ -27,7 +27,8 @@ export type KeywordTrigger = {
   handler: (msg: MessageEnvelope) => void;
 };
 
-export type SendDataFn = (data: object, target?: unknown) => void;
+/** Return false when the transport could not accept the message yet. */
+export type SendDataFn = (data: object, target?: unknown) => boolean | void;
 
 export type MessageBusOptions = {
   /** Max messages kept in history ring buffer. Default: 200. */
@@ -111,9 +112,7 @@ export class MessageBus extends EventEmitter {
     const envelope = createEnvelope(this.identity, type, payload, { to: targetStreamId });
     this.addToHistory(envelope);
 
-    if (this.peers.isConnected(targetStreamId)) {
-      this.rawSend(envelope, targetStreamId);
-    } else {
+    if (!this.peers.isConnected(targetStreamId) || !this.rawSend(envelope, targetStreamId)) {
       this.enqueueOffline(targetStreamId, envelope);
     }
     return envelope;
@@ -198,15 +197,21 @@ export class MessageBus extends EventEmitter {
     const queue = this.offlineQueues.get(streamId);
     if (!queue || queue.length === 0) return [];
 
-    this.offlineQueues.delete(streamId);
-
-    // Send each queued message wrapped as history_replay
+    const flushed: MessageEnvelope[] = [];
     for (const msg of queue) {
-      const replay = createEnvelope(this.identity, "history_replay", msg, { to: streamId });
-      this.rawSend(replay, streamId);
+      // Preserve the original type and ID. Wrapping queued commands as
+      // history_replay prevented normal command/file handlers from seeing them.
+      if (!this.rawSend(msg, streamId)) break;
+      flushed.push(msg);
     }
 
-    return queue;
+    if (flushed.length === queue.length) {
+      this.offlineQueues.delete(streamId);
+    } else if (flushed.length > 0) {
+      this.offlineQueues.set(streamId, queue.slice(flushed.length));
+    }
+
+    return flushed;
   }
 
   /** Get the number of queued messages for a peer. */
@@ -237,22 +242,26 @@ export class MessageBus extends EventEmitter {
 
   // ── Internals ────────────────────────────────────────────────────────────
 
-  private rawSend(envelope: MessageEnvelope, target: string | null): void {
-    if (!this.sendDataFn) return;
+  private rawSend(envelope: MessageEnvelope, target: string | null): boolean {
+    if (!this.sendDataFn) return false;
     const wire = envelopeToWire(envelope);
+    let accepted: boolean | void;
     if (target) {
       // Prefer uuid targeting once we know it; streamID targeting can be ambiguous
       // before announce/rekey completes on some SDK connection paths.
       const peer = this.peers.getPeer(target);
       if (peer?.uuid) {
-        this.sendDataFn(wire, { uuid: peer.uuid });
+        accepted = this.sendDataFn(wire, { uuid: peer.uuid });
       } else {
-        this.sendDataFn(wire, { streamID: target });
+        accepted = this.sendDataFn(wire, { streamID: target });
       }
     } else {
       // Broadcast to all
-      this.sendDataFn(wire);
+      accepted = this.sendDataFn(wire);
     }
+    // Void preserves compatibility with existing transports written before
+    // acceptance results were supported. Only an explicit false is a failure.
+    return accepted !== false;
   }
 
   private addToHistory(envelope: MessageEnvelope): void {
@@ -285,6 +294,7 @@ export class MessageBus extends EventEmitter {
 
     if (!text) return;
     for (const trigger of this.triggers) {
+      trigger.pattern.lastIndex = 0;
       if (trigger.pattern.test(text)) {
         try {
           trigger.handler(envelope);

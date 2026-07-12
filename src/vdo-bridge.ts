@@ -62,7 +62,7 @@ export class VDOBridge extends EventEmitter {
   private skills: string[];
   private status = "idle";
   private statusDetail = "";
-  private version = "0.1.3";
+  private version = "0.1.4";
   private agentProfile: AgentProfile | undefined;
   private readonly viewedStreamIds = new Set<string>();
 

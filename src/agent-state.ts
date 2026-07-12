@@ -90,6 +90,7 @@ export type InboxSummary = {
 
 const SESSION_FILE = "session.json";
 const PEERS_FILE = "peers.json";
+let lastQueuedActionAt = 0;
 
 type StatePaths = {
   stateDir: string;
@@ -146,7 +147,9 @@ export function queueAgentAction(
   const queued = {
     ...action,
     id: createMessageId(),
-    createdAt: Date.now(),
+    // Date.now() can repeat during a burst. Keep timestamps monotonic so the
+    // filesystem outbox remains FIFO even when several actions share a tick.
+    createdAt: nextQueuedActionTimestamp(),
   } as QueuedAgentAction;
   const filename = `${queued.createdAt}_${queued.id}.json`;
   writeJsonAtomic(path.join(paths.outboxDir, filename), queued);
@@ -291,6 +294,11 @@ function listJsonFiles(dir: string): string[] {
     .filter((name) => name.endsWith(".json"))
     .map((name) => path.join(dir, name))
     .sort();
+}
+
+function nextQueuedActionTimestamp(): number {
+  lastQueuedActionAt = Math.max(Date.now(), lastQueuedActionAt + 1);
+  return lastQueuedActionAt;
 }
 
 function readJsonFile<T>(filePath: string): T | null {

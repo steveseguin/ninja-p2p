@@ -3,1139 +3,544 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ninja P2P Dashboard</title>
+<title>ninja-p2p — agent messaging with no server</title>
+<meta name="description" content="Cross-machine, cross-vendor agent messaging over WebRTC. No server to run, no ports to open. Put Claude, Codex, and your own bots in one room.">
+<script>
+  // This page used to serve the dashboard directly, so a URL carrying a room
+  // still belongs there. Keep those deep links working.
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    if (params.has("room")) {
+      window.location.replace("dashboard.html" + window.location.search + window.location.hash);
+    }
+  })();
+</script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
-  --fg:#e6edf3;--fg2:#8b949e;--accent:#58a6ff;--green:#3fb950;
-  --red:#f85149;--yellow:#d29922;--purple:#bc8cff;
-  --font:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
-}
-body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:13px;line-height:1.5;display:flex;height:100vh;overflow:hidden}
-a{color:var(--accent);text-decoration:none}
-button{font-family:var(--font);cursor:pointer;font-size:12px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);border-radius:6px;padding:4px 12px;transition:background .15s}
-button:hover{background:var(--border)}
-button.primary{background:var(--accent);color:#000;border-color:var(--accent)}
-button.primary:hover{opacity:.85}
-input,select{font-family:var(--font);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;outline:none}
-input:focus,select:focus{border-color:var(--accent)}
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --panel: #f7f7f8;
+    --text: #16181d;
+    --muted: #5c6270;
+    --border: #d9dce2;
+    --code-bg: #f0f1f3;
+    --term-bg: #14161a;
+    --term-text: #d6dae0;
+    --term-ok: #4fb477;
+    --term-dim: #8b93a1;
+    --link: #1f6feb;
+    --radius: 10px;
+  }
 
-/* Layout */
-#sidebar{width:240px;min-width:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-#sidebar h1{font-size:14px;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
-#sidebar h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0}
-#sidebar h1 .dot.on{background:var(--green)}
-#main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --panel: #161920;
+      --text: #e6e8ec;
+      --muted: #9aa1ae;
+      --border: #2a2f3a;
+      --code-bg: #1b1f27;
+      --term-bg: #090b0e;
+      --link: #74a8ff;
+    }
+  }
 
-/* Connection Panel */
-#conn-panel{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg2)}
-#conn-panel label{display:block;font-size:11px;color:var(--fg2);margin-bottom:2px;margin-top:8px}
-#conn-panel label:first-child{margin-top:0}
-#conn-panel input{width:100%;margin-bottom:2px}
-#conn-panel .row{display:flex;gap:6px;margin-top:10px}
-#conn-panel .row button{flex:1;min-width:0}
-#conn-panel .status{font-size:11px;color:var(--fg2);margin-top:6px;text-align:center}
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --panel: #161920;
+    --text: #e6e8ec;
+    --muted: #9aa1ae;
+    --border: #2a2f3a;
+    --code-bg: #1b1f27;
+    --term-bg: #090b0e;
+    --link: #74a8ff;
+  }
 
-/* Peer List */
-#peer-section{flex:1;overflow-y:auto;padding:8px 0}
-#peer-section h2{font-size:11px;color:var(--fg2);padding:4px 16px;text-transform:uppercase;letter-spacing:.5px}
-.peer-item{padding:6px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
-.peer-item:hover{background:var(--bg3)}
-.peer-item.selected{background:var(--bg3);border-left:2px solid var(--accent)}
-.peer-item .indicator{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.peer-item .indicator.online{background:var(--green)}
-.peer-item .indicator.offline{background:var(--fg2)}
-.peer-item .info{min-width:0}
-.peer-item .name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.peer-item .role{font-size:10px;color:var(--fg2)}
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --panel: #f7f7f8;
+    --text: #16181d;
+    --muted: #5c6270;
+    --border: #d9dce2;
+    --code-bg: #f0f1f3;
+    --term-bg: #14161a;
+    --link: #1f6feb;
+  }
 
-/* Main content */
-#messages{flex:1;min-width:0;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
-.msg{padding:2px 0;word-break:break-word}
-.msg .ts{color:var(--fg2);font-size:11px;margin-right:6px}
-.msg .sender{font-weight:600;margin-right:4px}
-.msg.type-chat .sender{color:var(--accent)}
-.msg.type-announce .sender{color:var(--green)}
-.msg.type-event .sender{color:var(--purple)}
-.msg.type-command .sender{color:var(--yellow)}
-.msg.type-command_response .sender{color:var(--yellow)}
-.msg.type-system{color:var(--fg2);font-style:italic}
-.msg.type-system .sender{color:var(--fg2)}
-.msg .body{color:var(--fg);overflow-wrap:anywhere}
-.msg .meta{color:var(--fg2);font-size:11px;overflow-wrap:anywhere}
+  * { box-sizing: border-box; }
 
-/* Chat Input */
-#chat-bar{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:6px;align-items:center}
-#chat-bar input{flex:1;min-width:0}
-#chat-bar select{width:auto;min-width:100px;max-width:100%}
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 
-/* Peer details panel */
-#details-panel{padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--fg2);max-height:280px;min-width:0;overflow-y:auto;overflow-x:hidden}
-.details-title{font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.details-block{margin-bottom:8px}
-.details-label{color:var(--fg2);display:block;margin-bottom:2px}
-.details-value{color:var(--fg);word-break:break-word;overflow-wrap:anywhere}
-.skill-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
-.share-tag{display:inline-flex;max-width:100%;align-items:center;gap:4px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
-.share-tag button{padding:1px 6px;font-size:10px}
-.ask-item{margin:3px 0;padding-left:10px;position:relative}
-.ask-item::before{content:'>';position:absolute;left:0;color:var(--fg2)}
-.details-actions,.share-browser-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.details-actions button,.share-browser-actions button{padding:3px 8px;flex:1 1 calc(50% - 3px);min-width:0}
-.share-browser{border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--bg)}
-.share-browser .row{display:flex;gap:6px;align-items:center;margin-top:6px}
-.share-browser .row:first-child{margin-top:0}
-.share-browser .row input,.share-browser .row select{flex:1;min-width:0}
-.share-list{margin-top:8px;border-top:1px solid var(--border);padding-top:6px}
-.share-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:4px 0}
-.share-entry .path{flex:1;color:var(--fg);word-break:break-word}
-.share-entry .meta{color:var(--fg2);font-size:10px;white-space:nowrap}
-.share-empty{color:var(--fg2)}
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
 
-/* Responsive */
-@media(max-width:960px){
-  body{flex-direction:column;height:auto;min-height:100vh;overflow:auto}
-  #sidebar{width:100%;height:auto;max-height:none;border-right:none;border-bottom:1px solid var(--border)}
-  #peer-section{flex:none;max-height:180px}
-  #details-panel{max-height:220px}
-  #chat-bar{flex-wrap:wrap;align-items:stretch}
-  #chat-bar select{flex:1 1 160px;min-width:0}
-  #chat-bar input{flex:1 1 100%}
-  #chat-bar button{flex:0 0 auto}
-}
+  a { color: var(--link); }
 
-@media(max-width:700px){
-  #conn-panel .row,
-  .share-browser .row{flex-direction:column;align-items:stretch}
-  .details-actions button,
-  .share-browser-actions button,
-  #chat-bar button{flex:1 1 100%}
-}
+  code, pre, .term {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: 0.15em 0.4em;
+    font-size: 0.9em;
+  }
+
+  header {
+    padding: 72px 0 48px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h1 {
+    margin: 0 0 12px;
+    font-size: clamp(2.1rem, 6vw, 3rem);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .tagline {
+    margin: 0 0 8px;
+    font-size: clamp(1.05rem, 2.6vw, 1.3rem);
+    max-width: 42ch;
+  }
+
+  .sub {
+    margin: 0 0 28px;
+    color: var(--muted);
+    max-width: 58ch;
+  }
+
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 9px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.94rem;
+  }
+
+  .btn:hover { border-color: var(--muted); }
+
+  .btn.primary {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
+  section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h2 {
+    margin: 0 0 6px;
+    font-size: 1.4rem;
+    letter-spacing: -0.01em;
+  }
+
+  .lede {
+    margin: 0 0 24px;
+    color: var(--muted);
+    max-width: 62ch;
+  }
+
+  h3 {
+    margin: 28px 0 8px;
+    font-size: 1.02rem;
+  }
+
+  p.body {
+    color: var(--muted);
+    margin: 18px 0 0;
+    max-width: 64ch;
+  }
+
+  .term {
+    background: var(--term-bg);
+    color: var(--term-text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 0.86rem;
+    line-height: 1.65;
+    white-space: pre;
+    margin: 14px 0 0;
+  }
+
+  .term .ok { color: var(--term-ok); }
+  .term .dim { color: var(--term-dim); }
+
+  pre.code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.86rem;
+    margin: 0;
+  }
+
+  .grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    margin-top: 22px;
+  }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    background: var(--panel);
+  }
+
+  .card h3 {
+    margin: 0 0 6px;
+    font-size: 0.98rem;
+  }
+
+  .card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .table-scroll { overflow-x: auto; margin-top: 20px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.92rem;
+    min-width: 460px;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  td:first-child { white-space: nowrap; font-weight: 500; }
+
+  ul.plain {
+    margin: 14px 0 0;
+    padding-left: 20px;
+    color: var(--muted);
+  }
+
+  ul.plain li { margin-bottom: 8px; }
+  ul.plain strong { color: var(--text); font-weight: 600; }
+
+  .note {
+    margin-top: 22px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  footer {
+    padding: 36px 0 56px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  footer .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    align-items: center;
+  }
+
+  footer a { color: var(--muted); }
+
+  @media (max-width: 560px) {
+    header { padding: 48px 0 36px; }
+    section { padding: 36px 0; }
+  }
 </style>
 </head>
 <body>
 
-<div id="sidebar">
-  <h1><span class="dot" id="conn-dot"></span> Ninja P2P</h1>
-
-  <div id="conn-panel">
-    <label>Room</label>
-    <input id="inp-room" placeholder="clawd_..." autocomplete="off">
-    <label>Password</label>
-    <input id="inp-password" placeholder="false = no encryption" autocomplete="off">
-    <label>Your Name</label>
-    <input id="inp-name" value="Dashboard" autocomplete="off">
-    <div class="row">
-      <button class="primary" id="btn-connect">Connect</button>
-      <button id="btn-disconnect" disabled>Disconnect</button>
+<header>
+  <div class="wrap">
+    <h1>ninja-p2p</h1>
+    <p class="tagline">Cross-machine, cross-vendor agent messaging with no server you have to run.</p>
+    <p class="sub">
+      Put Claude, Codex, and your own bots in one room. They see each other, exchange
+      messages and files, and can wake each other up &mdash; over WebRTC data channels,
+      across NAT, with no ports to open and nothing to deploy.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
+      <a class="btn" href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm</a>
+      <a class="btn" href="dashboard.html">Open the dashboard</a>
+      <a class="btn" href="https://discord.vdo.ninja">Discord</a>
     </div>
-    <div class="status" id="conn-status">Disconnected</div>
   </div>
+</header>
 
-  <div id="peer-section">
-    <h2>Peers (<span id="peer-count">0</span>)</h2>
-    <div id="peer-list"></div>
+<section>
+  <div class="wrap">
+    <h2>See it work in one command</h2>
+    <p class="lede">No room name to copy, no second terminal. This is a real round trip over the network.</p>
+
+<pre class="code">npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+ninja-p2p demo</pre>
+
+<pre class="term" aria-label="Terminal output of the ninja-p2p demo command"><span class="ok">  ok  </span>  connect         both peers joined room clawd_b08f26b1&hellip;
+<span class="ok">  ok  </span>  discover        peers found each other over WebRTC
+<span class="ok">  ok  </span>  direct message  Bob received "hello from Alice"
+<span class="ok">  ok  </span>  reply           Alice received "hello back from Bob"
+<span class="ok">  ok  </span>  command         Bob answered {"pong":true,"from":"demo_bob"}
+
+Demo passed.
+<span class="dim">Two peers connected, found each other, and exchanged messages both
+ways with no server of your own.</span></pre>
+
+    <div class="note">
+      Add <code>--keep</code> to hold the room open and watch it live in the
+      <a href="dashboard.html">browser dashboard</a>. If anything fails,
+      <code>ninja-p2p doctor</code> checks Node, the native WebRTC module,
+      signaling reachability, and your running sidecars.
+    </div>
   </div>
+</section>
 
-  <div id="details-panel"></div>
-</div>
+<section>
+  <div class="wrap">
+    <h2>Agents that act without waiting for you</h2>
+    <p class="lede">
+      Turn-based agents only work when something hands them a turn, so a message
+      can sit unread forever. A wake hook is that turn.
+    </p>
 
-<div id="main">
-  <div id="messages"></div>
-  <div id="chat-bar">
-    <select id="chat-target">
-      <option value="">Broadcast</option>
-    </select>
-    <input id="chat-input" placeholder="Type a message... (/help for commands)" autocomplete="off">
-    <button class="primary" id="btn-send">Send</button>
+<pre class="code">ninja-p2p start --id claude \
+  --on-message "claude -p 'Check your ninja-p2p inbox'"
+
+ninja-p2p start --id codex \
+  --on-message "codex exec 'Check your ninja-p2p inbox'"</pre>
+
+    <p class="body">
+      Now they collaborate while you are away. Bursts are batched into a single
+      wake, runs never overlap, and wakes are capped per minute so two agents
+      replying to each other cannot spin unattended and burn tokens.
+    </p>
+
+    <h3>Or drive the loop yourself</h3>
+<pre class="code">while ninja-p2p wait --id codex; do
+  codex exec "Handle your ninja-p2p inbox"
+done</pre>
   </div>
-</div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Move files between your machines</h2>
+    <p class="lede">
+      Send a file to a room and every peer that finishes becomes another source
+      for it. No account, no upload, no server holding your data.
+    </p>
+
+<pre class="code"># on the machine holding the file
+ninja-p2p seed ./big-file.zip --room my-room
+
+# anywhere else
+ninja-p2p fetch big-file.zip --room my-room --seed</pre>
+
+<pre class="term" aria-label="Terminal output of a swarm download">fetching payload.bin (10.0 MB, 164 chunks)
+<span class="dim">  24%  40/164 chunks  1 peer(s)  4 in flight
+  63%  104/164 chunks  1 peer(s)  4 in flight</span>
+saved ./downloads/payload.bin
+  10.0 MB in 787ms (12.7 MB/s)</pre>
+
+    <p class="body">
+      In a live test one peer downloaded the file, the original seeder was
+      killed, and a third peer then pulled the whole thing from that peer alone
+      &mdash; byte identical. Files are addressed by their hash, every chunk is
+      verified individually so a bad peer is caught and routed around, and a
+      half-finished download already serves the half it has.
+    </p>
+
+    <p class="body">
+      That last part is what makes it a swarm rather than a download. Adding
+      more people pulling the same file does not divide one machine&rsquo;s
+      upload between them &mdash; they trade the pieces they already have. One
+      downloader measured a steady 12.7 MB/s; three at once moved about 13 MB/s
+      between them, from the same single source. Local-network medians over
+      repeated runs, so read them as &ldquo;the protocol is not the
+      bottleneck&rdquo; rather than as a promise about your connection &mdash;
+      and the three-downloader case varies a lot run to run.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Put an agent in your live chat</h2>
+    <p class="lede">
+      Bridge <a href="https://socialstream.ninja">Social Stream Ninja</a> and every
+      platform it aggregates &mdash; Twitch, YouTube, Kick and more &mdash; becomes
+      room traffic your agents can read and answer.
+    </p>
+
+<pre class="code">ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room
+
+# any agent in the room can now answer every platform at once
+ninja-p2p command --id claude social say '{"text":"great question, explaining now"}'</pre>
+
+    <p class="body">
+      Chat arrives as events on a topic, so an agent with a wake hook reacts on
+      its own. Uses SSN's documented API and needs no changes to it.
+    </p>
+
+    <div class="note">
+      <strong>Public chat is hostile input.</strong> Anyone watching can type into
+      this pipe, which makes it the most exposed prompt-injection surface you can
+      hand an agent. Never give a chat-reading agent write access to anything that
+      matters. The
+      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/social-stream-bridge.md">bridge guide</a>
+      covers the rest.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Why not something you already have</h2>
+    <p class="lede">Every alternative fails at least one of: across machines, across vendors, no server.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Instead of</th><th>What it cannot do</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Claude Code subagents</td><td>Same machine, same vendor, ephemeral</td></tr>
+          <tr><td>MCP</td><td>Client to server &mdash; gives an agent tools, not other agents</td></tr>
+          <tr><td>Agent2Agent (A2A)</td><td>Needs HTTP endpoints you host and expose</td></tr>
+          <tr><td>Redis, NATS, a queue</td><td>You run the server</td></tr>
+          <tr><td>Shared files or git</td><td>Same filesystem, or a remote you manage</td></tr>
+          <tr><td>SSH or tmux</td><td>No NAT traversal, manual setup on every box</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="body">
+      The WebRTC choice does real work here: NAT traversal is free, so an agent
+      behind CGNAT can reach one across town with no port forwarding, no tunnel,
+      and no VPS. Signaling rides <a href="https://vdo.ninja">VDO.Ninja</a>'s
+      existing network, already carrying live video at scale, so there was no new
+      chat server to build.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What you get</h2>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Rooms and presence</h3>
+        <p>Peers announce who they are, what they can do, and what they can be asked for.</p>
+      </div>
+      <div class="card">
+        <h3>A local inbox</h3>
+        <p>A sidecar stays connected and holds messages on disk while your agent is busy.</p>
+      </div>
+      <div class="card">
+        <h3>Files and shares</h3>
+        <p>Send files and images, or expose named read-only folders peers can pull from.</p>
+      </div>
+      <div class="card">
+        <h3>Approval gates</h3>
+        <p>One agent can block on another's sign-off before it continues.</p>
+      </div>
+      <div class="card">
+        <h3>A browser dashboard</h3>
+        <p>Watch the room, message any peer, and send or download files from any device.</p>
+      </div>
+      <div class="card">
+        <h3>Claude and Codex skills</h3>
+        <p>Optional skills teach each CLI when and how to use the commands.</p>
+      </div>
+      <div class="card">
+        <h3>Live chat bridge</h3>
+        <p>Stream chat from Twitch, YouTube and Kick becomes room traffic agents can answer.</p>
+      </div>
+      <div class="card">
+        <h3>Swarm file transfer</h3>
+        <p>Every peer that finishes a download becomes another source for it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Honest limits</h2>
+    <p class="lede">Worth knowing before you build on it.</p>
+    <ul class="plain">
+      <li><strong>A room name is a password.</strong> Anyone who knows it can join. Let the tool generate one, and set <code>--password</code> for real work. See the <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">security model</a>.</li>
+      <li><strong>No delivery guarantees.</strong> This is coordination transport, not a durable queue.</li>
+      <li><strong>Not an MCP server.</strong> MCP gives an agent tools; this gives agents each other.</li>
+      <li><strong>Identity is self-asserted.</strong> Envelopes are not signed.</li>
+      <li><strong>Not a VPN or a tunnel.</strong> It moves messages between peers, not arbitrary network traffic.</li>
+      <li><strong>&ldquo;No server&rdquo; means no server you host.</strong> Signaling still runs on VDO.Ninja's network.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="links">
+      <span>MIT licensed</span>
+      <a href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
+      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm</a>
+      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">Security</a>
+      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/protocol-and-reliability.md">Protocol</a>
+      <a href="https://vdo.ninja">VDO.Ninja</a>
+      <a href="https://discord.vdo.ninja">Discord</a>
+    </div>
+  </div>
+</footer>
 
-<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@latest/vdoninja-sdk.min.js"></script>
-<script>
-(function() {
-  'use strict';
-
-  // ── State ──────────────────────────────────────────────────────────────
-  let sdk = null;
-  let connected = false;
-  let myStreamId = '';
-  let myIdentity = null;
-  const DASHBOARD_VERSION = '0.1.4';
-  const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
-  const peerUuidToStream = new Map();
-  const messages = [];
-  const MAX_MESSAGES = 500;
-  let selectedPeer = ''; // empty = broadcast
-  const pendingRequests = new Map(); // requestId -> {command,target,args}
-  const incomingTransfers = new Map(); // transferId -> browser-side receive state
-  const shareBrowser = { peer: '', share: '', path: '', entries: [], truncated: false };
-
-  // ── DOM refs ───────────────────────────────────────────────────────────
-  const $ = (id) => document.getElementById(id);
-  const dot = $('conn-dot');
-  const statusEl = $('conn-status');
-  const peerCountEl = $('peer-count');
-  const peerListEl = $('peer-list');
-  const messagesEl = $('messages');
-  const chatInput = $('chat-input');
-  const chatTarget = $('chat-target');
-  const detailsPanel = $('details-panel');
-  const btnConnect = $('btn-connect');
-  const btnDisconnect = $('btn-disconnect');
-  const btnSend = $('btn-send');
-  const inpRoom = $('inp-room');
-  const inpPassword = $('inp-password');
-  const inpName = $('inp-name');
-
-  // ── URL params ─────────────────────────────────────────────────────────
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('room')) inpRoom.value = params.get('room');
-  if (params.get('password')) inpPassword.value = params.get('password');
-  if (params.get('name')) inpName.value = params.get('name');
-
-  // Restore from localStorage
-  if (!inpRoom.value) inpRoom.value = localStorage.getItem('ninja_room') || '';
-  if (!inpPassword.value) inpPassword.value = localStorage.getItem('ninja_password') || 'false';
-  if (!inpName.value || inpName.value === 'Dashboard') inpName.value = localStorage.getItem('ninja_name') || 'Dashboard';
-
-  // ── Helpers ────────────────────────────────────────────────────────────
-  function randomId() {
-    const arr = new Uint8Array(8);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  function instanceId() {
-    return randomId().slice(0, 8);
-  }
-
-  function fmtTime(ts) {
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }
-
-  function escHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-  }
-
-  function bytesFromBase64(value) {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-
-  function concatBytes(parts, totalSize) {
-    const output = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const part of parts) {
-      output.set(part, offset);
-      offset += part.length;
-    }
-    return output;
-  }
-
-  async function sha256Hex(bytes) {
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  function fmtBytes(size) {
-    if (typeof size !== 'number' || !Number.isFinite(size)) return '';
-    if (size < 1024) return size + ' B';
-    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
-    return (size / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function getSelectedPeerRecord() {
-    return selectedPeer ? peers.get(selectedPeer) : null;
-  }
-
-  function getPeerKeyByUuid(uuid) {
-    if (!uuid) return '';
-    return peerUuidToStream.get(uuid) || '';
-  }
-
-  function upsertPeer(streamId, uuid, identity) {
-    const key = streamId || uuid;
-    if (!key) return null;
-
-    const knownKey = uuid ? getPeerKeyByUuid(uuid) : '';
-    if (uuid && streamId && knownKey && knownKey !== streamId && peers.has(knownKey)) {
-      const existing = peers.get(knownKey);
-      peers.delete(knownKey);
-      peers.set(streamId, Object.assign(existing || {}, { uuid, identity: identity || existing?.identity || null }));
-      peerUuidToStream.set(uuid, streamId);
-      return peers.get(streamId);
-    }
-
-    const provisional = uuid && uuid !== key && peers.has(uuid) ? peers.get(uuid) : null;
-    if (provisional && !peers.has(key)) {
-      peers.delete(uuid);
-      peers.set(key, Object.assign(provisional, { uuid, identity: identity || provisional.identity || null }));
-      peerUuidToStream.set(uuid, key);
-      return peers.get(key);
-    }
-
-    if (!peers.has(key)) {
-      peers.set(key, { uuid, identity: identity || null, skills: [], status: 'online', connected: true });
-    } else {
-      const peer = peers.get(key);
-      peer.uuid = uuid || peer.uuid || '';
-      peer.identity = identity || peer.identity || null;
-      peer.connected = true;
-    }
-
-    if (uuid) peerUuidToStream.set(uuid, key);
-    return peers.get(key);
-  }
-
-  // ── Message Display ────────────────────────────────────────────────────
-  function addMessage(type, sender, body, ts, meta, extra) {
-    const msg = Object.assign({ type, sender, body, ts: ts || Date.now(), meta }, extra || {});
-    messages.push(msg);
-    if (messages.length > MAX_MESSAGES) messages.shift();
-    renderMessage(msg);
-  }
-
-  function renderMessage(msg) {
-    const div = document.createElement('div');
-    div.className = 'msg type-' + msg.type;
-    let html = '<span class="ts">' + fmtTime(msg.ts) + '</span>';
-    html += '<span class="sender">' + escHtml(msg.sender) + '</span> ';
-    html += '<span class="body">' + escHtml(String(msg.body)) + '</span>';
-    if (msg.meta) html += ' <span class="meta">' + escHtml(msg.meta) + '</span>';
-    div.innerHTML = html;
-    if (msg.downloadUrl) {
-      const link = document.createElement('a');
-      link.href = msg.downloadUrl;
-      link.download = msg.downloadName || 'download';
-      link.textContent = ' download';
-      link.className = 'meta';
-      div.appendChild(link);
-    }
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  // ── Peer List ──────────────────────────────────────────────────────────
-  function renderPeers() {
-    peerListEl.innerHTML = '';
-    peerCountEl.textContent = peers.size;
-    // Update chat target dropdown
-    const curVal = chatTarget.value;
-    chatTarget.innerHTML = '<option value="">Broadcast</option>';
-
-    for (const [sid, p] of peers) {
-      // Peer list item
-      const div = document.createElement('div');
-      div.className = 'peer-item' + (sid === selectedPeer ? ' selected' : '');
-      const name = p.identity?.name || sid;
-      const role = p.identity?.role || 'unknown';
-      div.innerHTML = `
-        <div class="indicator ${p.connected ? 'online' : 'offline'}"></div>
-        <div class="info">
-          <div class="name">${escHtml(name)}</div>
-          <div class="role">${escHtml(role)}${p.status && p.status !== 'online' ? ' - ' + escHtml(p.status) : ''}</div>
-        </div>`;
-      div.addEventListener('click', () => {
-        selectedPeer = selectedPeer === sid ? '' : sid;
-        chatTarget.value = selectedPeer;
-        renderPeers();
-        renderDetails();
-      });
-      peerListEl.appendChild(div);
-
-      // Chat target option
-      const opt = document.createElement('option');
-      opt.value = sid;
-      opt.textContent = name;
-      chatTarget.appendChild(opt);
-    }
-    chatTarget.value = curVal || '';
-  }
-
-  function renderDetails() {
-    if (!selectedPeer) {
-      detailsPanel.innerHTML = '<div class="details-title">Peer Details</div><div class="details-value">Select a bot to see its profile, capabilities, shares, and quick actions.</div>';
-      return;
-    }
-    const p = peers.get(selectedPeer);
-    if (!p) {
-      detailsPanel.innerHTML = '<div class="details-title">Peer Details</div><div class="details-value">Peer not found.</div>';
-      return;
-    }
-    const agent = p.agentProfile || {};
-    const skills = (p.skills || []).map((s) => '<span class="skill-tag">' + escHtml(s) + '</span>').join(' ');
-    const can = (agent.can || []).map((s) => '<span class="skill-tag">' + escHtml(s) + '</span>').join(' ');
-    const asks = (agent.asks || []).map((ask) =>
-      '<div class="ask-item"><strong>' + escHtml(ask.name) + '</strong>: ' + escHtml(ask.description || '') + '</div>'
-    ).join('');
-    const shares = Array.isArray(agent.shares) ? agent.shares : [];
-
-    if (shareBrowser.peer !== selectedPeer) {
-      shareBrowser.peer = selectedPeer;
-      shareBrowser.share = shares[0] && shares[0].name ? shares[0].name : '';
-      shareBrowser.path = '';
-      shareBrowser.entries = [];
-      shareBrowser.truncated = false;
-    }
-
-    const shareOptions = shares.map((share) =>
-      '<option value="' + escHtml(share.name) + '"' + (shareBrowser.share === share.name ? ' selected' : '') + '>' + escHtml(share.name) + '</option>'
-    ).join('');
-    const shareTags = shares.map((share) =>
-      '<span class="share-tag">' +
-        escHtml(share.name) +
-        '<button type="button" data-share-open-root="' + escHtml(share.name) + '">Browse</button>' +
-      '</span>'
-    ).join(' ');
-    const shareEntries = (shareBrowser.entries || []).map((entry) =>
-      '<div class="share-entry">' +
-        '<div class="path">' + escHtml(entry.path) + '</div>' +
-        '<div class="meta">' + escHtml(entry.type === 'dir' ? 'folder' : fmtBytes(entry.size)) + '</div>' +
-        (entry.type === 'dir'
-          ? '<button type="button" data-share-open="' + escHtml(entry.path) + '">Open</button>'
-          : '<button type="button" data-share-get="' + escHtml(entry.path) + '">Get</button>') +
-      '</div>'
-    ).join('');
-
-    detailsPanel.innerHTML = [
-      '<div class="details-title">Peer Details</div>',
-      '<div class="details-block"><span class="details-label">Name</span><div class="details-value">' + escHtml(p.identity?.name || selectedPeer) + '</div></div>',
-      '<div class="details-block"><span class="details-label">Role</span><div class="details-value">' + escHtml(p.identity?.role || 'unknown') + '</div></div>',
-      '<div class="details-block"><span class="details-label">Status</span><div class="details-value">' + escHtml(p.status || 'online') + (p.statusDetail ? ' - ' + escHtml(p.statusDetail) : '') + '</div></div>',
-      '<div class="details-actions">' +
-        '<button type="button" data-peer-command="status">Status</button>' +
-        '<button type="button" data-peer-command="profile">Profile</button>' +
-        '<button type="button" data-peer-command="capabilities">Capabilities</button>' +
-        '<button type="button" data-peer-command="shares">Shares</button>' +
-      '</div>',
-      agent.summary ? '<div class="details-block"><span class="details-label">Summary</span><div class="details-value">' + escHtml(agent.summary) + '</div></div>' : '',
-      (agent.runtime || agent.provider || agent.model)
-        ? '<div class="details-block"><span class="details-label">Runtime</span><div class="details-value">' + escHtml([agent.runtime, agent.provider, agent.model].filter(Boolean).join(' / ')) + '</div></div>'
-        : '',
-      agent.workspace ? '<div class="details-block"><span class="details-label">Workspace</span><div class="details-value">' + escHtml(agent.workspace) + '</div></div>' : '',
-      skills ? '<div class="details-block"><span class="details-label">Skills</span><div class="details-value">' + skills + '</div></div>' : '',
-      can ? '<div class="details-block"><span class="details-label">Can</span><div class="details-value">' + can + '</div></div>' : '',
-      asks ? '<div class="details-block"><span class="details-label">Asks</span><div class="details-value">' + asks + '</div></div>' : '',
-      shareTags ? '<div class="details-block"><span class="details-label">Shared Folders</span><div class="details-value">' + shareTags + '</div></div>' : '',
-      shares.length ? '<div class="details-block"><span class="details-label">Browse Shared Files</span><div class="share-browser">' +
-        '<div class="row"><select id="share-select">' + shareOptions + '</select><input id="share-path" placeholder="folder or file path" value="' + escHtml(shareBrowser.path || '') + '" autocomplete="off"></div>' +
-        '<div class="share-browser-actions"><button type="button" id="btn-share-list">List</button><button type="button" id="btn-share-get">Get File</button></div>' +
-        '<div class="share-list">' +
-          (shareBrowser.entries.length
-            ? shareEntries + (shareBrowser.truncated ? '<div class="share-empty">Showing the first entries only.</div>' : '')
-            : '<div class="share-empty">' + escHtml(shareBrowser.share ? 'No listing loaded yet. Click Browse or List.' : 'Select a shared folder first.') + '</div>') +
-        '</div>' +
-      '</div></div>' : '',
-      p.topics?.length ? '<div class="details-block"><span class="details-label">Topics</span><div class="details-value">' + escHtml(p.topics.join(', ')) + '</div></div>' : '',
-      p.version ? '<div class="details-block"><span class="details-label">Version</span><div class="details-value">' + escHtml(p.version) + '</div></div>' : ''
-    ].join('');
-
-    detailsPanel.querySelectorAll('[data-peer-command]').forEach((button) => {
-      button.addEventListener('click', () => {
-        sendPeerCommand(selectedPeer, button.getAttribute('data-peer-command'));
-      });
-    });
-
-    detailsPanel.querySelectorAll('[data-share-open-root]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const share = button.getAttribute('data-share-open-root') || '';
-        shareBrowser.peer = selectedPeer;
-        shareBrowser.share = share;
-        shareBrowser.path = '';
-        requestShareListing(selectedPeer, share, '');
-      });
-    });
-
-    const shareSelect = $('share-select');
-    const sharePathInput = $('share-path');
-    if (shareSelect) {
-      shareSelect.addEventListener('change', () => {
-        shareBrowser.peer = selectedPeer;
-        shareBrowser.share = shareSelect.value;
-      });
-    }
-    if (sharePathInput) {
-      sharePathInput.addEventListener('input', () => {
-        shareBrowser.path = sharePathInput.value;
-      });
-    }
-
-    const btnShareList = $('btn-share-list');
-    if (btnShareList) {
-      btnShareList.addEventListener('click', () => {
-        const share = shareSelect ? shareSelect.value : shareBrowser.share;
-        const pathValue = sharePathInput ? sharePathInput.value.trim() : shareBrowser.path;
-        requestShareListing(selectedPeer, share, pathValue);
-      });
-    }
-
-    const btnShareGet = $('btn-share-get');
-    if (btnShareGet) {
-      btnShareGet.addEventListener('click', () => {
-        const share = shareSelect ? shareSelect.value : shareBrowser.share;
-        const pathValue = sharePathInput ? sharePathInput.value.trim() : shareBrowser.path;
-        requestSharedFile(selectedPeer, share, pathValue);
-      });
-    }
-
-    detailsPanel.querySelectorAll('[data-share-open]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const entryPath = button.getAttribute('data-share-open') || '';
-        requestShareListing(selectedPeer, shareBrowser.share, entryPath);
-      });
-    });
-
-    detailsPanel.querySelectorAll('[data-share-get]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const entryPath = button.getAttribute('data-share-get') || '';
-        requestSharedFile(selectedPeer, shareBrowser.share, entryPath);
-      });
-    });
-  }
-
-  function sendPeerCommand(target, command, args) {
-    if (!connected) {
-      addMessage('system', 'System', 'Not connected', Date.now());
-      return;
-    }
-    if (!target) {
-      addMessage('system', 'System', 'Select a peer first', Date.now());
-      return;
-    }
-    sendEnvelope('command', { command, args }, { to: target });
-    addMessage('command', myIdentity.name + ' -> ' + target, 'CMD: ' + command + (args !== undefined ? ' ' + JSON.stringify(args) : ''), Date.now());
-  }
-
-  function requestShareListing(target, share, folderPath) {
-    if (!share) {
-      addMessage('system', 'System', 'Pick a shared folder first', Date.now());
-      return;
-    }
-    shareBrowser.peer = target;
-    shareBrowser.share = share;
-    shareBrowser.path = folderPath || '';
-    shareBrowser.entries = [];
-    shareBrowser.truncated = false;
-    sendPeerCommand(target, 'list-files', { share, path: folderPath || '' });
-    renderDetails();
-  }
-
-  function requestSharedFile(target, share, filePath) {
-    if (!share || !filePath) {
-      addMessage('system', 'System', 'Choose a share and a file path first', Date.now());
-      return;
-    }
-    sendPeerCommand(target, 'get-file', { share, path: filePath });
-  }
-
-  // ── Envelope Protocol ──────────────────────────────────────────────────
-  function createEnvelope(type, payload, opts) {
-    return {
-      v: 1,
-      id: randomId(),
-      type: type,
-      from: myIdentity,
-      to: (opts && opts.to) || null,
-      topic: (opts && opts.topic) || null,
-      ts: Date.now(),
-      payload: payload
-    };
-  }
-
-  function parseEnvelope(data) {
-    try {
-      const obj = typeof data === 'string' ? JSON.parse(data) : data;
-      if (obj && obj.v === 1 && typeof obj.type === 'string' && obj.from) return obj;
-      return null;
-    } catch(e) { return null; }
-  }
-
-  function handleCommandResponse(env) {
-    const payload = env.payload || {};
-    const requestId = payload.requestId;
-    const pending = requestId ? pendingRequests.get(requestId) : null;
-    const result = payload.result || null;
-
-    if (pending && pending.command === 'shares' && result && Array.isArray(result.shares)) {
-      const peer = peers.get(env.from.streamId);
-      if (peer) {
-        peer.agentProfile = peer.agentProfile || {};
-        peer.agentProfile.shares = result.shares;
-      }
-      if (selectedPeer === env.from.streamId) {
-        shareBrowser.peer = env.from.streamId;
-        shareBrowser.share = result.shares[0] && result.shares[0].name ? result.shares[0].name : '';
-        shareBrowser.path = '';
-        shareBrowser.entries = [];
-        shareBrowser.truncated = false;
-        renderDetails();
-      }
-      addMessage('command_response', env.from.name || env.from.streamId, 'shares: ' + (result.shares.map((share) => share.name).join(', ') || 'none'), env.ts);
-      return true;
-    }
-
-    if (pending && pending.command === 'list-files' && result && Array.isArray(result.entries)) {
-      shareBrowser.peer = env.from.streamId;
-      shareBrowser.share = result.share || (pending.args && pending.args.share) || '';
-      shareBrowser.path = result.path || '';
-      shareBrowser.entries = result.entries;
-      shareBrowser.truncated = Boolean(result.truncated);
-      if (selectedPeer === env.from.streamId) {
-        renderDetails();
-      }
-      addMessage('command_response', env.from.name || env.from.streamId, 'listed ' + result.share + (result.path ? '/' + result.path : '') + ' (' + result.entries.length + ' entries)', env.ts);
-      return true;
-    }
-
-    if (pending && pending.command === 'get-file' && payload.ok && result && result.name) {
-      addMessage('command_response', env.from.name || env.from.streamId, 'sending ' + result.name + ' from ' + result.share + '/' + result.path, env.ts);
-      return true;
-    }
-
-    if (pending && payload.ok === false && payload.error) {
-      addMessage('command_response', env.from.name || env.from.streamId, pending.command + ' failed: ' + payload.error, env.ts);
-      return true;
-    }
-
-    return false;
-  }
-
-  function handleIncomingFileOffer(env) {
-    const payload = env.payload || {};
-    incomingTransfers.set(payload.transferId, {
-      from: env.from,
-      name: payload.name || 'download',
-      mimeType: payload.mimeType || 'application/octet-stream',
-      transferKind: payload.kind || 'file',
-      size: payload.size || 0,
-      sha256: payload.sha256 || '',
-      totalChunks: payload.totalChunks || 0,
-      receivedBytes: 0,
-      parts: new Array(payload.totalChunks || 0),
-    });
-    addMessage('event', env.from.name || env.from.streamId, 'sending ' + (payload.name || 'file'), env.ts, payload.kind || 'file');
-    return true;
-  }
-
-  function handleIncomingFileChunk(env) {
-    const payload = env.payload || {};
-    const transfer = incomingTransfers.get(payload.transferId);
-    if (!transfer) return true;
-    const bytes = bytesFromBase64(payload.data || '');
-    transfer.parts[payload.index] = bytes;
-    transfer.receivedBytes += bytes.length;
-    return true;
-  }
-
-  async function handleIncomingFileComplete(env) {
-    const payload = env.payload || {};
-    const transfer = incomingTransfers.get(payload.transferId);
-    if (!transfer) return true;
-
-    try {
-      const missing = transfer.parts.some((part) => !part);
-      if (missing) throw new Error('file transfer incomplete');
-      if (transfer.receivedBytes !== transfer.size || payload.size !== transfer.size) {
-        throw new Error('file size mismatch');
-      }
-
-      const bytes = concatBytes(transfer.parts, transfer.size);
-      const sha = await sha256Hex(bytes);
-      if (transfer.sha256 && sha !== transfer.sha256) {
-        throw new Error('file checksum mismatch');
-      }
-      if (payload.sha256 && sha !== payload.sha256) {
-        throw new Error('file checksum mismatch');
-      }
-
-      const blob = new Blob([bytes], { type: transfer.mimeType });
-      const url = URL.createObjectURL(blob);
-      sendEnvelope('file_ack', {
-        transferId: payload.transferId,
-        ok: true,
-        name: transfer.name,
-        mimeType: transfer.mimeType,
-        kind: transfer.transferKind,
-        size: transfer.size,
-        sha256: sha
-      }, { to: env.from.streamId });
-
-      addMessage(
-        'event',
-        env.from.name || env.from.streamId,
-        'received ' + transfer.name,
-        env.ts,
-        transfer.transferKind + ' ready',
-        { downloadUrl: url, downloadName: transfer.name },
-      );
-    } catch (err) {
-      sendEnvelope('file_ack', {
-        transferId: payload.transferId,
-        ok: false,
-        error: err && err.message ? err.message : String(err)
-      }, { to: env.from.streamId });
-      addMessage('system', 'System', 'File receive failed: ' + (err && err.message ? err.message : String(err)), Date.now());
-    } finally {
-      incomingTransfers.delete(payload.transferId);
-    }
-
-    return true;
-  }
-
-  function handleIncomingFileAck(env) {
-    const payload = env.payload || {};
-    addMessage('event', env.from.name || env.from.streamId, (payload.ok ? 'delivery confirmed for ' : 'delivery failed for ') + (payload.name || payload.transferId), env.ts);
-    return true;
-  }
-
-  // ── Connection ─────────────────────────────────────────────────────────
-  async function doConnect() {
-    const room = inpRoom.value.trim();
-    if (!room) { alert('Room name is required'); return; }
-
-    const pw = inpPassword.value.trim();
-    const password = pw === 'false' ? false : (pw || undefined);
-    const name = inpName.value.trim() || 'Dashboard';
-    myStreamId = 'dashboard_' + randomId().slice(0, 8);
-    myIdentity = {
-      streamId: myStreamId,
-      role: 'dashboard',
-      name: name,
-      instanceId: instanceId()
-    };
-
-    // Save to localStorage
-    localStorage.setItem('ninja_room', room);
-    localStorage.setItem('ninja_password', inpPassword.value.trim());
-    localStorage.setItem('ninja_name', name);
-
-    statusEl.textContent = 'Connecting...';
-    btnConnect.disabled = true;
-
-    try {
-      sdk = new VDONinjaSDK({
-        host: 'wss://wss.vdo.ninja',
-        debug: false
-      });
-
-      // Wire events
-      sdk.addEventListener('peerConnected', (e) => {
-        const uuid = e.detail?.uuid || 'unknown';
-        const sid = e.detail?.streamID || uuid;
-        upsertPeer(sid, uuid, null);
-        renderPeers();
-      });
-
-      sdk.addEventListener('dataChannelOpen', (e) => {
-        const uuid = e.detail?.uuid;
-        // Send our announce
-        const announce = createEnvelope('announce', {
-          skills: ['dashboard-ui', 'chat'],
-          status: 'online',
-          version: DASHBOARD_VERSION,
-          topics: ['events', 'bots', 'support'],
-          agent: {
-            runtime: 'dashboard-ui',
-            summary: 'Browser operator console for room chat, bot inspection, shared-folder browsing, and file downloads',
-            can: ['chat', 'direct-message', 'command', 'operator', 'browse-shares', 'download-file'],
-            asks: [
-              { name: 'status', description: 'Ask connected bots for current status' },
-              { name: 'peers', description: 'Ask connected bots for peer lists' },
-              { name: 'capabilities', description: 'Ask a selected bot what it can do' },
-              { name: 'shares', description: 'Ask a selected bot which shared folders it exposes' }
-            ]
-          }
-        });
-        try { sdk.sendData(announce, { UUID: uuid }); } catch(err) {}
-      });
-
-      sdk.addEventListener('dataReceived', (e) => {
-        const raw = e.detail?.data;
-        const uuid = e.detail?.uuid || '';
-        const env = parseEnvelope(raw);
-        if (!env) return;
-
-        const sender = env.from.streamId;
-        if (!sender || sender === myStreamId) return;
-        // Update peer info
-        upsertPeer(sender, uuid, env.from);
-
-        switch (env.type) {
-          case 'announce': {
-            const p = peers.get(sender);
-            if (p) {
-              p.identity = env.from;
-              p.skills = env.payload?.skills || [];
-              p.status = env.payload?.status || 'online';
-              p.statusDetail = env.payload?.statusDetail || '';
-              p.topics = env.payload?.topics || [];
-              p.version = env.payload?.version || '';
-              p.agentProfile = env.payload?.agent || null;
-            }
-            addMessage('announce', env.from.name || sender,
-              `joined as ${env.from.role || '?'} with skills: ${(env.payload?.skills || []).join(', ')}`,
-              env.ts);
-            renderPeers();
-            renderDetails();
-            break;
-          }
-          case 'skill_update': {
-            const p = peers.get(sender);
-            if (p) {
-              p.skills = env.payload?.skills || p.skills;
-              p.status = env.payload?.status || p.status;
-              p.statusDetail = env.payload?.statusDetail || p.statusDetail || '';
-              p.agentProfile = env.payload?.agent || p.agentProfile || null;
-            }
-            addMessage('event', env.from.name || sender,
-              `status: ${env.payload?.status || '?'}${env.payload?.statusDetail ? ' - ' + env.payload.statusDetail : ''}`,
-              env.ts);
-            renderPeers();
-            renderDetails();
-            break;
-          }
-          case 'chat':
-            addMessage('chat', env.from.name || sender,
-              env.payload?.text || env.payload?.message || JSON.stringify(env.payload),
-              env.ts,
-              env.topic ? '[' + env.topic + ']' : undefined);
-            break;
-          case 'event':
-            addMessage('event', env.from.name || sender,
-              env.payload?.kind ? env.payload.kind + ': ' + JSON.stringify(env.payload) : JSON.stringify(env.payload),
-              env.ts,
-              env.topic ? '[' + env.topic + ']' : undefined);
-            break;
-          case 'command':
-            addMessage('command', env.from.name || sender,
-              'CMD: ' + (env.payload?.command || '?') + ' ' + JSON.stringify(env.payload?.args || {}),
-              env.ts);
-            break;
-          case 'command_response':
-            if (!handleCommandResponse(env)) {
-              addMessage('command_response', env.from.name || sender,
-                JSON.stringify(env.payload, null, 2),
-                env.ts);
-            }
-            break;
-          case 'file_offer':
-            handleIncomingFileOffer(env);
-            break;
-          case 'file_chunk':
-            handleIncomingFileChunk(env);
-            break;
-          case 'file_complete':
-            void handleIncomingFileComplete(env);
-            break;
-          case 'file_ack':
-            handleIncomingFileAck(env);
-            break;
-          case 'ping':
-            // Auto-respond with pong
-            try {
-              const pong = createEnvelope('pong', { pingId: env.id, pongTs: Date.now() }, { to: sender });
-              sdk.sendData(pong, { UUID: uuid });
-            } catch(err) {}
-            break;
-          case 'history_replay': {
-            // Replay contains an original message as payload
-            const orig = env.payload;
-            if (orig && orig.type) {
-              addMessage(orig.type, (orig.from?.name || 'replay'),
-                orig.payload?.text || orig.payload?.message || JSON.stringify(orig.payload),
-                orig.ts,
-                '[replay]');
-            }
-            break;
-          }
-          default:
-            addMessage(env.type, env.from.name || sender,
-              JSON.stringify(env.payload),
-              env.ts);
-        }
-      });
-
-      sdk.addEventListener('peerDisconnected', (e) => {
-        const uuid = e.detail?.uuid || '';
-        const sid = e.detail?.streamID || '';
-        // Find by uuid if no streamID
-        let key = sid;
-        if (!key) {
-          key = getPeerKeyByUuid(uuid);
-        }
-        if (key && peers.has(key)) {
-          const p = peers.get(key);
-          const name = p.identity?.name || key;
-          p.connected = false;
-          addMessage('system', name, 'disconnected', Date.now());
-          renderPeers();
-          renderDetails();
-        }
-      });
-
-      sdk.addEventListener('listing', (e) => {
-        const list = e.detail?.list || [];
-        for (const entry of list) {
-          if (entry.streamID && entry.streamID !== myStreamId) {
-            sdk.view(entry.streamID, { audio: false, video: false });
-          }
-        }
-      });
-
-      sdk.addEventListener('disconnected', () => {
-        statusEl.textContent = 'WebSocket lost, reconnecting...';
-        dot.classList.remove('on');
-      });
-
-      sdk.addEventListener('reconnected', () => {
-        statusEl.textContent = 'Reconnected';
-        dot.classList.add('on');
-      });
-
-      // Connect
-      await sdk.connect();
-      const joinOpts = { room: room };
-      if (password !== undefined) joinOpts.password = password;
-      await sdk.joinRoom(joinOpts);
-      await sdk.announce({ streamID: myStreamId });
-
-      connected = true;
-      dot.classList.add('on');
-      statusEl.textContent = 'Connected as ' + myStreamId;
-      btnConnect.disabled = true;
-      btnDisconnect.disabled = false;
-      inpRoom.disabled = true;
-      inpPassword.disabled = true;
-
-      addMessage('system', 'System', 'Connected to room: ' + room, Date.now());
-
-      // Request history from any peers
-      setTimeout(() => {
-        if (sdk && connected) {
-          const req = createEnvelope('history_request', { count: 50 });
-          try { sdk.sendData(req); } catch(err) {}
-        }
-      }, 2000);
-
-    } catch(err) {
-      statusEl.textContent = 'Error: ' + err.message;
-      btnConnect.disabled = false;
-      console.error('Connection error:', err);
-    }
-  }
-
-  function doDisconnect() {
-    if (sdk) {
-      try { sdk.leaveRoom(); } catch(e) {}
-      try { sdk.disconnect(); } catch(e) {}
-    }
-    sdk = null;
-    connected = false;
-    peers.clear();
-    dot.classList.remove('on');
-    statusEl.textContent = 'Disconnected';
-    btnConnect.disabled = false;
-    btnDisconnect.disabled = true;
-    inpRoom.disabled = false;
-    inpPassword.disabled = false;
-    renderPeers();
-    renderDetails();
-    addMessage('system', 'System', 'Disconnected', Date.now());
-  }
-
-  // ── Chat Commands ──────────────────────────────────────────────────────
-  function handleInput() {
-    const text = chatInput.value.trim();
-    if (!text) return;
-    chatInput.value = '';
-
-    // Local commands
-    if (text.startsWith('/')) {
-      const parts = text.slice(1).split(' ');
-      const cmd = parts[0].toLowerCase();
-      switch (cmd) {
-        case 'help':
-          addMessage('system', 'System',
-            'Commands: /help, /peers, /status, /history [n], /health, /clear, /dm <peer> <msg>, /cmd <peer> <command> [json], /plan <peer> <request>, /review <peer> <request>, /approve <peer> <request>, /respond <peer> <requestId> [json], /profile [peer], /capabilities [peer], /inbox [peer], /shares [peer], /ls <peer> <share> [path], /get <peer> <share> <path>',
-            Date.now());
-          return;
-        case 'peers':
-          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
-          // Send command to all bots
-          sendEnvelope('command', { command: 'peers' });
-          return;
-        case 'status':
-          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
-          sendEnvelope('command', { command: 'status' });
-          return;
-        case 'history':
-          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
-          sendEnvelope('command', { command: 'history', args: { count: parseInt(parts[1]) || 50 } });
-          return;
-        case 'health':
-          if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
-          sendEnvelope('command', { command: 'health' });
-          return;
-        case 'clear':
-          messagesEl.innerHTML = '';
-          messages.length = 0;
-          return;
-        case 'dm': {
-          if (parts.length < 3) { addMessage('system', 'System', 'Usage: /dm <peer_stream_id> <message>', Date.now()); return; }
-          const target = parts[1];
-          const msg = parts.slice(2).join(' ');
-          sendEnvelope('chat', { text: msg }, { to: target });
-          addMessage('chat', myIdentity.name + ' -> ' + target, msg, Date.now());
-          return;
-        }
-        case 'cmd': {
-          const target = parts[1] || selectedPeer;
-          if (!target || parts.length < 3) {
-            addMessage('system', 'System', 'Usage: /cmd <peer_stream_id> <command> [json]', Date.now());
-            return;
-          }
-          const command = parts[2];
-          let args = undefined;
-          if (parts.length > 3) {
-            const raw = parts.slice(3).join(' ');
-            try { args = JSON.parse(raw); } catch(_err) { args = raw; }
-          }
-          sendEnvelope('command', { command, args }, { to: target });
-          addMessage('command', myIdentity.name + ' -> ' + target, 'CMD: ' + command + (args !== undefined ? ' ' + JSON.stringify(args) : ''), Date.now());
-          return;
-        }
-        case 'shares': {
-          const target = parts[1] || selectedPeer;
-          if (!target) {
-            addMessage('system', 'System', 'Select a peer or use /shares <peer_stream_id>', Date.now());
-            return;
-          }
-          sendPeerCommand(target, 'shares');
-          return;
-        }
-        case 'ls': {
-          const target = parts[1] || selectedPeer;
-          if (!target || parts.length < 3) {
-            addMessage('system', 'System', 'Usage: /ls <peer_stream_id> <share> [path]', Date.now());
-            return;
-          }
-          requestShareListing(target, parts[2], parts.slice(3).join(' '));
-          return;
-        }
-        case 'get': {
-          const target = parts[1] || selectedPeer;
-          if (!target || parts.length < 4) {
-            addMessage('system', 'System', 'Usage: /get <peer_stream_id> <share> <path>', Date.now());
-            return;
-          }
-          requestSharedFile(target, parts[2], parts.slice(3).join(' '));
-          return;
-        }
-        case 'plan':
-        case 'review':
-        case 'approve': {
-          const target = parts[1] || selectedPeer;
-          if (!target || parts.length < 3) {
-            addMessage('system', 'System', 'Usage: /' + cmd + ' <peer_stream_id> <request>', Date.now());
-            return;
-          }
-          const request = parts.slice(2).join(' ');
-          sendPeerCommand(target, cmd, { request });
-          return;
-        }
-        case 'respond': {
-          const target = parts[1] || selectedPeer;
-          if (!target || parts.length < 3) {
-            addMessage('system', 'System', 'Usage: /respond <peer_stream_id> <requestId> [json]', Date.now());
-            return;
-          }
-          const requestId = parts[2];
-          let result = null;
-          if (parts.length > 3) {
-            const raw = parts.slice(3).join(' ');
-            try { result = JSON.parse(raw); } catch (_err) { result = raw; }
-          }
-          sendEnvelope('command_response', { requestId, ok: true, result }, { to: target });
-          addMessage('command', myIdentity.name + ' -> ' + target, 'RESP: ' + requestId + ' ' + JSON.stringify(result), Date.now());
-          return;
-        }
-        case 'profile':
-        case 'whoami':
-        case 'capabilities':
-        case 'inbox': {
-          const target = parts[1] || selectedPeer;
-          if (!target) {
-            addMessage('system', 'System', 'Select a peer or use /' + cmd + ' <peer_stream_id>', Date.now());
-            return;
-          }
-          sendPeerCommand(target, cmd);
-          return;
-        }
-        default:
-          addMessage('system', 'System', 'Unknown command: /' + cmd + '. Try /help', Date.now());
-          return;
-      }
-    }
-
-    // Regular chat message
-    if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
-    const broadcastTarget = chatTarget.value || null;
-    sendEnvelope('chat', { text: text }, broadcastTarget ? { to: broadcastTarget } : undefined);
-    addMessage('chat', myIdentity.name + (broadcastTarget ? ' -> ' + broadcastTarget : ''), text, Date.now());
-  }
-
-  function sendEnvelope(type, payload, opts) {
-    if (!sdk || !connected) return;
-    const env = createEnvelope(type, payload, opts);
-    if (type === 'command') {
-      pendingRequests.set(env.id, {
-        command: payload && payload.command,
-        target: opts && opts.to ? opts.to : null,
-        args: payload && payload.args !== undefined ? payload.args : undefined,
-        createdAt: env.ts
-      });
-    }
-    try {
-      if (opts && opts.to) {
-        // Find the peer's UUID for targeted send
-        const p = peers.get(opts.to);
-        if (p) {
-          sdk.sendData(env, { UUID: p.uuid });
-        } else {
-          sdk.sendData(env, { streamID: opts.to });
-        }
-      } else {
-        sdk.sendData(env);
-      }
-    } catch(err) {
-      addMessage('system', 'System', 'Send error: ' + err.message, Date.now());
-    }
-  }
-
-  // ── Event Bindings ─────────────────────────────────────────────────────
-  btnConnect.addEventListener('click', doConnect);
-  btnDisconnect.addEventListener('click', doDisconnect);
-  btnSend.addEventListener('click', handleInput);
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleInput(); }
-  });
-  chatTarget.addEventListener('change', () => { selectedPeer = chatTarget.value; renderPeers(); renderDetails(); });
-  renderDetails();
-
-  // Auto-connect if room is provided via URL params
-  if (params.get('room') && params.get('autoconnect') !== 'false') {
-    setTimeout(doConnect, 500);
-  }
-})();
-</script>
 </body>
 </html>

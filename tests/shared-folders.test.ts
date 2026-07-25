@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -79,6 +79,52 @@ test("resolveSharedFile returns file details and transfer kind", () => {
     assert.equal(file.kind, "image");
     assert.equal(file.filePath, path.join(docsDir, "diagram.png"));
     assert.equal(inferTransferKind(file.filePath), "image");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveSharedFile refuses a symlink that escapes the declared share", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-shares-"));
+  try {
+    const docsDir = path.join(dir, "docs");
+    const secretDir = path.join(dir, "secret");
+    mkdirSync(docsDir, { recursive: true });
+    mkdirSync(secretDir, { recursive: true });
+    writeFileSync(path.join(secretDir, "private.txt"), "do not share", "utf8");
+
+    const linkPath = path.join(docsDir, "leak.txt");
+    try {
+      symlinkSync(path.join(secretDir, "private.txt"), linkPath, "file");
+    } catch {
+      // Windows needs Developer Mode or admin rights to create symlinks.
+      return;
+    }
+
+    const shares = parseSharedFolderSpecs(["docs=./docs"], dir);
+    // The path stays lexically inside the share, so only a real-path check
+    // catches this.
+    assert.throws(
+      () => resolveSharedFile(shares, "docs", "leak.txt"),
+      /escapes the declared folder/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveSharedFile still serves ordinary files inside the share", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-shares-"));
+  try {
+    const docsDir = path.join(dir, "docs", "nested");
+    mkdirSync(docsDir, { recursive: true });
+    writeFileSync(path.join(docsDir, "guide.md"), "hello", "utf8");
+
+    const shares = parseSharedFolderSpecs(["docs=./docs"], dir);
+    const resolved = resolveSharedFile(shares, "docs", "nested/guide.md");
+    assert.equal(resolved.name, "guide.md");
+    assert.equal(resolved.share, "docs");
+    assert.equal(resolved.size, 5);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

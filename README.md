@@ -10,7 +10,7 @@ It runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not 
 
 **Not for:** general network tunnelling, durable cloud storage, or very large public communities.
 
-Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p) | [Protocol and reliability](docs/protocol-and-reliability.md) | [Support](https://discord.vdo.ninja)
+Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p) | [Security model](docs/security.md) | [Social Stream bridge](docs/social-stream-bridge.md) | [Protocol and reliability](docs/protocol-and-reliability.md) | [SDK wishlist](docs/sdk-wishlist.md) | [Support](https://discord.vdo.ninja)
 
 <p align="center">
   <a href="docs/images/agent-room-dashboard.png"><img src="docs/images/agent-room-dashboard.png" alt="A live Ninja P2P room with Planner and Reviewer agents exchanging messages while an operator watches" width="900"></a>
@@ -25,13 +25,35 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 - The **CLI or skill** lets Codex and Claude read and write that inbox during their turns.
 - The optional **dashboard** lets a person watch, chat, inspect agents, and download shared files.
 
-## Start Two Agents
+## See It Work First
 
 Install once:
 
 ```bash
 npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ```
+
+Then prove the whole thing in one command:
+
+```bash
+ninja-p2p demo
+```
+
+```text
+  ok    connect         both peers joined room clawd_b08f26b1...
+  ok    discover        peers found each other over WebRTC
+  ok    direct message  Bob received "hello from Alice"
+  ok    reply           Alice received "hello back from Bob"
+  ok    command         Bob answered {"pong":true,"from":"demo_bob"}
+
+Demo passed.
+```
+
+Two peers connected, found each other through NAT, and exchanged messages both ways with no server of your own. Add `--keep` to hold the room open and watch it in the browser dashboard.
+
+If something goes wrong, `ninja-p2p doctor` checks Node, the native WebRTC module, signaling reachability, and any sidecars you have running.
+
+## Start Two Agents
 
 Start the first agent. A private room name is generated automatically:
 
@@ -234,7 +256,57 @@ What it does not do:
 - it does not interrupt Codex or Claude in the middle of a turn
 - it does not magically become an MCP server
 
-Turn-based tools only act when they get a turn. If you want automatic wakeups, pair `notify` with hooks or wrappers around Claude Code or Codex CLI.
+Turn-based tools only act when they get a turn. To hand them one automatically, see [Wake On Message](#wake-on-message).
+
+### Wake On Message
+
+By default a sidecar will hold a message forever while the agent sits idle and never notices. A wake hook closes that gap: when real peer messages arrive, the sidecar runs a shell command, which is how the agent gets a turn.
+
+```bash
+ninja-p2p start --room ai-room --id claude \
+  --on-message "claude -p 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'"
+
+ninja-p2p start --room ai-room --id codex \
+  --on-message "codex exec 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'"
+```
+
+That is the difference between a message bus and two agents that actually work together while you are away.
+
+The wake command receives these environment variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `NINJA_ID` | this agent's stream id |
+| `NINJA_STATE_DIR` | this agent's state folder |
+| `NINJA_WAKE_COUNT` | how many messages triggered this wake |
+| `NINJA_WAKE_FROM` | comma-separated sender stream ids |
+| `NINJA_WAKE_TYPES` | comma-separated message types |
+| `NINJA_WAKE_TEXT` | text of the first message that had any |
+| `NINJA_WAKE_ROOM` | the room name, for display |
+
+Because `NINJA_ID` and `NINJA_STATE_DIR` are set, the woken command can run bare `ninja-p2p read` or `ninja-p2p dm <peer> "..."` and it routes through the running sidecar.
+
+Safety rules, because wake hooks usually invoke paid models:
+
+- messages arriving close together are batched into one wake (`--wake-debounce`, default 750ms)
+- two wake commands never run at once; messages that arrive mid-run trigger one more wake after it exits
+- wakes are capped at `--wake-limit` per minute (default 30, `0` disables) so two agents replying to each other cannot spin unattended
+- peer join and leave notices do not trigger wakes
+
+If you would rather drive the loop yourself, `wait` blocks until the inbox has something in it:
+
+```bash
+ninja-p2p wait --id codex                      # block until mail arrives
+ninja-p2p wait --id codex --timeout 60000      # or give up after 60s
+
+while ninja-p2p wait --id codex; do
+  codex exec "Handle your ninja-p2p inbox"
+done
+```
+
+`wait` exits `0` when messages are pending and `1` on timeout.
+
+One caveat worth knowing: since runs never overlap, a wake command that never exits will stop later wakes. The sidecar log says so when it happens.
 
 ### Discovery Between Agents
 
@@ -313,7 +385,11 @@ Safety rules:
 
 - the requested path must stay inside the declared shared root
 - absolute paths and `..` traversal are rejected
+- a symlink inside a share cannot hand out a file outside it
+- everything is read-only; there is no write, rename, or delete path
 - this is pull-by-name from explicit shares, not arbitrary remote file access
+
+A room name is the only thing gating access, so read the [security model](docs/security.md) before sharing anything you care about.
 
 ### Practical Agent Patterns
 
@@ -386,6 +462,97 @@ In Claude Code, the skill becomes a slash command:
 
 Without the skill, Claude can still use the `ninja-p2p` shell command if it is installed.
 
+## Swarm File Transfer
+
+Send a file to a room and every peer that finishes becomes another source for it.
+
+```bash
+# on the machine holding the file
+ninja-p2p seed ./big-file.zip --room my-room
+
+# anywhere else
+ninja-p2p fetch big-file.zip --room my-room --out ./downloads --seed
+```
+
+```text
+fetching payload.bin (5.0 MB, 82 chunks)
+  24%  20/82 chunks  1 peer(s)  4 in flight
+  63%  52/82 chunks  1 peer(s)  4 in flight
+saved ./downloads/payload.bin
+  10.0 MB in 787ms (12.7 MB/s)
+```
+
+`--seed` keeps serving after the download finishes, which is what lets a swarm outlive the original sender. In a live test a peer downloaded a 5 MB file, the original seeder was killed, and a third peer then downloaded the whole file from that peer alone — byte identical.
+
+How it works:
+
+- **Files are content-addressed by sha256.** Any peer holding the same bytes is interchangeable, so swarms form implicitly.
+- **Every chunk is hashed individually.** A peer serving corrupt data is caught on the chunk, not at the end of the file, so only that chunk is refetched and the peer is scored down.
+- **Chunks are written at their byte offset**, so they can arrive out of order and from several peers at once.
+- **An interrupted download resumes.** Run the same `fetch` again and it hashes what the part file already holds, credits the chunks that verify, and asks only for the rest. Verified rather than assumed: a gap in a part file reads back as zeros and a half-written chunk looks like data, so trusting the file's length would corrupt the result. Proven on a 200 MB transfer restarted at 40%.
+- **Rarest chunk first**, served by the best-scoring peer that has it. Scoring uses measured round-trip time, observed failures, and queue depth — nothing a peer claims about itself.
+- **A partial downloader is already a source.** It serves any chunk it has verified while still fetching the rest.
+- **Ties in rarity are broken at random.** At the start of a download every chunk is equally rare, so choosing by index made every downloader ask for the same chunks in the same order — they never held anything to trade and could never serve each other. Random selection makes them diverge immediately, and it is what makes the point above real rather than theoretical.
+- **Bulk data has its own channel.** Chunks travel as raw bytes on a dedicated binary lane rather than as base64 inside JSON on the control channel, so a 64 KB chunk no longer sits in front of the chunk requests queued behind it.
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--seed` | off | keep serving after the download completes |
+| `--out <dir>` | `.` | where finished files land |
+| `--chunk-size <n>` | `64000` | bytes per chunk when seeding |
+| `--timeout <ms>` | `300000` | give up if the download stalls |
+
+Measured speed, one seeder, 10 MB, separate processes on one idle machine. Each figure is the median of repeated runs, with the observed spread — a single run is not a reliable number here, and the spread is part of the answer:
+
+| Downloaders | Each (median) | Spread | Total |
+| --- | --- | --- | --- |
+| 1 | 12.7 MB/s | 12.2–13.0 | 12.7 MB/s |
+| 3 | ~4.5 MB/s | 1.1–5.5 | ~13 MB/s |
+
+Total throughput holds roughly flat as downloaders are added, rather than the seeder's capacity being divided among them — that is the swarm doing its job. Adding downloaders does not make any one of them faster.
+
+A single downloader is consistent. Several downloaders are not: the same test varies by a factor of four run to run, because a lost chunk costs a request timeout and one unlucky downloader drags its own figure down. Treat the median as the shape and the spread as the honest caveat.
+
+Two honest notes:
+
+- **The fast path needs `@vdoninja/sdk` 1.4.1 or newer.** On an older SDK there is no binary lane, so chunks fall back to base64 inside JSON on the control channel. Everything still works and still verifies, but measurably slower — two downloaders measured 627 KB/s each on 1.4.0 against 7.1 MB/s on 1.4.1. The fallback is chosen per request, so a room can mix old and new peers.
+- **These are local-network numbers.** They say the protocol is not the bottleneck; they say nothing about what you will see across the internet, where round-trip time and upload capacity dominate.
+
+## Live Stream Chat (Social Stream Ninja)
+
+Pipe live chat from Twitch, YouTube, Kick and everything else [Social Stream Ninja](https://socialstream.ninja) aggregates into a room, so agents can watch it and answer it.
+
+```bash
+ninja-p2p ssn --session <your-ssn-session-id> --room ai-room --echo
+```
+
+Each chat message is published as an event on the `social` topic, so any agent in the room reads it the normal way. Pair it with a wake hook and the agent reacts on its own:
+
+```bash
+ninja-p2p start --id claude --room ai-room \
+  --on-message "claude -p 'New stream chat arrived. Run: ninja-p2p read --take 20'"
+```
+
+The bridge also advertises a `say` command, so one message from an agent goes out to every connected platform at once:
+
+```bash
+ninja-p2p command --id claude social say '{"text":"great question, explaining now"}'
+```
+
+This uses SSN's documented WebSocket API and needs no changes to SSN. It does require two toggles under `Global settings and tools` → `Mechanics`: **Enable remote API control of extension** and **Send chat messages to API server**. Without the second one the bridge connects but never receives anything.
+
+One warning worth taking seriously: **public chat is hostile input.** Anyone watching can type into this pipe, which makes it the most exposed prompt-injection surface you can hand an agent. Do not give a chat-reading agent write access to anything that matters.
+
+If the agent only needs to watch, say so and the bridge will enforce it:
+
+```bash
+ninja-p2p ssn --session <id> --room ai-room --read-only
+```
+
+In that mode the bridge does not advertise `say` and refuses it if sent anyway, so an agent cannot reach your audience even if it tries.
+
+Full setup, the event shape, safety notes, and a requirements map for Social Stream Ninja itself: [Social Stream bridge](docs/social-stream-bridge.md).
+
 ## MCP
 
 `ninja-p2p` does not expose an MCP server today.
@@ -396,6 +563,31 @@ If you want MCP, treat it as a separate layer:
 - Claude Code adds MCP servers with `claude mcp add ...`
 
 This package is a CLI and library, not an MCP endpoint.
+
+## Troubleshooting
+
+Start here:
+
+```bash
+ninja-p2p doctor
+```
+
+```text
+[ok  ] node       Node v22.14.0
+[ok  ] webrtc     @roamhq/wrtc is installed
+[ok  ] signaling  wss://wss.vdo.ninja reachable in 257ms
+[ok  ] state      C:\Users\steve\.ninja-p2p is writable
+[warn] sidecars   0 running, 6 stopped
+```
+
+It checks the Node version, whether the native WebRTC module loads, whether the signaling server is reachable, whether the state folder is writable, and which sidecars this machine believes it started. It exits non-zero if a required check fails.
+
+Common cases:
+
+- **Peers never discover each other.** They must use the exact same `--room`. Run `ninja-p2p room --id <you>` on the first agent and copy that value.
+- **`ninja-p2p demo` fails at `connect`.** Outbound `wss://` is blocked. Check a proxy or firewall.
+- **Messages queue but never send.** The sidecar is not running. Check `ninja-p2p status --id <you>` and the log at `<state-dir>/agent.log`.
+- **A wake hook stopped firing.** Wake runs never overlap, so a wake command that never exits blocks later ones. The log records `[wake] busy` when that happens.
 
 ## Testing From This Repo
 
@@ -444,6 +636,14 @@ npm run validate:live
 That script starts a planner, worker, reviewer, and operator sidecar, waits for full peer discovery, exercises plan/task/review/approve/respond/event flows, and fails if the room does not converge.
 
 ## CLI
+
+Prove the transport works, then diagnose if it does not:
+
+```bash
+ninja-p2p demo
+ninja-p2p demo --keep
+ninja-p2p doctor
+```
 
 Interactive room session:
 
@@ -497,6 +697,19 @@ Read pending messages:
 
 ```bash
 ninja-p2p read --id codex --take 10
+```
+
+Block until messages arrive:
+
+```bash
+ninja-p2p wait --id codex
+ninja-p2p wait --id codex --timeout 60000
+```
+
+Run a command automatically when messages arrive:
+
+```bash
+ninja-p2p start --id codex --on-message "codex exec 'Check your ninja-p2p inbox'"
 ```
 
 Queue a direct message through the running sidecar:
@@ -679,11 +892,13 @@ The browser dashboard can also join the same room:
 dashboard.html?room=agents_room&password=false&name=Steve&autoconnect=true
 ```
 
-For GitHub Pages, the same static UI can live at:
+The same UI is hosted, so you do not have to open a local file:
 
 ```text
-docs/index.html?room=agents_room&password=false&name=Steve&autoconnect=true
+https://steveseguin.github.io/ninja-p2p/dashboard.html?room=agents_room&password=false&name=Steve&autoconnect=true
 ```
+
+The project landing page lives at the root of that site, and `docs/dashboard.html` is the copy it serves. Run `npm run sync:docs` after editing `dashboard.html` to update it.
 
 That browser UI can:
 
@@ -693,11 +908,12 @@ That browser UI can:
 - broadcast to the whole room
 - inspect the selected peer's announced profile, capabilities, asks, and shared folders
 - browse a selected peer's declared shared folders and request one file at a time
+- send a local file to the selected peer, which lands in that peer's downloads folder
 - download files that arrive over the room connection
 - send slash-style commands like `/profile`, `/capabilities`, `/inbox`, `/status`, `/history`, `/peers`, `/shares`, `/ls <peer> <share> [path]`, `/get <peer> <share> <path>`, and `/cmd <peer> <command> [json]`
 - send operator-friendly shortcuts like `/plan`, `/review`, `/approve`, and `/respond`
 
-One honest caveat: GitHub Pages is just a static host. It can join a known room, but it will not list all rooms for you or store durable history on its own. Also, if the room password matters, entering it into the page is better than putting it in the URL. The browser dashboard can browse declared shares and download requested files now, but it still does not have a browser-side uploader or full sync UI.
+One honest caveat: GitHub Pages is just a static host. It can join a known room, but it will not list all rooms for you or store durable history on its own. Also, if the room password matters, entering it into the page is better than putting it in the URL. The dashboard can now browse shares, download files, and send files, but it does not have a full sync UI.
 
 ## Coordination Helpers
 
@@ -752,6 +968,13 @@ If you want to turn video into frames for ingestion, stream media between bots, 
 - `src/peer-registry.ts`: peer state and presence
 - `src/protocol.ts`: message envelope format
 - `src/agent-state.ts`: local inbox, outbox, and sidecar state
+- `src/wake.ts`: wake-on-message hooks, batching, and rate limiting
+- `src/demo.ts`: the one-command live round-trip self-test
+- `src/doctor.ts`: environment and connectivity diagnostics
+- `src/social-stream.ts`: the Social Stream Ninja live-chat bridge
+- `src/swarm.ts`: chunk bitfields, piece selection, and sparse chunk storage
+- `src/swarm-session.ts`: per-file transfer state, verification, and peer scoring
+- `src/swarm-manager.ts`: binds swarm sessions to a live room
 - `dashboard.html`: browser monitor and chat client
 - `.codex/skills/ninja-p2p`: optional Codex skill
 - `.agents/skills/ninja-p2p`: Codex compatibility copy for older layouts

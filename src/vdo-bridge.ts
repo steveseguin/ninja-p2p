@@ -8,7 +8,9 @@
  * Zero dependencies on stevesbot internals.
  */
 
+import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
+import { setTimeout as delay } from "node:timers/promises";
 import { sendFileFromPath } from "./file-transfer.js";
 import { MessageBus, type MessageBusOptions } from "./message-bus.js";
 import { PeerRegistry } from "./peer-registry.js";
@@ -25,6 +27,29 @@ import {
   type PeerIdentity,
   type SkillUpdatePayload,
 } from "./protocol.js";
+
+/**
+ * The version advertised to peers.
+ *
+ * Read from package.json rather than typed in. It was a literal, and had
+ * already drifted from the released version — peers were told whatever someone
+ * last remembered to edit, which is worse than no version at all because it
+ * looks authoritative.
+ */
+function readPackageVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require("../package.json") as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+/** Cap on how long a shutdown waits for the SDK, so it can never wedge an exit. */
+const TEARDOWN_TIMEOUT_MS = 5000;
+/** Quiet period after a reconnect, while the SDK replays its own view intent. */
+const RESTORE_GRACE_MS = 8000;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,9 +87,13 @@ export class VDOBridge extends EventEmitter {
   private skills: string[];
   private status = "idle";
   private statusDetail = "";
-  private version = "0.1.4";
+  private version = readPackageVersion();
   private agentProfile: AgentProfile | undefined;
   private readonly viewedStreamIds = new Set<string>();
+  private disconnecting = false;
+  /** Set while the SDK is re-establishing signalling and replaying its intent. */
+  private restoring = false;
+  private restoringUntil = 0;
 
   constructor(options: VDOBridgeOptions) {
     super();
@@ -136,6 +165,8 @@ export class VDOBridge extends EventEmitter {
   async disconnect(): Promise<void> {
     if (!this.connected || !this.sdk) return;
 
+    const sdk = this.sdk;
+    this.disconnecting = true;
     this.stopHeartbeat();
 
     // Send a leaving event to all peers
@@ -144,15 +175,39 @@ export class VDOBridge extends EventEmitter {
       this.sdk.sendData(envelopeToWire(envelope));
     } catch { /* best effort */ }
 
+    // Every viewed peer holds an RTCPeerConnection. Under @roamhq/wrtc those
+    // are native handles that keep Node's event loop alive, so a CLI that only
+    // dropped the bookkeeping set would connect, do its work, and then hang
+    // forever instead of exiting.
+    for (const streamId of this.viewedStreamIds) {
+      try {
+        this.sdk.stopViewing(streamId);
+      } catch { /* best effort */ }
+    }
+
     try {
       this.sdk.leaveRoom();
     } catch { /* best effort */ }
 
+    // Tearing the process down before the SDK has finished closing peer
+    // connections kills the native WebRTC module mid-cleanup, so wait for real
+    // completion. From v1.4.1 disconnect() resolves exactly then; older builds
+    // return void and need the state polled instead.
     try {
-      this.sdk.disconnect();
-    } catch { /* best effort */ }
+      const result = sdk.disconnect() as unknown;
+      if (result && typeof (result as Promise<void>).then === "function") {
+        await Promise.race([result as Promise<void>, delay(TEARDOWN_TIMEOUT_MS)]);
+      } else {
+        await this.waitForSdkTeardown(sdk);
+      }
+    } catch {
+      // A disconnect that throws has not cleaned up, so fall back to observing
+      // the state rather than exiting into a half-torn-down native module.
+      await this.waitForSdkTeardown(sdk);
+    }
 
     this.connected = false;
+    this.disconnecting = false;
     this.sdk = null;
     this.viewedStreamIds.clear();
     this.peers.clear();
@@ -162,6 +217,39 @@ export class VDOBridge extends EventEmitter {
 
   isConnected(): boolean {
     return this.connected;
+  }
+
+  /** Whether the SDK is mid-reconnect, or just finished and still settling. */
+  isRestoring(): boolean {
+    return this.restoring || Date.now() < this.restoringUntil;
+  }
+
+  /**
+   * Resolve once the SDK has genuinely finished tearing down.
+   *
+   * Its "disconnected" event is not a reliable signal: the WebSocket close
+   * handler fires it well before the real cleanup, which runs later in a
+   * promise chain the SDK never hands back. Waiting on the event let callers
+   * exit while peer connections were still closing, which crashed the native
+   * WebRTC module. So observe the state the cleanup actually clears, and cap
+   * the wait so a changed SDK can never wedge a shutdown.
+   */
+  private async waitForSdkTeardown(
+    sdk: InstanceType<typeof import("@vdoninja/sdk")>,
+    timeoutMs = TEARDOWN_TIMEOUT_MS,
+  ): Promise<void> {
+    const state = sdk as unknown as {
+      connections?: { size?: number };
+      signaling?: unknown;
+    };
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      const connectionsClosed = (state.connections?.size ?? 0) === 0;
+      const signalingClosed = !state.signaling;
+      if (connectionsClosed && signalingClosed) return;
+      await delay(50);
+    }
   }
 
   private emitBridgeError(err: unknown): void {
@@ -257,6 +345,83 @@ export class VDOBridge extends EventEmitter {
       this.emitBridgeError(err);
       return false;
     }
+  }
+
+  // ── Binary lane ──────────────────────────────────────────────────────────
+
+  /**
+   * Whether this build can put raw bytes on the wire.
+   *
+   * False on SDK versions before 1.4.1, where everything was JSON-stringified
+   * before it reached the data channel. Callers fall back to base64 rather than
+   * failing: a swarm with a mix of old and new peers still works, just slower
+   * with the old ones.
+   */
+  supportsBinary(): boolean {
+    return typeof this.sdk?.sendBinary === "function";
+  }
+
+  /**
+   * Send raw bytes to one peer, bypassing JSON entirely.
+   *
+   * Resolves false rather than throwing when the peer is unknown or the SDK is
+   * too old, so a caller can treat it as "try binary, else base64" in one line.
+   */
+  async sendBinaryTo(targetStreamId: string, bytes: Uint8Array): Promise<boolean> {
+    const sdk = this.sdk;
+    if (!sdk || typeof sdk.sendBinary !== "function") return false;
+    const uuid = this.peers.getPeer(targetStreamId)?.uuid;
+    if (!uuid) return false;
+    try {
+      return await sdk.sendBinary(bytes, uuid);
+    } catch (err) {
+      this.emitBridgeError(err);
+      return false;
+    }
+  }
+
+  /**
+   * Bytes still queued for a peer on the binary lane, or null if unknown.
+   *
+   * Note this is the binary lane specifically. Reading the control channel
+   * while bulk traffic queues on `x-bin` reports a permanent zero, which is
+   * exactly how the SDK's own docs concluded that the value never moves under
+   * `@roamhq/wrtc` — see docs/sdk-wishlist.md.
+   */
+  bufferedBytesFor(targetStreamId: string): number | null {
+    const sdk = this.sdk;
+    if (!sdk || typeof sdk.getBufferedAmount !== "function") return null;
+    const uuid = this.peers.getPeer(targetStreamId)?.uuid;
+    if (!uuid) return null;
+    try {
+      return sdk.getBufferedAmount(uuid, "bin");
+    } catch {
+      return null;
+    }
+  }
+
+  /** Negotiated SCTP message limit for a peer, or null if not reported. */
+  maxMessageSizeFor(targetStreamId: string): number | null {
+    const sdk = this.sdk;
+    if (!sdk || typeof sdk.getMaxMessageSize !== "function") return null;
+    const uuid = this.peers.getPeer(targetStreamId)?.uuid;
+    if (!uuid) return null;
+    try {
+      return sdk.getMaxMessageSize(uuid);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Smallest limit any connected peer reports, or null if none report one. */
+  smallestMaxMessageSize(): number | null {
+    let smallest: number | null = null;
+    for (const peer of this.peers.getConnectedPeers()) {
+      const limit = this.maxMessageSizeFor(peer.streamId);
+      if (limit === null) continue;
+      if (smallest === null || limit < smallest) smallest = limit;
+    }
+    return smallest;
   }
 
   /** Reply to a received message using its sender as the target. */
@@ -410,14 +575,53 @@ export class VDOBridge extends EventEmitter {
       this.emit("peer:disconnected", { streamId, uuid });
     });
 
+    // Raw bytes from a peer's sendBinary(). No envelope, no routing beyond the
+    // sender, so whatever framing the payload needs lives inside the bytes.
+    this.sdk.addEventListener(
+      "binaryReceived",
+      (event: { detail?: { uuid?: string; streamID?: string; bytes?: unknown } }) => {
+        const raw = event.detail?.bytes;
+        if (!(raw instanceof Uint8Array)) return;
+        const uuid = event.detail?.uuid ?? "unknown";
+        const streamId = this.peers.streamIdForUuid(uuid) ?? event.detail?.streamID ?? uuid;
+        this.emit("binary", { streamId, uuid, bytes: raw });
+      },
+    );
+
     // SDK-level connection events
-    this.sdk.addEventListener("disconnected", () => {
-      console.log("[P2P] WebSocket disconnected, SDK will attempt reconnect...");
-      this.emit("ws:disconnected");
+    this.sdk.addEventListener(
+      "disconnected",
+      (event: { detail?: { intentional?: boolean; willReconnect?: boolean; phase?: string } }) => {
+        // From SDK v1.4.1 the event says whether a reconnect is actually coming.
+        // Older builds say nothing, so fall back to our own shutdown flag rather
+        // than claiming a reconnect that will never happen.
+        const detail = event?.detail;
+        const willReconnect =
+          typeof detail?.willReconnect === "boolean" ? detail.willReconnect : !this.disconnecting;
+        if (willReconnect) {
+          console.log("[P2P] WebSocket disconnected, SDK will attempt reconnect...");
+        }
+        this.emit("ws:disconnected", { willReconnect, phase: detail?.phase });
+      },
+    );
+
+    this.sdk.addEventListener("reconnecting", () => {
+      this.restoring = true;
     });
 
     this.sdk.addEventListener("reconnected", () => {
       console.log("[P2P] WebSocket reconnected.");
+      // The SDK replays its own view intent right after this. Rebuilding a
+      // connection on top of that replay races it — both sides manipulate the
+      // same pending-view state — so hold off briefly and let it finish.
+      this.restoring = false;
+      this.restoringUntil = Date.now() + RESTORE_GRACE_MS;
+      // Every peer connection was established under the old socket. The SDK
+      // replays its own view intent, but our bookkeeping said "already viewing"
+      // for all of them, so anything the replay missed could never be
+      // re-established by us — the set was only ever cleared on shutdown.
+      // Forget it, and let the fresh room listing decide what to view.
+      this.viewedStreamIds.clear();
       this.emit("ws:reconnected");
     });
 
@@ -491,6 +695,32 @@ export class VDOBridge extends EventEmitter {
       statusDetail: this.statusDetail,
       agent: this.agentProfile,
     } satisfies SkillUpdatePayload);
+  }
+
+  /**
+   * Tear down and rebuild the connection to one peer.
+   *
+   * A peer connection can report `open` on the sending side while nothing
+   * actually crosses it — measured after a signalling blip, where chunk
+   * requests arrived, the sender's `send()` returned success, and the bytes
+   * never landed. Nothing below us notices, because every layer believes it is
+   * fine. The only evidence is at the application layer: a peer that keeps
+   * failing to deliver. This is how that evidence gets acted on.
+   */
+  revivePeer(streamId: string): boolean {
+    if (!this.sdk || streamId === this.options.streamId) return false;
+    // Never while the SDK is restoring: it is already rebuilding these very
+    // connections, and doing it underneath was measured as slower than doing
+    // nothing. With signalling healthy, a rebuild restores a path in ~260ms.
+    if (this.isRestoring()) return false;
+    try {
+      this.sdk.stopViewing(streamId);
+    } catch { /* it may already be gone; rebuilding is still worth trying */ }
+    this.viewedStreamIds.delete(streamId);
+    this.peers.markDisconnected(streamId);
+    console.log(`[P2P] Rebuilding the connection to ${streamId}`);
+    this.maybeViewPeer(streamId);
+    return true;
   }
 
   private maybeViewPeer(streamId?: string): void {

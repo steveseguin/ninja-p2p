@@ -285,6 +285,13 @@ export function isInboxWorthy(type: MessageType): boolean {
     "file_chunk",
     "file_complete",
     "file_ack",
+    // Swarm traffic is machine-to-machine and high volume. A single file would
+    // otherwise write thousands of inbox entries and bury every real message.
+    "swarm_offer",
+    "swarm_announce",
+    "swarm_request",
+    "swarm_chunk",
+    "swarm_have",
   ].includes(type);
 }
 

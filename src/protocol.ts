@@ -25,7 +25,35 @@ export type MessageType =
   | "pong"
   | "ack"
   | "history_replay"
-  | "history_request";
+  | "history_request"
+  // Swarm transfer. High volume and machine-only: these must never reach an
+  // agent inbox, or a single file would bury every real message.
+  | "swarm_offer"
+  | "swarm_announce"
+  | "swarm_request"
+  | "swarm_chunk"
+  | "swarm_have";
+
+/**
+ * Messages that are only worth delivering right now.
+ *
+ * Swarm traffic is high volume and time-sensitive: a chunk request replayed
+ * from an offline queue minutes later asks for something the requester already
+ * has, and a history ring full of chunk requests has evicted every real message
+ * a peer asking for history actually wanted. Neither is retained or replayed —
+ * anything missed is re-announced on the next interval.
+ */
+export const TRANSIENT_MESSAGE_TYPES: ReadonlySet<MessageType> = new Set<MessageType>([
+  "swarm_offer",
+  "swarm_announce",
+  "swarm_request",
+  "swarm_chunk",
+  "swarm_have",
+]);
+
+export function isTransientType(type: MessageType): boolean {
+  return TRANSIENT_MESSAGE_TYPES.has(type);
+}
 
 export type PeerIdentity = {
   streamId: string;
@@ -55,6 +83,52 @@ export type AgentProfile = {
   can?: string[];
   asks?: AgentAsk[];
   shares?: SharedFolderSummary[];
+};
+
+/** Announces that a file exists in the swarm and describes how it is chunked. */
+export type SwarmOfferPayload = {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  chunkSize: number;
+  totalChunks: number;
+  chunkHashes: string[];
+};
+
+/** A peer's full chunk bitfield, base64 encoded. */
+export type SwarmAnnouncePayload = {
+  fileId: string;
+  totalChunks: number;
+  chunks: string;
+};
+
+export type SwarmRequestPayload = {
+  fileId: string;
+  index: number;
+  /**
+   * Set when the requester can receive the chunk as raw bytes on the binary
+   * lane. Carrying it on the request rather than negotiating up front means
+   * there is no capability table to keep in sync and no window where a peer
+   * that just joined is assumed to be one thing or the other — each request
+   * states how its own reply should come back.
+   */
+  bin?: 1;
+};
+
+export type SwarmChunkPayload = {
+  fileId: string;
+  index: number;
+  data: string;
+};
+
+/** Incremental "I now hold these chunks", so peers learn without a full re-announce. */
+export type SwarmHavePayload = {
+  fileId: string;
+  /** Batched indexes. Preferred; one message can carry a whole burst. */
+  indexes?: number[];
+  /** Single index, kept so a peer running an older build is still understood. */
+  index?: number;
 };
 
 export type FileTransferKind = "file" | "image";

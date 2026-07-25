@@ -1,6 +1,18 @@
 import path from "node:path";
 import { createMessageId, generateRoomName, type AgentAsk, type AgentProfile } from "./protocol.js";
 import { parseSharedFolderSpecs, toSharedFolderSummaries, type SharedFolderConfig } from "./shared-folders.js";
+import {
+  DEFAULT_WAKE_DEBOUNCE_MS,
+  DEFAULT_WAKE_LIMIT_PER_MINUTE,
+  type WakeConfig,
+} from "./wake.js";
+import {
+  DEFAULT_SSN_HOST,
+  DEFAULT_SSN_IN_CHANNEL,
+  DEFAULT_SSN_OUT_CHANNEL,
+  DEFAULT_SSN_TOPIC,
+} from "./social-stream.js";
+import { DEFAULT_SWARM_CHUNK_SIZE } from "./swarm.js";
 
 export type CliCommonOptions = {
   room: string;
@@ -12,6 +24,7 @@ export type CliCommonOptions = {
   stateDir: string | null;
   agentProfile?: AgentProfile;
   sharedFolders: SharedFolderConfig[];
+  wake: WakeConfig | null;
 };
 
 export type SkillRuntime = "claude" | "codex";
@@ -27,6 +40,22 @@ export type CliCommand =
   | { kind: "agent"; options: CliCommonOptions }
   | { kind: "notify"; stateDir: string }
   | { kind: "read"; stateDir: string; take: number; peek: boolean }
+  | { kind: "wait"; stateDir: string; timeoutMs: number; intervalMs: number }
+  | { kind: "doctor"; stateRoot: string }
+  | { kind: "seed"; options: CliCommonOptions; filePath: string; chunkSize: number }
+  | { kind: "fetch"; options: CliCommonOptions; query: string; outDir: string | null; keepSeeding: boolean; timeoutMs: number }
+  | { kind: "demo"; room: string | null; password: string | false; timeoutMs: number; keep: boolean }
+  | {
+    kind: "ssn";
+    options: CliCommonOptions;
+    session: string;
+    topic: string;
+    host: string;
+    inChannel: number;
+    outChannel: number;
+    echo: boolean;
+    readOnly: boolean;
+  }
   | { kind: "connect"; options: CliCommonOptions }
   | { kind: "chat"; options: CliCommonOptions; text: string }
   | { kind: "dm"; options: CliCommonOptions; target: string; text: string }
@@ -49,8 +78,30 @@ export function helpText(): string {
     "",
     "Start here:",
     "  ninja-p2p menu",
+    "  ninja-p2p demo",
     "  ninja-p2p start --id claude",
     "  ninja-p2p start --id codex",
+    "",
+    "Troubleshooting:",
+    "  ninja-p2p doctor",
+    "",
+    "Swarm file transfer (every downloader becomes a source):",
+    "  ninja-p2p seed ./big-file.zip --room my-room",
+    "  ninja-p2p fetch big-file.zip --room my-room --out ./downloads",
+    "  ninja-p2p fetch <file-id> --room my-room --seed",
+    "",
+    "  --seed              keep serving after the download finishes",
+    "  --out <dir>         where finished files land",
+    "  --chunk-size <n>    bytes per chunk (default 64000)",
+    "",
+    "Live chat bridge (Social Stream Ninja):",
+    "  ninja-p2p ssn --session <ssn-session-id> --room ai-room",
+    "  ninja-p2p ssn --session <id> --room ai-room --read-only",
+    "  ninja-p2p ssn --session <id> --room ai-room --topic social --echo",
+    "",
+    "  Publishes Twitch/YouTube/Kick chat into the room as events on --topic,",
+    "  and lets any agent reply to every platform at once:",
+    "    ninja-p2p command --id claude social say '{\"text\":\"hi chat\"}'",
     "",
     "Install:",
     "  npm install -g @vdoninja/ninja-p2p @roamhq/wrtc",
@@ -78,6 +129,20 @@ export function helpText(): string {
     "  ninja-p2p event --id codex builds build_failed '{\"job\":\"api\"}'",
     "  ninja-p2p command --id codex claude capabilities",
     "  ninja-p2p stop --id codex",
+    "",
+    "Wake on incoming messages (agents act without a human turn):",
+    "  ninja-p2p start --id claude --on-message \"claude -p 'Check your ninja-p2p inbox'\"",
+    "  ninja-p2p start --id codex --on-message \"codex exec 'Check your ninja-p2p inbox'\"",
+    "  ninja-p2p wait --id codex && echo \"mail arrived\"",
+    "  while ninja-p2p wait --id codex; do codex exec 'handle inbox'; done",
+    "",
+    "  --on-message <cmd>      shell command to run when messages arrive",
+    "  --wake-debounce <ms>    batch window before firing (default 750)",
+    "  --wake-limit <n>        max wakes per minute, 0 = unlimited (default 30)",
+    "  --timeout <ms>          wait: give up after this long, 0 = forever",
+    "",
+    "  The wake command receives NINJA_ID, NINJA_STATE_DIR, NINJA_WAKE_COUNT,",
+    "  NINJA_WAKE_FROM, NINJA_WAKE_TYPES, and NINJA_WAKE_TEXT.",
     "",
     "Use:",
     "  ninja-p2p connect --room my-room --name Claude",
@@ -131,6 +196,26 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
     };
   }
 
+  if (kind === "demo") {
+    const parsedDemo = parseOptions(args, env);
+    const passwordValue = getSingleValue(parsedDemo.values, "password") ?? env.NINJA_PASSWORD;
+    return {
+      kind,
+      room: getSingleValue(parsedDemo.values, "room") || null,
+      password: passwordValue === "false" ? false : (passwordValue || false),
+      timeoutMs: parsePositiveInt(getSingleValue(parsedDemo.values, "timeout"), 20_000),
+      keep: parsedDemo.flags.has("keep"),
+    };
+  }
+
+  if (kind === "doctor") {
+    const parsedDoctor = parseOptions(args, env);
+    return {
+      kind,
+      stateRoot: getSingleValue(parsedDoctor.values, "state-root") || getStateRoot(env),
+    };
+  }
+
   if (kind === "install-skill") {
     const runtime = (args.shift() ?? "").toLowerCase();
     if (runtime !== "codex" && runtime !== "claude") {
@@ -180,6 +265,77 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
         take: parsePositiveInt(getSingleValue(parsed.values, "take"), 20),
         peek: getSingleValue(parsed.values, "peek") === "true",
       };
+    case "wait":
+      return {
+        kind,
+        stateDir: resolveStateDir(parsed.values, env),
+        // 0 means wait indefinitely, which is what a `while` loop wants.
+        timeoutMs: parseNonNegativeInt(getSingleValue(parsed.values, "timeout"), 0),
+        intervalMs: parsePositiveInt(getSingleValue(parsed.values, "interval"), 500),
+      };
+    case "seed":
+      {
+        if (positional.length < 1) {
+          throw new Error("seed requires a file path");
+        }
+        const options = buildCommonOptions(parsed.values, env, {
+          requireRoom: false,
+          requireStateDir: false,
+          allowGeneratedRoom: true,
+        });
+        return {
+          kind,
+          options,
+          filePath: positional.join(" "),
+          chunkSize: parsePositiveInt(getSingleValue(parsed.values, "chunk-size"), DEFAULT_SWARM_CHUNK_SIZE),
+        };
+      }
+    case "fetch":
+      {
+        if (positional.length < 1) {
+          throw new Error("fetch requires a file id or name");
+        }
+        const options = buildCommonOptions(parsed.values, env, {
+          requireRoom: true,
+          requireStateDir: false,
+        });
+        return {
+          kind,
+          options,
+          query: positional.join(" "),
+          outDir: getSingleValue(parsed.values, "out") ?? null,
+          keepSeeding: parsed.flags.has("seed"),
+          timeoutMs: parseNonNegativeInt(getSingleValue(parsed.values, "timeout"), 300_000),
+        };
+      }
+    case "ssn":
+      {
+        const session = getSingleValue(parsed.values, "session") || env.SSN_SESSION || positional[0];
+        if (!session) {
+          throw new Error("ssn requires a Social Stream Ninja session id; use --session <id>");
+        }
+        const options = buildCommonOptions(parsed.values, env, {
+          requireRoom: false,
+          requireStateDir: false,
+          allowGeneratedRoom: true,
+        });
+        return {
+          kind,
+          options: {
+            ...options,
+            name: getSingleValue(parsed.values, "name") || env.NINJA_NAME || "Social Stream",
+            streamId: getSingleValue(parsed.values, "id") || env.NINJA_ID || "social",
+            role: getSingleValue(parsed.values, "role") || env.NINJA_ROLE || "bridge",
+          },
+          session,
+          topic: getSingleValue(parsed.values, "topic") || DEFAULT_SSN_TOPIC,
+          host: getSingleValue(parsed.values, "ssn-host") || env.SSN_HOST || DEFAULT_SSN_HOST,
+          inChannel: parseNonNegativeInt(getSingleValue(parsed.values, "in-channel"), DEFAULT_SSN_IN_CHANNEL),
+          outChannel: parseNonNegativeInt(getSingleValue(parsed.values, "out-channel"), DEFAULT_SSN_OUT_CHANNEL),
+          echo: parsed.flags.has("echo"),
+          readOnly: parsed.flags.has("read-only"),
+        };
+      }
     case "connect":
       return { kind, options: buildCommonOptions(parsed.values, env, { requireRoom: false, requireStateDir: false, allowGeneratedRoom: true }) };
     case "chat":
@@ -455,19 +611,31 @@ export function getSkillInstallTargets(runtime: SkillRuntime, env: NodeJS.Proces
 }
 
 export function getDefaultStateDir(streamId: string, env: NodeJS.ProcessEnv = process.env): string {
+  return path.join(getStateRoot(env), streamId);
+}
+
+/** Parent folder holding every sidecar's state, used by `doctor`. */
+export function getStateRoot(env: NodeJS.ProcessEnv = process.env): string {
   const home = env.USERPROFILE || env.HOME;
   if (!home) {
     throw new Error("cannot determine home directory");
   }
-  return path.join(home, ".ninja-p2p", streamId);
+  return path.join(home, ".ninja-p2p");
 }
 
 type CliOptionValue = string | string[];
 type CliOptionValues = Record<string, CliOptionValue>;
 
-function parseOptions(argv: string[], env: NodeJS.ProcessEnv): { values: CliOptionValues; positional: string[] } {
+/** Flags that stand alone. Everything else still requires an explicit value. */
+const BOOLEAN_FLAGS = new Set(["keep", "echo", "read-only", "seed"]);
+
+function parseOptions(
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+): { values: CliOptionValues; positional: string[]; flags: Set<string> } {
   const values: CliOptionValues = {};
   const positional: string[] = [];
+  const flags = new Set<string>();
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -476,6 +644,10 @@ function parseOptions(argv: string[], env: NodeJS.ProcessEnv): { values: CliOpti
       continue;
     }
     const key = arg.slice(2);
+    if (BOOLEAN_FLAGS.has(key)) {
+      flags.add(key);
+      continue;
+    }
     const next = argv[i + 1];
     if (!next || next.startsWith("--")) {
       throw new Error(`missing value for --${key}`);
@@ -498,6 +670,7 @@ function parseOptions(argv: string[], env: NodeJS.ProcessEnv): { values: CliOpti
   if (!values.password && env.NINJA_PASSWORD) values.password = env.NINJA_PASSWORD;
   if (!values["state-dir"] && env.NINJA_STATE_DIR) values["state-dir"] = env.NINJA_STATE_DIR;
   if (!values["wait-ms"] && env.NINJA_WAIT_MS) values["wait-ms"] = env.NINJA_WAIT_MS;
+  if (!values["on-message"] && env.NINJA_ON_MESSAGE) values["on-message"] = env.NINJA_ON_MESSAGE;
   if (!values.runtime && env.NINJA_RUNTIME) values.runtime = env.NINJA_RUNTIME;
   if (!values.provider && env.NINJA_PROVIDER) values.provider = env.NINJA_PROVIDER;
   if (!values.model && env.NINJA_MODEL) values.model = env.NINJA_MODEL;
@@ -507,7 +680,7 @@ function parseOptions(argv: string[], env: NodeJS.ProcessEnv): { values: CliOpti
   if (!values.ask && env.NINJA_ASKS) values.ask = env.NINJA_ASKS.split(";").map((item) => item.trim()).filter(Boolean);
   if (!values.share && env.NINJA_SHARE) values.share = env.NINJA_SHARE.split(";").map((item) => item.trim()).filter(Boolean);
 
-  return { values, positional };
+  return { values, positional, flags };
 }
 
 function buildCommonOptions(
@@ -551,6 +724,7 @@ function buildCommonOptions(
     stateDir,
     agentProfile,
     sharedFolders,
+    wake: buildWakeConfig(values, env),
   };
 }
 
@@ -570,6 +744,31 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const value = Number.parseInt(raw, 10);
   if (!Number.isFinite(value) || value <= 0) return fallback;
   return value;
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return value;
+}
+
+function buildWakeConfig(values: CliOptionValues, env: NodeJS.ProcessEnv): WakeConfig | null {
+  const command = (getSingleValue(values, "on-message") || env.NINJA_ON_MESSAGE || "").trim();
+  if (!command) return null;
+  return {
+    command,
+    debounceMs: parseNonNegativeInt(
+      getSingleValue(values, "wake-debounce") ?? env.NINJA_WAKE_DEBOUNCE,
+      DEFAULT_WAKE_DEBOUNCE_MS,
+    ),
+    // 0 disables the rate limit. Keep a default ceiling so a pair of agents
+    // that reply to each other cannot spin unattended forever.
+    limitPerMinute: parseNonNegativeInt(
+      getSingleValue(values, "wake-limit") ?? env.NINJA_WAKE_LIMIT,
+      DEFAULT_WAKE_LIMIT_PER_MINUTE,
+    ),
+  };
 }
 
 function shouldUseStateMode(values: CliOptionValues, env: NodeJS.ProcessEnv): boolean {

@@ -1,6 +1,6 @@
 {
   "name": "@vdoninja/ninja-p2p",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Open source P2P agent messaging and coordination over VDO.Ninja WebRTC data channels",
   "type": "module",
   "main": "./dist/index.js",
@@ -48,8 +48,12 @@
     "dist",
     "dashboard.html",
     "README.md",
+    "CHANGELOG.md",
     "docs/images/agent-room-dashboard.png",
     "docs/protocol-and-reliability.md",
+    "docs/security.md",
+    "docs/social-stream-bridge.md",
+    "docs/sdk-wishlist.md",
     ".codex/skills/ninja-p2p",
     ".agents/skills/ninja-p2p",
     ".claude/skills/ninja-p2p"
@@ -61,7 +65,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "npm test && npm run build",
     "validate:live": "node ./scripts/validate-live.mjs",
-    "sync:docs": "node -e \"const fs=require('node:fs'); fs.mkdirSync('docs',{recursive:true}); fs.copyFileSync('dashboard.html','docs/index.html');\"",
+    "sync:docs": "node -e \"const fs=require('node:fs'); fs.mkdirSync('docs',{recursive:true}); fs.copyFileSync('dashboard.html','docs/dashboard.html');\"",
     "prepare": "npm run build"
   },
   "keywords": [

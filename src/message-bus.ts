@@ -15,6 +15,7 @@ import type { PeerRegistry } from "./peer-registry.js";
 import {
   createEnvelope,
   envelopeToWire,
+  isTransientType,
   type MessageEnvelope,
   type MessageType,
   type PeerIdentity,
@@ -107,13 +108,39 @@ export class MessageBus extends EventEmitter {
     return envelope;
   }
 
+  /**
+   * Send something that is only worth delivering right now, reporting whether
+   * the transport took it.
+   *
+   * Unlike `send`, a failure is not queued for replay and nothing enters the
+   * history ring. Both matter for swarm traffic: a chunk request replayed from
+   * a queue asks for something the requester already has, and a few seconds of
+   * transfer is enough to evict every real message from history.
+   *
+   * The returned boolean is the point. A caller that assumes a send succeeded
+   * will sit waiting out a request timeout for a message that never left.
+   */
+  trySend(targetStreamId: string, type: MessageType, payload: unknown): boolean {
+    if (!this.peers.isConnected(targetStreamId)) return false;
+    const envelope = createEnvelope(this.identity, type, payload, { to: targetStreamId });
+    return this.rawSend(envelope, targetStreamId);
+  }
+
+  /** Broadcast counterpart of `trySend`: not retained, not replayed. */
+  tryBroadcast(type: MessageType, payload: unknown): boolean {
+    const envelope = createEnvelope(this.identity, type, payload);
+    return this.rawSend(envelope, null);
+  }
+
   /** Send a message to a specific peer (by streamId). */
   send(targetStreamId: string, type: MessageType, payload: unknown): MessageEnvelope {
     const envelope = createEnvelope(this.identity, type, payload, { to: targetStreamId });
-    this.addToHistory(envelope);
+    // Transient types are still deliverable this way, but never retained or
+    // queued, so a caller reaching for the wrong method cannot flood history.
+    if (!isTransientType(type)) this.addToHistory(envelope);
 
     if (!this.peers.isConnected(targetStreamId) || !this.rawSend(envelope, targetStreamId)) {
-      this.enqueueOffline(targetStreamId, envelope);
+      if (!isTransientType(type)) this.enqueueOffline(targetStreamId, envelope);
     }
     return envelope;
   }
@@ -265,6 +292,7 @@ export class MessageBus extends EventEmitter {
   }
 
   private addToHistory(envelope: MessageEnvelope): void {
+    if (isTransientType(envelope.type)) return;
     // Don't store heartbeat or file chunk traffic in history.
     if (envelope.type === "ping" || envelope.type === "pong" || envelope.type === "file_chunk") return;
     this.history.push(envelope);

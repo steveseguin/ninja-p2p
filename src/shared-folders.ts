@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import type { FileTransferKind, SharedFolderSummary } from "./protocol.js";
 
@@ -167,10 +167,32 @@ function resolveSharedPath(share: SharedFolderConfig, relativePath: string): { f
   if (!existsSync(target)) {
     throw new Error(`shared path does not exist: ${normalized || "."}`);
   }
+
+  // The check above is lexical, so a symlink sitting inside the share and
+  // pointing outside it would still pass. Compare the real paths too, or
+  // `--share docs=./docs` could hand out anything the link reaches.
+  assertRealPathContained(share.path, target);
+
   return {
     filePath: target,
     path: normalized,
   };
+}
+
+function assertRealPathContained(shareRoot: string, target: string): void {
+  let realRoot: string;
+  let realTarget: string;
+  try {
+    realRoot = realpathSync(shareRoot);
+    realTarget = realpathSync(target);
+  } catch {
+    // If either path cannot be resolved, refuse rather than guess.
+    throw new Error("shared path escapes the declared folder");
+  }
+
+  if (realTarget !== realRoot && !realTarget.startsWith(`${realRoot}${path.sep}`)) {
+    throw new Error("shared path escapes the declared folder");
+  }
 }
 
 function normalizeRelativeSharePath(relativePath: string): string {

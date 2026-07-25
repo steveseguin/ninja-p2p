@@ -2,6 +2,7 @@
 
 import { closeSync, cpSync, existsSync, mkdirSync, openSync } from "node:fs";
 import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import readline from "node:readline";
@@ -61,6 +62,24 @@ import {
   toSharedFolderSummaries,
   type SharedFolderConfig,
 } from "./shared-folders.js";
+import {
+  DEFAULT_WAKE_DEBOUNCE_MS,
+  DEFAULT_WAKE_LIMIT_PER_MINUTE,
+  WakeRunner,
+} from "./wake.js";
+import { formatDemoResult, runDemo } from "./demo.js";
+import { describeSocialMessage, SocialStreamBridge } from "./social-stream.js";
+import { SwarmManager, type SwarmCompletion } from "./swarm-manager.js";
+import {
+  checkNodeVersion,
+  checkSidecars,
+  checkSignaling,
+  checkStateRoot,
+  checkWebRtc,
+  formatReport,
+  summarizeChecks,
+  type DiagnosticCheck,
+} from "./doctor.js";
 
 const SIDECAR_SKILLS = ["cli", "chat", "command", "sidecar", "discovery"];
 
@@ -129,6 +148,24 @@ async function main(argv: string[]): Promise<void> {
         stateDir: parsed.stateDir,
         messages: takeInboxMessages(parsed.stateDir, parsed.take, parsed.peek).map((item) => item.envelope),
       }, null, 2));
+      return;
+    case "wait":
+      await waitForInbox(parsed.stateDir, parsed.timeoutMs, parsed.intervalMs);
+      return;
+    case "doctor":
+      await runDoctor(parsed.stateRoot);
+      return;
+    case "demo":
+      await runDemoCommand(parsed.room, parsed.password, parsed.timeoutMs, parsed.keep);
+      return;
+    case "seed":
+      await runSeed(parsed.options, parsed.filePath, parsed.chunkSize);
+      return;
+    case "fetch":
+      await runFetch(parsed.options, parsed.query, parsed.outDir, parsed.keepSeeding, parsed.timeoutMs);
+      return;
+    case "ssn":
+      await runSocialStreamBridge(parsed);
       return;
     case "connect":
       await runConnect(parsed.options);
@@ -576,6 +613,20 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
   const peerFingerprints = new Map<string, string>();
   let shuttingDown = false;
 
+  // Wake hooks fire on real peer traffic only. Peer join/leave notices are
+  // generated locally and would otherwise wake the agent every reconnect.
+  const wake = options.wake
+    ? new WakeRunner({
+      config: options.wake,
+      context: {
+        streamId: options.streamId,
+        room: options.room,
+        stateDir: options.stateDir,
+      },
+      log: (message) => console.log(message),
+    })
+    : null;
+
   const syncSession = (connected = bridge.isConnected()): void => {
     writeAgentSession(options.stateDir!, {
       room: options.room,
@@ -654,6 +705,10 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
   await bridge.connect();
   syncSession(true);
   console.log(`agent ready: ${options.streamId} -> ${options.stateDir}`);
+  if (options.wake) {
+    console.log(`wake on message: ${options.wake.command}`);
+    console.log(`wake debounce=${options.wake.debounceMs}ms limit=${options.wake.limitPerMinute || "unlimited"}/min`);
+  }
 
   bridge.on("peer:connected", () => {
     syncSession(true);
@@ -719,6 +774,7 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
     const autoHandled = transferHandled || maybeHandleSidecarCommand(bridge, options.stateDir!, envelope);
     if (!autoHandled && isInboxWorthy(envelope.type)) {
       storeInboxMessage(options.stateDir!, envelope);
+      wake?.notify(envelope);
       console.log(`[inbox] ${envelope.type} from ${envelope.from.streamId}`);
     } else if (transferHandled) {
       console.log(`[transfer] ${envelope.type} from ${envelope.from.streamId}`);
@@ -738,6 +794,7 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     clearInterval(heartbeatTimer);
+    wake?.dispose();
     syncSession(false);
     await bridge.disconnect();
     syncSession(false);
@@ -1450,7 +1507,458 @@ function buildAgentArgs(options: CliCommonOptions): string[] {
   for (const share of options.sharedFolders) {
     args.push("--share", `${share.name}=${share.path}`);
   }
+  if (options.wake) {
+    args.push("--on-message", options.wake.command);
+    if (options.wake.debounceMs !== DEFAULT_WAKE_DEBOUNCE_MS) {
+      args.push("--wake-debounce", String(options.wake.debounceMs));
+    }
+    if (options.wake.limitPerMinute !== DEFAULT_WAKE_LIMIT_PER_MINUTE) {
+      args.push("--wake-limit", String(options.wake.limitPerMinute));
+    }
+  }
   return args;
+}
+
+function createSwarmBridge(options: CliCommonOptions, name: string, role: string): VDOBridge {
+  return new VDOBridge({
+    room: options.room,
+    streamId: options.streamId,
+    identity: { streamId: options.streamId, role, name },
+    password: options.password,
+    skills: ["swarm", "file-transfer"],
+    topics: [],
+  });
+}
+
+function swarmWorkDir(): string {
+  return path.join(os.tmpdir(), "ninja-p2p-swarm");
+}
+
+/** Publish a file to the room and serve it until interrupted. */
+async function runSeed(options: CliCommonOptions, filePath: string, chunkSize: number): Promise<void> {
+  const bridge = createSwarmBridge(options, options.name || "Seeder", "seeder");
+  const manager = new SwarmManager({
+    bridge,
+    downloadDir: path.resolve("."),
+    workDir: swarmWorkDir(),
+    log: (message) => console.log(message),
+  });
+
+  await bridge.connect();
+  manager.start();
+
+  const manifest = manager.seed(filePath, chunkSize);
+
+  console.log("");
+  console.log(`seeding ${manifest.name}`);
+  console.log(`  room:    ${options.room}`);
+  console.log(`  id:      ${options.streamId}`);
+  console.log(`  file id: ${manifest.fileId}`);
+  console.log(`  size:    ${formatBytes(manifest.size)} in ${manifest.totalChunks} chunk(s)`);
+  console.log("");
+  console.log("Fetch it from anywhere with:");
+  console.log(`  ninja-p2p fetch ${manifest.name} --room ${options.room}`);
+  console.log("");
+  console.log("Anyone who finishes also becomes a source. Press Ctrl+C to stop.");
+
+  let shuttingDown = false;
+  const shutdown = async (): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    manager.stop();
+    await bridge.disconnect();
+  };
+  process.on("SIGINT", () => { void shutdown(); });
+  process.on("SIGTERM", () => { void shutdown(); });
+
+  await new Promise<void>((resolve) => {
+    bridge.once("disconnected", () => resolve());
+  });
+}
+
+/** Download a file from whoever in the room has it. */
+async function runFetch(
+  options: CliCommonOptions,
+  query: string,
+  outDir: string | null,
+  keepSeeding: boolean,
+  timeoutMs: number,
+): Promise<void> {
+  const downloadDir = path.resolve(outDir ?? ".");
+  const bridge = createSwarmBridge(options, options.name || "Fetcher", "fetcher");
+
+  let done: ((completion: SwarmCompletion | null) => void) | null = null;
+  const finished = new Promise<SwarmCompletion | null>((resolve) => { done = resolve; });
+
+  const manager = new SwarmManager({
+    bridge,
+    downloadDir,
+    workDir: swarmWorkDir(),
+    log: (message) => console.log(message),
+    onComplete: (completion) => done?.(completion),
+  });
+
+  await bridge.connect();
+  manager.start();
+  console.log(`joined ${options.room} as ${options.streamId}, looking for "${query}"`);
+
+  // Offers arrive on announce, so give the room a moment before giving up.
+  const deadline = Date.now() + Math.min(timeoutMs || 300_000, 60_000);
+  let manifest = manager.resolveOffer(query);
+  while (!manifest && Date.now() < deadline) {
+    await delay(500);
+    manifest = manager.resolveOffer(query);
+  }
+
+  if (!manifest) {
+    const offers = manager.knownOffers();
+    console.error(`no offer matching "${query}" in room ${options.room}`);
+    if (offers.length > 0) {
+      console.error("available:");
+      for (const offer of offers) {
+        console.error(`  ${offer.name}  ${offer.fileId.slice(0, 16)}  ${formatBytes(offer.size)}`);
+      }
+    }
+    manager.stop();
+    await bridge.disconnect();
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`fetching ${manifest.name} (${formatBytes(manifest.size)}, ${manifest.totalChunks} chunks)`);
+  const startedAt = Date.now();
+  manager.fetch(manifest.fileId);
+
+  const progressTimer = setInterval(() => {
+    const progress = manager.sessionFor(manifest!.fileId)?.progress();
+    if (progress && !progress.complete) {
+      console.log(`  ${progress.percent}%  ${progress.haveChunks}/${progress.totalChunks} chunks  ${progress.peers} peer(s)  ${progress.inFlight} in flight`);
+    }
+  }, 2_000);
+  progressTimer.unref?.();
+
+  const timeoutTimer = timeoutMs > 0 ? setTimeout(() => done?.(null), timeoutMs) : null;
+  timeoutTimer?.unref?.();
+
+  const completion = await finished;
+  clearInterval(progressTimer);
+  if (timeoutTimer) clearTimeout(timeoutTimer);
+
+  if (!completion) {
+    const progress = manager.sessionFor(manifest.fileId)?.progress();
+    console.error(`timed out after ${formatDuration(Date.now() - startedAt)} at ${progress?.percent ?? 0}%`);
+    manager.stop();
+    await bridge.disconnect();
+    process.exitCode = 1;
+    return;
+  }
+
+  const elapsed = Date.now() - startedAt;
+  console.log("");
+  console.log(`saved ${completion.savedPath}`);
+  console.log(`  ${formatBytes(completion.manifest.size)} in ${formatDuration(elapsed)} (${formatRate(completion.manifest.size, elapsed)})`);
+
+  if (keepSeeding) {
+    console.log("");
+    console.log("Still seeding for other peers. Press Ctrl+C to stop.");
+    let shuttingDown = false;
+    const shutdown = async (): Promise<void> => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      manager.stop();
+      await bridge.disconnect();
+    };
+    process.on("SIGINT", () => { void shutdown(); });
+    process.on("SIGTERM", () => { void shutdown(); });
+    await new Promise<void>((resolve) => {
+      bridge.once("disconnected", () => resolve());
+    });
+    return;
+  }
+
+  manager.stop();
+  await bridge.disconnect();
+}
+
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatRate(bytes: number, ms: number): string {
+  if (ms <= 0) return "n/a";
+  return `${formatBytes(Math.round((bytes * 1000) / ms))}/s`;
+}
+
+/**
+ * Bridge Social Stream Ninja's live chat into a ninja-p2p room.
+ *
+ * Inbound: every chat message SSN aggregates becomes a topic event, so agents
+ * can watch a stream's chat the same way they watch any other room traffic.
+ *
+ * Outbound: the bridge advertises a `say` command, so an agent that wants to
+ * answer chat sends one message and SSN fans it out to every connected
+ * platform. That is the whole co-host loop in two directions.
+ */
+async function runSocialStreamBridge(parsed: {
+  options: CliCommonOptions;
+  session: string;
+  topic: string;
+  host: string;
+  inChannel: number;
+  outChannel: number;
+  echo: boolean;
+  readOnly: boolean;
+}): Promise<void> {
+  const { options } = parsed;
+
+  // An SSN session id grants everything: send chat, block users, clear
+  // overlays, fake donations. Until SSN can issue read-scoped credentials, this
+  // is the next best thing — the bridge structurally refuses to speak, so a
+  // compromised or over-eager agent in the room cannot reach the audience.
+  const readOnly = parsed.readOnly;
+  const bridge = new VDOBridge({
+    room: options.room,
+    streamId: options.streamId,
+    identity: {
+      streamId: options.streamId,
+      role: options.role,
+      name: options.name,
+    },
+    password: options.password,
+    skills: ["social", "chat", "command", "bridge"],
+    topics: [parsed.topic, "events"],
+    agentProfile: {
+      ...options.agentProfile,
+      summary: options.agentProfile?.summary
+        ?? (readOnly
+          ? "Read-only bridge for live stream chat from Social Stream Ninja."
+          : "Bridges live stream chat from Social Stream Ninja into this room."),
+      can: [...new Set([
+        ...(options.agentProfile?.can ?? []),
+        "social-chat",
+        ...(readOnly ? [] : ["broadcast"]),
+      ])],
+      asks: [
+        ...(options.agentProfile?.asks ?? []),
+        // Do not advertise an ability we will refuse to perform.
+        ...(readOnly ? [] : [{
+          name: "say",
+          description: "Send a message out to every live chat platform connected to Social Stream Ninja.",
+          via: "command" as const,
+          example: `ninja-p2p command --id <you> ${options.streamId} say '{"text":"hello chat"}'`,
+        }]),
+      ],
+    },
+  });
+
+  let forwarded = 0;
+  const social = new SocialStreamBridge({
+    session: parsed.session,
+    host: parsed.host,
+    inChannel: parsed.inChannel,
+    outChannel: parsed.outChannel,
+    log: (message) => console.log(message),
+    onMessage: (message) => {
+      forwarded += 1;
+      bridge.publishEvent(parsed.topic, "social_chat", message);
+      if (parsed.echo) {
+        console.log(describeSocialMessage(message));
+      }
+    },
+  });
+
+  bridge.bus.on("message:command", (envelope: MessageEnvelope) => {
+    const payload = envelope.payload as { command?: string; args?: unknown };
+    if (payload.command !== "say") return;
+
+    if (readOnly) {
+      // Refuse loudly. Silently dropping it would let an agent believe it spoke
+      // to the audience when nothing was said.
+      bridge.commandResponse(envelope, undefined, "bridge is running read-only; restart without --read-only to allow sending");
+      console.log(`[ssn] refused say from ${envelope.from.streamId} (read-only)`);
+      return;
+    }
+
+    const text = extractSayText(payload.args);
+    if (!text) {
+      bridge.commandResponse(envelope, undefined, "say requires text, e.g. '{\"text\":\"hello chat\"}'");
+      return;
+    }
+
+    // Report the truth: if the relay is down the message did not reach chat.
+    if (!social.isConnected()) {
+      bridge.commandResponse(envelope, undefined, "not connected to Social Stream Ninja");
+      return;
+    }
+
+    const sent = social.sendChat(text);
+    bridge.commandResponse(
+      envelope,
+      sent ? { sent: true, text } : undefined,
+      sent ? undefined : "failed to send to Social Stream Ninja",
+    );
+    console.log(`[ssn] ${envelope.from.streamId} -> chat: ${text}`);
+  });
+
+  await bridge.connect();
+  social.connect();
+
+  console.log(`social stream bridge ready`);
+  console.log(`  room:    ${options.room}`);
+  console.log(`  id:      ${options.streamId}`);
+  console.log(`  session: ${parsed.session}`);
+  console.log(`  topic:   ${parsed.topic}`);
+  console.log("");
+  if (readOnly) {
+    console.log("Read-only: agents can watch chat but cannot send to it.");
+  } else {
+    console.log("Agents in this room can reply to every platform with:");
+    console.log(`  ninja-p2p command --id <you> ${options.streamId} say '{"text":"hello chat"}'`);
+    console.log("");
+    console.log("Anything an agent says here reaches your real audience.");
+    console.log("Use --read-only if you only want them to watch.");
+  }
+  console.log("");
+  console.log("Press Ctrl+C to stop.");
+
+  let shuttingDown = false;
+  const shutdown = async (): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\nforwarded ${forwarded} chat message(s)`);
+    social.close();
+    await bridge.disconnect();
+  };
+
+  process.on("SIGINT", () => { void shutdown(); });
+  process.on("SIGTERM", () => { void shutdown(); });
+
+  await new Promise<void>((resolve) => {
+    bridge.once("disconnected", () => resolve());
+  });
+}
+
+function extractSayText(args: unknown): string {
+  if (typeof args === "string") return args.trim();
+  if (typeof args === "object" && args !== null) {
+    const value = (args as Record<string, unknown>).text;
+    if (typeof value === "string") return value.trim();
+  }
+  return "";
+}
+
+export const DASHBOARD_URL = "https://steveseguin.github.io/ninja-p2p/dashboard.html";
+
+export function buildDashboardUrl(room: string, password: string | false): string {
+  const params = new URLSearchParams({
+    room,
+    password: password === false ? "false" : password,
+    name: "You",
+    autoconnect: "true",
+  });
+  return `${DASHBOARD_URL}?${params.toString()}`;
+}
+
+/** One-command proof that the transport works on this machine and network. */
+async function runDemoCommand(
+  room: string | null,
+  password: string | false,
+  timeoutMs: number,
+  keep: boolean,
+): Promise<void> {
+  console.log("ninja-p2p demo");
+  console.log("");
+  console.log("Two peers, no server of your own. Watch the round trip:");
+  console.log("");
+
+  const result = await runDemo({
+    room: room ?? undefined,
+    password,
+    timeoutMs,
+    log: (message) => console.log(message),
+    hold: keep
+      ? async (activeRoom) => {
+        console.log("");
+        console.log("Both peers are still in the room. Open this to watch:");
+        console.log(`  ${buildDashboardUrl(activeRoom, password)}`);
+        console.log("");
+        console.log("Press Ctrl+C to stop.");
+        await new Promise<void>((resolve) => {
+          process.on("SIGINT", () => resolve());
+          process.on("SIGTERM", () => resolve());
+        });
+      }
+      : undefined,
+  });
+
+  console.log(formatDemoResult(result, buildDashboardUrl(result.room, password)));
+  if (!result.ok) {
+    process.exitCode = 1;
+  }
+}
+
+/** Run every diagnostic and exit non-zero if a required one failed. */
+async function runDoctor(stateRoot: string): Promise<void> {
+  const checks: DiagnosticCheck[] = [checkNodeVersion(process.version)];
+  checks.push(await checkWebRtc());
+  checks.push(await checkSignaling());
+  checks.push(checkStateRoot(stateRoot));
+
+  const sidecars = checkSidecars(stateRoot, readAgentSession, isPidRunning);
+  checks.push(sidecars.check);
+
+  const report = summarizeChecks(checks);
+  console.log(formatReport(report, sidecars.sidecars));
+  if (!report.ok) {
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * Block until the sidecar's inbox has something in it.
+ *
+ * This is the pull half of the wake story: `--on-message` pushes a turn at the
+ * agent, `wait` lets a shell loop pull one. Exit code 0 means mail arrived,
+ * 1 means the timeout elapsed, so `while ninja-p2p wait --id x; do ...; done`
+ * behaves the way a shell author expects.
+ */
+async function waitForInbox(stateDir: string, timeoutMs: number, intervalMs: number): Promise<void> {
+  const startedAt = Date.now();
+
+  for (;;) {
+    const summary = getInboxSummary(stateDir);
+    if (summary.pending > 0) {
+      console.log(JSON.stringify({
+        stateDir,
+        pending: summary.pending,
+        senders: summary.senders,
+        types: summary.types,
+        waitedMs: Date.now() - startedAt,
+      }, null, 2));
+      return;
+    }
+
+    if (timeoutMs > 0 && Date.now() - startedAt >= timeoutMs) {
+      console.log(JSON.stringify({
+        stateDir,
+        pending: 0,
+        timedOut: true,
+        waitedMs: Date.now() - startedAt,
+      }, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+
+    await delay(intervalMs);
+  }
 }
 
 function isPidRunning(pid: number): boolean {
@@ -1462,10 +1970,37 @@ function isPidRunning(pid: number): boolean {
   }
 }
 
+/**
+ * End the process explicitly once a command is done.
+ *
+ * `@roamhq/wrtc` segfaults during normal process teardown if a data channel
+ * has ever existed, which corrupts the exit code (139/127) even on a fully
+ * successful run. Any script doing `ninja-p2p wait && ...` would break on it.
+ * Calling process.exit() skips the native teardown path and the crash with it,
+ * so every command ends through here rather than by draining the event loop.
+ *
+ * This is safe because `VDOBridge.disconnect()` already waits for the SDK to
+ * finish its own cleanup, so nothing meaningful is still in flight.
+ */
+async function exitCleanly(): Promise<void> {
+  // Let buffered stdout reach the terminal or pipe before we cut the process off.
+  await new Promise<void>((resolve) => {
+    if (process.stdout.write("")) {
+      resolve();
+      return;
+    }
+    process.stdout.once("drain", () => resolve());
+  });
+
+  process.exit(process.exitCode ?? 0);
+}
+
 const entry = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
 if (entry) {
-  main(process.argv.slice(2)).catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  });
+  main(process.argv.slice(2))
+    .then(exitCleanly)
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    });
 }

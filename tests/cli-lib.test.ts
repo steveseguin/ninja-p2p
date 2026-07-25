@@ -426,3 +426,219 @@ test("parseCliArgs builds agent profile from environment", () => {
   });
   assert.deepEqual(parsed.options.sharedFolders, []);
 });
+
+test("parseCliArgs parses wait with defaults", () => {
+  const parsed = parseCliArgs(["wait", "--id", "codex"], { HOME: "/home/steve" } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "wait");
+  if (parsed.kind !== "wait") return;
+  assert.equal(parsed.stateDir, path.join("/home/steve", ".ninja-p2p", "codex"));
+  assert.equal(parsed.timeoutMs, 0);
+  assert.equal(parsed.intervalMs, 500);
+});
+
+test("parseCliArgs parses wait timeout and interval overrides", () => {
+  const parsed = parseCliArgs(
+    ["wait", "--id", "codex", "--timeout", "5000", "--interval", "100"],
+    { HOME: "/home/steve" } as NodeJS.ProcessEnv,
+  );
+  assert.equal(parsed.kind, "wait");
+  if (parsed.kind !== "wait") return;
+  assert.equal(parsed.timeoutMs, 5000);
+  assert.equal(parsed.intervalMs, 100);
+});
+
+test("parseCliArgs leaves wake unset without --on-message", () => {
+  const parsed = parseCliArgs(["start", "--room", "demo", "--id", "codex"], {
+    HOME: "/home/steve",
+  } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "start");
+  if (parsed.kind !== "start") return;
+  assert.equal(parsed.options.wake, null);
+});
+
+test("parseCliArgs parses --on-message with safe defaults", () => {
+  const parsed = parseCliArgs(
+    ["start", "--room", "demo", "--id", "codex", "--on-message", "codex exec 'check inbox'"],
+    { HOME: "/home/steve" } as NodeJS.ProcessEnv,
+  );
+  assert.equal(parsed.kind, "start");
+  if (parsed.kind !== "start") return;
+  assert.deepEqual(parsed.options.wake, {
+    command: "codex exec 'check inbox'",
+    debounceMs: 750,
+    limitPerMinute: 30,
+  });
+});
+
+test("parseCliArgs honours wake tuning flags and env fallback", () => {
+  const parsed = parseCliArgs(
+    ["start", "--room", "demo", "--id", "codex", "--wake-debounce", "2000", "--wake-limit", "0"],
+    { HOME: "/home/steve", NINJA_ON_MESSAGE: "echo woke" } as NodeJS.ProcessEnv,
+  );
+  assert.equal(parsed.kind, "start");
+  if (parsed.kind !== "start") return;
+  assert.deepEqual(parsed.options.wake, {
+    command: "echo woke",
+    debounceMs: 2000,
+    limitPerMinute: 0,
+  });
+});
+
+test("parseCliArgs parses doctor with the default state root", () => {
+  const parsed = parseCliArgs(["doctor"], { HOME: "/home/steve" } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "doctor");
+  if (parsed.kind !== "doctor") return;
+  assert.equal(parsed.stateRoot, path.join("/home/steve", ".ninja-p2p"));
+});
+
+test("parseCliArgs parses doctor with an explicit state root", () => {
+  const parsed = parseCliArgs(["doctor", "--state-root", "/tmp/agents"], {
+    HOME: "/home/steve",
+  } as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "doctor");
+  if (parsed.kind !== "doctor") return;
+  assert.equal(parsed.stateRoot, "/tmp/agents");
+});
+
+test("parseCliArgs parses demo with defaults", () => {
+  const parsed = parseCliArgs(["demo"], {} as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "demo");
+  if (parsed.kind !== "demo") return;
+  assert.equal(parsed.room, null);
+  assert.equal(parsed.password, false);
+  assert.equal(parsed.timeoutMs, 20_000);
+  assert.equal(parsed.keep, false);
+});
+
+test("parseCliArgs treats --keep as a standalone flag", () => {
+  // --keep takes no value, so it must not swallow the flag that follows it.
+  const parsed = parseCliArgs(["demo", "--keep", "--room", "watch-me"], {} as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "demo");
+  if (parsed.kind !== "demo") return;
+  assert.equal(parsed.keep, true);
+  assert.equal(parsed.room, "watch-me");
+});
+
+test("parseCliArgs keeps requiring values for non-boolean flags", () => {
+  assert.throws(() => parseCliArgs(["demo", "--room"], {} as NodeJS.ProcessEnv), /missing value for --room/);
+});
+
+test("help text documents the wake flow", () => {
+  const text = helpText();
+  assert.match(text, /--on-message <cmd>/);
+  assert.match(text, /--wake-limit <n>/);
+  assert.match(text, /while ninja-p2p wait --id codex/);
+  assert.match(text, /NINJA_WAKE_COUNT/);
+});
+
+test("parseCliArgs parses seed with a generated room and default chunk size", () => {
+  const parsed = parseCliArgs(["seed", "./big.zip"], {} as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "seed");
+  if (parsed.kind !== "seed") return;
+  assert.equal(parsed.filePath, "./big.zip");
+  assert.equal(parsed.chunkSize, 64_000);
+  assert.ok(parsed.options.room, "seed may generate its own room");
+});
+
+test("parseCliArgs rejects seed without a file", () => {
+  assert.throws(() => parseCliArgs(["seed"], {} as NodeJS.ProcessEnv), /seed requires a file path/);
+});
+
+test("parseCliArgs parses fetch with defaults", () => {
+  const parsed = parseCliArgs(["fetch", "big.zip", "--room", "r"], {} as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "fetch");
+  if (parsed.kind !== "fetch") return;
+  assert.equal(parsed.query, "big.zip");
+  assert.equal(parsed.outDir, null);
+  assert.equal(parsed.keepSeeding, false);
+  assert.equal(parsed.timeoutMs, 300_000);
+});
+
+test("parseCliArgs parses fetch --seed and --out", () => {
+  const parsed = parseCliArgs(
+    ["fetch", "abc123", "--room", "r", "--out", "./downloads", "--seed", "--timeout", "1000"],
+    {} as NodeJS.ProcessEnv,
+  );
+  assert.equal(parsed.kind, "fetch");
+  if (parsed.kind !== "fetch") return;
+  assert.equal(parsed.outDir, "./downloads");
+  assert.equal(parsed.keepSeeding, true);
+  assert.equal(parsed.timeoutMs, 1_000);
+});
+
+test("parseCliArgs requires a room for fetch", () => {
+  // Unlike seed, fetch cannot invent a room — it has to join an existing one.
+  assert.throws(() => parseCliArgs(["fetch", "big.zip"], {} as NodeJS.ProcessEnv), /missing room/);
+});
+
+test("help text documents the swarm commands", () => {
+  const text = helpText();
+  assert.match(text, /ninja-p2p seed \.\/big-file\.zip/);
+  assert.match(text, /ninja-p2p fetch big-file\.zip/);
+  assert.match(text, /--seed\s+keep serving after the download finishes/);
+});
+
+test("parseCliArgs parses ssn with bridge defaults", () => {
+  const parsed = parseCliArgs(["ssn", "--session", "abc123", "--room", "ai-room"], {} as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "ssn");
+  if (parsed.kind !== "ssn") return;
+  assert.equal(parsed.session, "abc123");
+  assert.equal(parsed.topic, "social");
+  assert.equal(parsed.host, "wss://io.socialstream.ninja");
+  assert.equal(parsed.inChannel, 4);
+  assert.equal(parsed.outChannel, 1);
+  assert.equal(parsed.echo, false);
+  // The bridge gets its own identity so it does not collide with an agent.
+  assert.equal(parsed.options.streamId, "social");
+  assert.equal(parsed.options.role, "bridge");
+  assert.equal(parsed.options.room, "ai-room");
+});
+
+test("parseCliArgs accepts the ssn session positionally and from env", () => {
+  const positional = parseCliArgs(["ssn", "sess-1", "--room", "r"], {} as NodeJS.ProcessEnv);
+  assert.equal(positional.kind, "ssn");
+  if (positional.kind !== "ssn") return;
+  assert.equal(positional.session, "sess-1");
+
+  const fromEnv = parseCliArgs(["ssn", "--room", "r"], { SSN_SESSION: "sess-2" } as NodeJS.ProcessEnv);
+  assert.equal(fromEnv.kind, "ssn");
+  if (fromEnv.kind !== "ssn") return;
+  assert.equal(fromEnv.session, "sess-2");
+});
+
+test("parseCliArgs rejects ssn without a session", () => {
+  assert.throws(
+    () => parseCliArgs(["ssn", "--room", "r"], {} as NodeJS.ProcessEnv),
+    /requires a Social Stream Ninja session id/,
+  );
+});
+
+test("parseCliArgs parses ssn --read-only", () => {
+  const parsed = parseCliArgs(["ssn", "--session", "s", "--room", "r", "--read-only"], {} as NodeJS.ProcessEnv);
+  assert.equal(parsed.kind, "ssn");
+  if (parsed.kind !== "ssn") return;
+  assert.equal(parsed.readOnly, true);
+
+  const writable = parseCliArgs(["ssn", "--session", "s", "--room", "r"], {} as NodeJS.ProcessEnv);
+  assert.equal(writable.kind, "ssn");
+  if (writable.kind !== "ssn") return;
+  assert.equal(writable.readOnly, false);
+});
+
+test("parseCliArgs honours ssn channel and echo overrides", () => {
+  const parsed = parseCliArgs(
+    ["ssn", "--session", "s", "--room", "r", "--topic", "chat", "--in-channel", "2", "--echo"],
+    {} as NodeJS.ProcessEnv,
+  );
+  assert.equal(parsed.kind, "ssn");
+  if (parsed.kind !== "ssn") return;
+  assert.equal(parsed.topic, "chat");
+  assert.equal(parsed.inChannel, 2);
+  assert.equal(parsed.echo, true);
+});
+
+test("help text surfaces demo and doctor", () => {
+  const text = helpText();
+  assert.match(text, /ninja-p2p demo/);
+  assert.match(text, /ninja-p2p doctor/);
+});

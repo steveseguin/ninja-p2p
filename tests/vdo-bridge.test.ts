@@ -4,6 +4,12 @@ import test from "node:test";
 import { VDOBridge } from "../src/vdo-bridge.js";
 import { createEnvelope, type PeerIdentity } from "../src/protocol.js";
 
+import { readFileSync } from "node:fs";
+
+const packageVersion = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version as string;
+
 const me: PeerIdentity = {
   streamId: "planner_bot",
   role: "agent",
@@ -224,7 +230,9 @@ test("getAnnouncePayload includes the configured agent profile", () => {
     skills: ["chat", "command"],
     status: "idle",
     statusDetail: "",
-    version: "0.1.4",
+    // Asserted against package.json, not a literal. A literal here is the same
+    // drift that had peers being told a version nobody had updated.
+    version: packageVersion,
     topics: ["events"],
     agent: {
       runtime: "claude-code",

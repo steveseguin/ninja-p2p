@@ -57,6 +57,17 @@ test("the product story stays aligned across user-facing surfaces", () => {
   assert.match(packageJson.description, /optional Social Stream bridge/);
 });
 
+test("the landing page surfaces the main end-user capabilities", () => {
+  assert.match(landingPage, /Hand work to the right agent/);
+  assert.match(landingPage, /Reach an agent between turns/);
+  assert.match(landingPage, /send-file/);
+  assert.match(landingPage, /--share/);
+  assert.match(landingPage, /seed/);
+  assert.match(landingPage, /fetch/);
+  assert.match(landingPage, /Social Stream/);
+  assert.match(landingPage, /built-in capability, not a separate add-on/);
+});
+
 test("the library guide and package metadata describe the SDK 1.4.1 binary API", () => {
   assert.match(readme, /sendBinaryTo/);
   assert.match(readme, /bridge\.on\("binary"/);

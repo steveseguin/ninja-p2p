@@ -120,6 +120,15 @@
     max-width: 58ch;
   }
 
+  .eyebrow {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
   .cta {
     display: flex;
     flex-wrap: wrap;
@@ -151,9 +160,21 @@
     outline-offset: 2px;
   }
 
+  .quick-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-top: 22px;
+    font-size: 0.88rem;
+  }
+
+  .quick-nav span { color: var(--muted); }
+  .quick-nav a { color: var(--muted); }
+
   section {
     padding: 48px 0;
     border-bottom: 1px solid var(--border);
+    scroll-margin-top: 20px;
   }
 
   h2 {
@@ -212,6 +233,10 @@
     margin-top: 22px;
   }
 
+  .capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .card {
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -228,6 +253,69 @@
     margin: 0;
     color: var(--muted);
     font-size: 0.92rem;
+  }
+
+  .card .label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .card ul {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+
+  .card li { margin-top: 5px; }
+
+  .mental-model {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .mental-model div {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+
+  .mental-model strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 0.92rem;
+  }
+
+  .mental-model span {
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  figure.product-shot {
+    margin: 26px 0 0;
+  }
+
+  .product-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--term-bg);
+  }
+
+  .product-shot figcaption {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 0.84rem;
   }
 
   .table-scroll { overflow-x: auto; margin-top: 20px; }
@@ -293,6 +381,8 @@
   @media (max-width: 560px) {
     header { padding: 48px 0 36px; }
     section { padding: 36px 0; }
+    .capability-grid { grid-template-columns: 1fr; }
+    .mental-model { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -300,6 +390,7 @@
 
 <header>
   <div class="wrap">
+    <p class="eyebrow">Peer coordination for AI agents</p>
     <h1>ninja-p2p</h1>
     <p class="tagline">Make separate AI tools work like a team.</p>
     <p class="sub">
@@ -308,18 +399,112 @@
       up &mdash; across machines and vendors, with no coordination server to deploy.
     </p>
     <div class="cta">
-      <a class="btn primary" href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
+      <a class="btn primary" href="#quick-start">Run the demo</a>
+      <a class="btn" href="#capabilities">Explore capabilities</a>
+      <a class="btn" href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
       <a class="btn" href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm</a>
       <a class="btn" href="dashboard.html">Open the dashboard</a>
-      <a class="btn" href="https://discord.vdo.ninja">Discord</a>
     </div>
+    <nav class="quick-nav" aria-label="Explore ninja-p2p">
+      <span>Explore:</span>
+      <a href="#agents">Agent handoffs</a>
+      <a href="#files">File transfer</a>
+      <a href="#social">Social Stream</a>
+      <a href="#limits">Security and limits</a>
+    </nav>
   </div>
 </header>
 
-<section>
+<main>
+<section id="capabilities">
+  <div class="wrap">
+    <h2>One lightweight layer, four practical jobs</h2>
+    <p class="lede">
+      This is more than agent chat. One room gives otherwise separate tools a
+      common way to find each other, hand off work, move working context, and
+      let a person or live audience into the loop.
+    </p>
+
+    <div class="grid capability-grid">
+      <div class="card">
+        <span class="label">Coordinate</span>
+        <h3>Hand work to the right agent</h3>
+        <p>Peers announce who they are and what they can do, then exchange private messages and structured requests.</p>
+        <ul>
+          <li>Task, review, and approval handoffs</li>
+          <li>Cross-vendor and cross-machine rooms</li>
+          <li>Human-readable messages plus JSON commands</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="label">Stay available</span>
+        <h3>Reach an agent between turns</h3>
+        <p>A small sidecar remains online, keeps a local inbox, and can safely wake a turn-based agent when work arrives.</p>
+        <ul>
+          <li>Disk-backed local inbox and outbox</li>
+          <li>Batched, rate-limited wake hooks</li>
+          <li>Shell-friendly blocking waits</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="label">Move context</span>
+        <h3>Transfer files the way the job needs</h3>
+        <p>Push one checked file, expose an explicit read-only folder, or distribute a large file as a resumable swarm.</p>
+        <ul>
+          <li>Checksums and acknowledgements</li>
+          <li>Named shares, never arbitrary disk access</li>
+          <li>Multi-source delivery for larger files</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="label">Keep people involved</span>
+        <h3>Watch, guide, or bring live input</h3>
+        <p>The browser dashboard gives an operator a seat in the room. Social Stream can add live chat as optional team input.</p>
+        <ul>
+          <li>Inspect peers, chat, and exchange files</li>
+          <li>Twitch, YouTube, Kick, and more</li>
+          <li>Read-only bridge mode for safer intake</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mental-model" aria-label="How ninja-p2p fits together">
+      <div>
+        <strong>1. Your agent stays itself</strong>
+        <span>Codex, Claude, a Node bot, a shell script, or a human-operated dashboard.</span>
+      </div>
+      <div>
+        <strong>2. A sidecar keeps its seat</strong>
+        <span>It maintains room presence and local mail while the agent is busy or between turns.</span>
+      </div>
+      <div>
+        <strong>3. WebRTC connects the room</strong>
+        <span>Peers cross machines and NAT without a coordination server for you to deploy.</span>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>One CLI, one bundled skill per agent tool.</strong> The optional
+      Codex and Claude skills teach the complete CLI &mdash; messaging, commands,
+      approvals, direct files, shared folders, and swarms. File transfer is a
+      built-in capability, not a separate add-on. Install the helper with
+      <code>ninja-p2p install-skill codex</code> or
+      <code>ninja-p2p install-skill claude</code>.
+    </div>
+
+    <figure class="product-shot">
+      <a href="dashboard.html">
+        <img src="images/agent-room-dashboard.png" alt="Ninja P2P dashboard showing Planner and Reviewer agents exchanging a launch plan while a human operator watches" width="1000" height="391" loading="lazy">
+      </a>
+      <figcaption>A human operator can watch Planner and Reviewer collaborate in the same room, then step in when needed.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="quick-start">
   <div class="wrap">
     <h2>See it work in one command</h2>
-    <p class="lede">No room name to copy, no second terminal. This is a real round trip over the network.</p>
+    <p class="lede">No room name to copy, no second terminal. This is a real peer-discovery, message, and command round trip over the network.</p>
 
 <pre class="code">npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ninja-p2p demo</pre>
@@ -335,6 +520,10 @@ Demo passed.
 ways with no server of your own.</span></pre>
 
     <div class="note">
+      The demo deliberately proves the smallest collaboration loop; it does not
+      transfer a file. The <a href="#files">file paths below</a> cover direct
+      sends, shared folders, and resumable swarms.
+      <br><br>
       Add <code>--keep</code> to hold the room open and watch it live in the
       <a href="dashboard.html">browser dashboard</a>. If anything fails,
       <code>ninja-p2p doctor</code> checks Node, the native WebRTC module,
@@ -343,7 +532,7 @@ ways with no server of your own.</span></pre>
   </div>
 </section>
 
-<section>
+<section id="agents">
   <div class="wrap">
     <h2>Agents that act without waiting for you</h2>
     <p class="lede">
@@ -370,14 +559,40 @@ done</pre>
   </div>
 </section>
 
-<section>
+<section id="files">
   <div class="wrap">
-    <h2>Move files between your machines</h2>
+    <h2>Move files three ways</h2>
     <p class="lede">
-      Send a file to a room and every peer that finishes becomes another source
-      for it. No account, no upload, no server holding your data.
+      Choose the path by job: push one file, let a peer pull from an explicit
+      folder, or swarm a larger payload. No account and no upload service holding
+      your data.
     </p>
 
+    <div class="grid">
+      <div class="card">
+        <span class="label">One peer, one file</span>
+        <h3>Direct checked send</h3>
+        <p><code>send-file</code> and <code>send-image</code> deliver to a connected peer, verify SHA-256, never overwrite an existing file, and return an acknowledgement. Use for files up to 256 MiB.</p>
+      </div>
+      <div class="card">
+        <span class="label">Pull selected files</span>
+        <h3>Named shared folders</h3>
+        <p>Expose only roots declared with <code>--share</code>. Peers can list and request files, but cannot browse arbitrary paths; symlink escapes are rejected.</p>
+      </div>
+      <div class="card">
+        <span class="label">Large or repeated delivery</span>
+        <h3>Resumable swarm</h3>
+        <p><code>seed</code> and <code>fetch</code> stream from disk, resume verified chunks, and let downloaders immediately become sources for other peers.</p>
+      </div>
+    </div>
+
+    <h3>Direct send or explicit share</h3>
+<pre class="code">ninja-p2p send-file --id codex reviewer ./notes.txt
+
+ninja-p2p start --id worker --share docs=./docs
+ninja-p2p get-file --id codex worker docs guide.md</pre>
+
+    <h3>Swarm a large file</h3>
 <pre class="code"># on the machine holding the file
 ninja-p2p seed ./big-file.zip --room my-room
 
@@ -414,7 +629,7 @@ saved ./downloads/payload.bin
   </div>
 </section>
 
-<section>
+<section id="social">
   <div class="wrap">
     <h2>Turn a live audience into team input</h2>
     <p class="lede">
@@ -447,7 +662,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
   </div>
 </section>
 
-<section>
+<section id="comparison">
   <div class="wrap">
     <h2>Why not something you already have</h2>
     <p class="lede">Every alternative fails at least one of: across machines, across vendors, no server.</p>
@@ -478,7 +693,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
   </div>
 </section>
 
-<section>
+<section id="toolkit">
   <div class="wrap">
     <h2>What you get</h2>
 
@@ -519,7 +734,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
   </div>
 </section>
 
-<section>
+<section id="limits">
   <div class="wrap">
     <h2>Honest limits</h2>
     <p class="lede">Worth knowing before you build on it.</p>
@@ -534,6 +749,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
     </ul>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap">

@@ -9,13 +9,21 @@
  */
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 
 import { SwarmManager } from "../src/swarm-manager.js";
-import { buildManifest, ChunkMap, maxSafeChunkSize, sha256Hex } from "../src/swarm.js";
+import {
+  buildManifest,
+  ChunkMap,
+  hashChunkHashes,
+  maxSafeChunkSize,
+  sha256Hex,
+  SWARM_MANIFEST_PAGE_HASHES,
+  toManifestSummary,
+} from "../src/swarm.js";
 import { encodeChunkFrame } from "../src/swarm-wire.js";
 import { createEnvelope, type MessageEnvelope, type MessageType, type PeerIdentity } from "../src/protocol.js";
 
@@ -153,7 +161,12 @@ describe("offers arriving from peers", () => {
       const manifest = manager.seed(makeFile(dir, "a.bin"));
       // Same content id, different bytes: one of them is lying, and trading
       // chunks with a liar corrupts the file.
-      bridge.deliver("liar", "swarm_offer", { ...manifest, chunkHashes: manifest.chunkHashes.map(() => "0".repeat(64)) });
+      const chunkHashes = manifest.chunkHashes.map(() => "0".repeat(64));
+      bridge.deliver("liar", "swarm_offer", {
+        ...manifest,
+        chunkHashes,
+        chunkHashesHash: hashChunkHashes(chunkHashes),
+      });
 
       assert.ok(logs.some((l) => /rejecting conflicting offer/.test(l)));
     });
@@ -164,6 +177,44 @@ describe("offers arriving from peers", () => {
       bridge.deliver("junk", "swarm_offer", { fileId: "abc" });
       bridge.deliver("junk", "swarm_offer", null);
       assert.deepEqual(manager.knownOffers(), []);
+    });
+  });
+
+  it("requests and verifies large manifests in bounded pages", () => {
+    withManager(({ manager, bridge }) => {
+      const data = new Uint8Array((SWARM_MANIFEST_PAGE_HASHES + 9) * 1_024);
+      for (let i = 0; i < data.length; i += 1) data[i] = i % 251;
+      const manifest = buildManifest(data, "large.bin", "application/octet-stream", 1_024);
+      const totalPages = Math.ceil(manifest.totalChunks / SWARM_MANIFEST_PAGE_HASHES);
+      const offer = {
+        ...toManifestSummary(manifest),
+        manifestPageSize: SWARM_MANIFEST_PAGE_HASHES,
+        manifestPages: totalPages,
+      };
+
+      assert.ok(JSON.stringify(offer).length < 2_000, "the initial offer must stay small");
+      bridge.deliver("seed", "swarm_offer", offer);
+      assert.equal(manager.resolveOffer(manifest.fileId)?.manifestReady, false);
+      assert.equal(manager.fetch(manifest.fileId), true);
+
+      const request = bridge.ofType("swarm_manifest_request").at(-1);
+      assert.ok(request, "fetch should request the missing hash pages");
+      assert.deepEqual(request.payload.pages, [0, 1]);
+
+      for (let page = 0; page < totalPages; page += 1) {
+        const start = page * SWARM_MANIFEST_PAGE_HASHES;
+        bridge.deliver("seed", "swarm_manifest_page", {
+          fileId: manifest.fileId,
+          page,
+          totalPages,
+          pageSize: SWARM_MANIFEST_PAGE_HASHES,
+          chunkHashesHash: manifest.chunkHashesHash,
+          hashes: manifest.chunkHashes.slice(start, start + SWARM_MANIFEST_PAGE_HASHES),
+        });
+      }
+
+      assert.equal(manager.resolveOffer(manifest.fileId)?.manifestReady, true);
+      assert.ok(manager.sessionFor(manifest.fileId), "download starts only after every page verifies");
     });
   });
 
@@ -339,6 +390,33 @@ describe("receiving chunks", () => {
       // Dropping out here is exactly what starves a swarm: the peer that just
       // finished is its newest complete source.
       assert.equal(manager.sessionFor(manifest.fileId)!.isComplete(), true);
+    });
+  });
+
+  it("discards a complete part when a peer's manifest lies about the whole-file id", () => {
+    withManager(({ manager, bridge, dir, logs }) => {
+      const data = new Uint8Array(readFileSync(makeFile(dir, "actual.bin", 8_192)));
+      const honest = buildManifest(data, "claimed.bin", "application/octet-stream", 4_096);
+      const malicious = { ...honest, fileId: "f".repeat(64) };
+
+      bridge.deliver("liar", "swarm_offer", malicious);
+      manager.fetch(malicious.fileId);
+      for (let index = 0; index < malicious.totalChunks; index += 1) {
+        const start = index * malicious.chunkSize;
+        bridge.emit("binary", {
+          streamId: "liar",
+          bytes: encodeChunkFrame(
+            malicious.fileId,
+            index,
+            data.subarray(start, start + malicious.chunkSize),
+          ),
+        });
+      }
+
+      assert.equal(manager.sessionFor(malicious.fileId), undefined);
+      assert.equal(manager.resolveOffer(malicious.fileId), null, "the bad manifest must not poison retries");
+      assert.deepEqual(readdirSync(path.join(dir, "work")), [], "the invalid part and lock are removed");
+      assert.ok(logs.some((line) => /invalid part discarded/.test(line)));
     });
   });
 });

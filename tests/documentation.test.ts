@@ -1,0 +1,74 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import test from "node:test";
+
+function read(relativePath: string): string {
+  return readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
+}
+
+const readme = read("README.md");
+const codexSkill = read(".codex/skills/ninja-p2p/SKILL.md");
+const agentsSkill = read(".agents/skills/ninja-p2p/SKILL.md");
+const claudeSkill = read(".claude/skills/ninja-p2p/SKILL.md");
+const packageJson = JSON.parse(read("package.json")) as {
+  description: string;
+  dependencies: Record<string, string>;
+};
+const markdownGuides = [
+  "README.md",
+  "docs/audiences.md",
+  "docs/protocol-and-reliability.md",
+  "docs/sdk-wishlist.md",
+  "docs/security.md",
+  "docs/social-stream-bridge.md",
+  ".codex/skills/ninja-p2p/SKILL.md",
+  ".claude/skills/ninja-p2p/SKILL.md",
+];
+
+test("the two installed Codex skill layouts stay identical", () => {
+  assert.equal(agentsSkill, codexSkill);
+});
+
+test("the user guides distinguish simple, shared, swarm, and browser file paths", () => {
+  for (const guide of [readme, codexSkill, claudeSkill]) {
+    assert.match(guide, /send-file/);
+    assert.match(guide, /256 MiB/);
+    assert.match(guide, /seed/);
+    assert.match(guide, /fetch/);
+    assert.match(guide, /resum/);
+    assert.match(guide, /64 MiB/);
+    assert.match(guide, /read-only/);
+  }
+});
+
+test("the library guide and package metadata describe the SDK 1.4.1 binary API", () => {
+  assert.match(readme, /sendBinaryTo/);
+  assert.match(readme, /bridge\.on\("binary"/);
+  assert.match(readme, /sendRaw\(\).*is not the binary API/);
+  assert.equal(packageJson.dependencies["@vdoninja/sdk"], "^1.4.1");
+  assert.match(packageJson.description, /resumable file swarms/);
+  assert.equal(
+    existsSync(new URL("../src/vdoninja-sdk.d.ts", import.meta.url)),
+    false,
+    "the SDK's published types replace the local shim",
+  );
+});
+
+test("local links in the Markdown guides resolve", () => {
+  for (const guidePath of markdownGuides) {
+    const guideUrl = new URL(`../${guidePath}`, import.meta.url);
+    const markdown = read(guidePath);
+    for (const match of markdown.matchAll(/!?\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+      const href = match[1];
+      if (/^(?:https?:|mailto:|#)/i.test(href)) continue;
+      const relativePath = href.split(/[?#]/, 1)[0];
+      if (!relativePath) continue;
+      const target = new URL(decodeURIComponent(relativePath), guideUrl);
+      assert.equal(
+        existsSync(target),
+        true,
+        `${guidePath} links to missing local target ${href}`,
+      );
+    }
+  }
+});

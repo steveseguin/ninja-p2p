@@ -38,6 +38,32 @@ strong and true line.
 
 ## Status log
 
+**2026-07-25 — release audit turned the feature set into a bounded contract.**
+The v0.2 work was reviewed as hostile network input rather than only as a happy
+demo. The product intent stayed the same; the edges became explicit:
+
+- simple transfers are one-to-one, checksum verified, non-overwriting, and
+  capped at 256 MiB; swarm is the streaming path for larger or multi-recipient
+  work
+- large swarm manifests are fetched in authenticated pages, part files are
+  destination-locked, and corrupt completed parts are discarded before retry
+- history replay cannot disclose direct messages between other peers, and bulk
+  transfer traffic no longer evicts conversation history
+- wake environment text is bounded, subprocess failures cannot wedge the
+  runner, and Social Stream uses an explicit Node 20-compatible `ws` dependency
+- the dashboard now keeps chat reachable on mobile, ignores stale disconnect
+  events, validates incoming files, applies backpressure, and caps its DOM
+
+Evidence: the full suite passed on Node 22 and the Node 20 support floor; a
+packed install pinned to SDK 1.4.0 passed the base64 compatibility fallback; a
+2 MiB, 2,048-chunk transfer exercised eight manifest pages on both fallback and
+1.4.1 binary lanes. The v0.2 dependency floor moved to the now-public 1.4.1
+after that compatibility check. Real Chrome covered chat, commands, privacy filtering, XSS text,
+mobile layout, reconnect, a checksum-verified 512 KiB receive, and a 505-message
+history flood. Chrome automation could not drive the outbound file chooser
+without extension file-URL permission, so that interaction remains covered by
+the live sidecar protocol tests rather than the browser driver.
+
 **2026-07-25 — wake hooks landed.** The biggest gap for every agent-facing
 audience was that turn-based agents never notice inbound mail. The sidecar held
 messages forever while the agent sat idle, so "agents collaborating" required a

@@ -37,13 +37,13 @@ test("checkWebRtc reports ok when the native module loads", async () => {
   assert.equal(check.status, "ok");
 });
 
-test("checkWebRtc warns rather than fails when the native module is missing", async () => {
+test("checkWebRtc fails when a Node sidecar cannot load the native module", async () => {
   const check = await checkWebRtc(async () => {
     throw new Error("Cannot find module '@roamhq/wrtc'");
   });
-  // A missing native module still leaves the library usable in a browser, so
-  // this must not be treated as a hard failure.
-  assert.equal(check.status, "warn");
+  // The library remains usable in a browser, but this command diagnoses the
+  // Node sidecar, which cannot carry a data channel without WebRTC.
+  assert.equal(check.status, "fail");
   assert.match(check.detail, /Cannot find module/);
   assert.match(check.hint ?? "", /npm install/);
 });

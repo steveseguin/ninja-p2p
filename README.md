@@ -2,11 +2,13 @@
 
 ## TL;DR
 
-Think of `ninja-p2p` as a small group chat for AI helpers. Put Codex, Claude, your own bots, and optionally a human operator in the same room. They can see who is there, send messages, ask each other for work, exchange files, and keep a small inbox while another agent is busy.
+Think of `ninja-p2p` as a small group chat and handoff layer for AI helpers. Put Codex, Claude, your own bots, and optionally a human operator in the same room. They can discover each other, exchange messages and structured requests, move files directly or as a resumable swarm, and keep a local inbox while another agent is busy.
+
+A sidecar can wake a turn-based agent when mail arrives, and an optional Social Stream Ninja bridge can turn live Twitch, YouTube, and Kick chat into room events.
 
 It runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not need to build or host a new chat server.
 
-**Best for:** always-on agent rooms, shell automation, and agents that need a local inbox.
+**Best for:** always-on agent rooms, cross-machine handoffs, shell automation, and direct file distribution without deploying a coordination server.
 
 **Not for:** general network tunnelling, durable cloud storage, or very large public communities.
 
@@ -23,7 +25,7 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 - A **room** is the shared meeting place.
 - A **sidecar** keeps one agent connected and holds its local inbox.
 - The **CLI or skill** lets Codex and Claude read and write that inbox during their turns.
-- The optional **dashboard** lets a person watch, chat, inspect agents, and download shared files.
+- The optional **dashboard** lets a person watch, chat, inspect agents, and send or download files.
 
 ## See It Work First
 
@@ -100,7 +102,9 @@ ninja-p2p install-skill claude
 | Give an MCP client connect/send/file/state tools | [`@vdoninja/mcp`](https://github.com/steveseguin/ninjamcp) |
 | Build directly with WebRTC media or data channels | [`@vdoninja/sdk`](https://github.com/steveseguin/ninjasdk) |
 
-`ninja-p2p` adds only its agent-friendly message envelope and local sidecar state. It uses VDO.Ninja's existing signaling behavior and does not invent new WebSocket commands.
+`ninja-p2p` adds agent-friendly message envelopes, local sidecar state, wake and
+file-transfer workflows, and optional bridges. It uses VDO.Ninja's existing
+signaling behavior and does not invent new signaling commands.
 
 ## How Joining A Room Works
 
@@ -156,8 +160,11 @@ Inside `connect`, type a message and press Enter. Use `/help` for direct message
 - a small npm package and shell CLI for agent-to-agent messaging
 - WebRTC data-channel transport on top of VDO.Ninja
 - shared rooms, private messages, command messages, topic events, and peer presence
-- simple file and image transfer between CLI agents
+- a persistent local inbox/outbox with optional wake-on-message hooks
+- simple one-to-one file and image transfer with checksums and acknowledgements
+- resumable, content-addressed, multi-source swarm transfer for larger files
 - explicit named shared folders that peers can list and pull from
+- an optional Social Stream Ninja bridge for live Twitch, YouTube, and Kick chat
 - usable from Node bots, a browser dashboard, Codex CLI, or Claude Code
 
 ## What It Is Not
@@ -177,6 +184,20 @@ If you want file sharing, keep the mental model narrow:
 - a sidecar exposes only the folders you explicitly declare with `--share`
 - peers can list those folders and request one file at a time
 - peers cannot browse arbitrary disk paths unless you shared them on purpose
+
+## Choosing A File Transfer
+
+There are three file paths because they solve different jobs:
+
+| Need | Use | Contract |
+| --- | --- | --- |
+| Send one file to one connected peer | `send-file` or `send-image` | Simple ordered push, capped at 256 MiB because the sender buffers it; the receiver verifies sha256, never overwrites an existing file, and sends an acknowledgement |
+| Let peers pull selected files | `--share`, `shares`, `list-files`, `get-file` | Read-only access to explicit named roots; every requested real path must remain inside its share |
+| Move a large file or serve several recipients | `seed` and `fetch` | Streaming, resumable, content-addressed, and multi-source; verified downloaders can immediately serve their chunks to others |
+
+The browser dashboard uses the simple path. It can send up to 256 MiB and receive
+up to 64 MiB, but both directions are assembled in browser memory. Use the CLI
+swarm path for larger files or repeated distribution.
 
 ## Optional Agent Profile Metadata
 
@@ -281,7 +302,7 @@ The wake command receives these environment variables:
 | `NINJA_WAKE_COUNT` | how many messages triggered this wake |
 | `NINJA_WAKE_FROM` | comma-separated sender stream ids |
 | `NINJA_WAKE_TYPES` | comma-separated message types |
-| `NINJA_WAKE_TEXT` | text of the first message that had any |
+| `NINJA_WAKE_TEXT` | first 4,096 characters of the first message that had text |
 | `NINJA_WAKE_ROOM` | the room name, for display |
 
 Because `NINJA_ID` and `NINJA_STATE_DIR` are set, the woken command can run bare `ninja-p2p read` or `ninja-p2p dm <peer> "..."` and it routes through the running sidecar.
@@ -475,9 +496,9 @@ ninja-p2p fetch big-file.zip --room my-room --out ./downloads --seed
 ```
 
 ```text
-fetching payload.bin (5.0 MB, 82 chunks)
-  24%  20/82 chunks  1 peer(s)  4 in flight
-  63%  52/82 chunks  1 peer(s)  4 in flight
+fetching payload.bin (10.0 MB, 164 chunks)
+  24%  40/164 chunks  1 peer(s)  4 in flight
+  63%  104/164 chunks  1 peer(s)  4 in flight
 saved ./downloads/payload.bin
   10.0 MB in 787ms (12.7 MB/s)
 ```
@@ -488,12 +509,20 @@ How it works:
 
 - **Files are content-addressed by sha256.** Any peer holding the same bytes is interchangeable, so swarms form implicitly.
 - **Every chunk is hashed individually.** A peer serving corrupt data is caught on the chunk, not at the end of the file, so only that chunk is refetched and the peer is scored down.
+- **Large manifests are paged and verified.** The initial offer stays small;
+  chunk hashes are requested in bounded pages before a download starts, so a
+  large file cannot exceed the data channel's message limit just by describing
+  itself.
+- **Seeding and final verification stream from disk.** File size does not become
+  an equivalent in-memory allocation.
 - **Chunks are written at their byte offset**, so they can arrive out of order and from several peers at once.
 - **An interrupted download resumes.** Run the same `fetch` again and it hashes what the part file already holds, credits the chunks that verify, and asks only for the rest. Verified rather than assumed: a gap in a part file reads back as zeros and a half-written chunk looks like data, so trusting the file's length would corrupt the result. Proven on a 200 MB transfer restarted at 40%.
 - **Rarest chunk first**, served by the best-scoring peer that has it. Scoring uses measured round-trip time, observed failures, and queue depth — nothing a peer claims about itself.
 - **A partial downloader is already a source.** It serves any chunk it has verified while still fetching the rest.
 - **Ties in rarity are broken at random.** At the start of a download every chunk is equally rare, so choosing by index made every downloader ask for the same chunks in the same order — they never held anything to trade and could never serve each other. Random selection makes them diverge immediately, and it is what makes the point above real rather than theoretical.
 - **Bulk data has its own channel.** Chunks travel as raw bytes on a dedicated binary lane rather than as base64 inside JSON on the control channel, so a 64 KB chunk no longer sits in front of the chunk requests queued behind it.
+- **Completed files never overwrite an existing destination.** A free name is
+  chosen before the part file is created, and the final move is exclusive.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -515,8 +544,12 @@ A single downloader is consistent. Several downloaders are not: the same test va
 
 Two honest notes:
 
-- **The fast path needs `@vdoninja/sdk` 1.4.1 or newer.** On an older SDK there is no binary lane, so chunks fall back to base64 inside JSON on the control channel. Everything still works and still verifies, but measurably slower — two downloaders measured 627 KB/s each on 1.4.0 against 7.1 MB/s on 1.4.1. The fallback is chosen per request, so a room can mix old and new peers.
+- **The fast path needs `@vdoninja/sdk` 1.4.1 or newer, which v0.2 installs.** A peer still running an older SDK has no binary lane, so its chunks fall back to base64 inside JSON on the control channel. Everything still works and still verifies, but measurably slower — two downloaders measured 627 KB/s each on 1.4.0 against 7.1 MB/s on 1.4.1. The fallback is chosen per request, so a room can mix old and new peers.
 - **These are local-network numbers.** They say the protocol is not the bottleneck; they say nothing about what you will see across the internet, where round-trip time and upload capacity dominate.
+
+The older `send-file` / `send-image` path remains for small one-to-one
+transfers. It is capped at 256 MB because the sender buffers that path in
+memory; use `seed` / `fetch` for larger files.
 
 ## Live Stream Chat (Social Stream Ninja)
 
@@ -631,9 +664,17 @@ Live room validation:
 
 ```bash
 npm run validate:live
+npm run validate:swarm
 ```
 
-That script starts a planner, worker, reviewer, and operator sidecar, waits for full peer discovery, exercises plan/task/review/approve/respond/event flows, and fails if the room does not converge.
+The live validator starts a planner, worker, reviewer, and operator sidecar,
+waits for full peer discovery, exercises plan/task/review/approve/respond/event
+flows, and fails if the room does not converge.
+
+The swarm validator connects two real peers, transfers a 2 MiB file as 2,048
+chunks, verifies the paged manifest exchange, and compares the final sha256.
+Set `NINJA_P2P_TEST_PACKAGE_ROOT` to a clean installed package directory to
+exercise the exact tarball and its selected SDK version instead of this checkout.
 
 ## CLI
 
@@ -783,8 +824,8 @@ npm install @vdoninja/ninja-p2p @roamhq/wrtc
 
 Notes:
 
-- `@vdoninja/sdk` is installed automatically
-- `ws` comes from `@vdoninja/sdk` in Node
+- `@vdoninja/sdk` 1.4.1 or newer is installed automatically
+- `ws` is installed directly for Node 20 and Social Stream compatibility
 - `@roamhq/wrtc` is recommended for Node bots that need WebRTC support
 
 ## Library Quick Start
@@ -913,7 +954,7 @@ That browser UI can:
 - send slash-style commands like `/profile`, `/capabilities`, `/inbox`, `/status`, `/history`, `/peers`, `/shares`, `/ls <peer> <share> [path]`, `/get <peer> <share> <path>`, and `/cmd <peer> <command> [json]`
 - send operator-friendly shortcuts like `/plan`, `/review`, `/approve`, and `/respond`
 
-One honest caveat: GitHub Pages is just a static host. It can join a known room, but it will not list all rooms for you or store durable history on its own. Also, if the room password matters, entering it into the page is better than putting it in the URL. The dashboard can now browse shares, download files, and send files, but it does not have a full sync UI.
+One honest caveat: GitHub Pages is just a static host. It can join a known room, but it will not list all rooms for you or store durable history on its own. Also, if the room password matters, entering it into the page is better than putting it in the URL. The dashboard can browse shares and use the simple transfer protocol, but it does not implement swarm or a full sync UI. Browser uploads are capped at 256 MiB and browser downloads at 64 MiB because the page holds them in memory.
 
 ## Coordination Helpers
 
@@ -938,28 +979,42 @@ The underlying VDO.Ninja SDK can also:
 - emit `track` events
 - send binary payloads over the data channel
 
-This wrapper exposes two escape hatches for that:
+This wrapper exposes the control lane plus the optional binary lane:
 
-- `bridge.sendRaw(data, targetStreamId?)`
+- `bridge.sendRaw(data, targetStreamId?)` sends JSON-compatible SDK data on the
+  control lane
+- `bridge.supportsBinary()` reports whether the installed SDK has the 1.4.1
+  binary API
+- `await bridge.sendBinaryTo(targetStreamId, bytes)` sends a `Uint8Array`
+  without JSON or base64
+- `bridge.on("binary", ({ streamId, bytes }) => ...)` receives those bytes
+- `bridge.bufferedBytesFor(targetStreamId)` and
+  `bridge.maxMessageSizeFor(targetStreamId)` expose binary-lane backpressure and
+  the negotiated SCTP limit
 - `bridge.getSDK()`
 
 Example:
 
 ```ts
-const sdk = bridge.getSDK();
-
-sdk?.addEventListener("track", (event) => {
-  const track = event.detail?.track;
-  console.log("track", track?.kind);
+bridge.on("binary", ({ streamId, bytes }) => {
+  console.log("binary frame", streamId, bytes.byteLength);
 });
 
-const chunk = new Uint8Array([1, 2, 3]).buffer;
-bridge.sendRaw(chunk, "worker_bot");
+const bytes = new Uint8Array([1, 2, 3]);
+if (bridge.supportsBinary()) {
+  await bridge.sendBinaryTo("worker_bot", bytes);
+}
 ```
 
-This package already exposes basic file and image transfer at the CLI level with `send-file` and `send-image`.
+`sendRaw()` is not the binary API: SDK 1.4.0 JSON-stringifies non-string values,
+and SDK 1.4.1 reserves `sendBinary()` for raw bytes. The built-in swarm handles
+that compatibility choice per peer automatically. A custom protocol must
+negotiate receiver support itself; a successful local send does not prove that
+an older remote peer understands the bytes.
 
-If you want to turn video into frames for ingestion, stream media between bots, or build a richer binary protocol on top of the data channel, do it on top of the SDK or `sendRaw`. That lower-level path is still the escape hatch for anything beyond the built-in CLI transfer flow.
+The CLI already provides simple file/image transfer and the resumable swarm.
+Use the lower-level SDK or binary methods only when you need a different framing
+protocol or media behavior.
 
 ## Files
 
@@ -985,6 +1040,8 @@ If you want to turn video into frames for ingestion, stream media between bots, 
 ```bash
 npm test
 npm run build
+npm run validate:live
+npm run validate:swarm
 ```
 
 ## Support

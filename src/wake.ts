@@ -16,6 +16,9 @@ import type { MessageEnvelope } from "./protocol.js";
 
 export const DEFAULT_WAKE_DEBOUNCE_MS = 750;
 export const DEFAULT_WAKE_LIMIT_PER_MINUTE = 30;
+/** Keep peer-controlled preview text well below Windows' process environment limit. */
+export const MAX_WAKE_TEXT_LENGTH = 4_096;
+export const MAX_WAKE_CONTEXT_LENGTH = 4_096;
 
 export type WakeConfig = {
   command: string;
@@ -26,6 +29,7 @@ export type WakeConfig = {
 /** Minimal shape of a spawned process, so tests can inject a fake. */
 export type WakeChild = {
   on(event: "exit", listener: () => void): unknown;
+  on(event: "error", listener: (error: Error) => void): unknown;
 };
 
 export type WakeSpawn = (command: string, env: NodeJS.ProcessEnv) => WakeChild;
@@ -62,8 +66,8 @@ export function buildWakeEnv(batch: MessageEnvelope[], context: WakeContext): Re
     NINJA_STATE_DIR: context.stateDir,
     NINJA_WAKE_ROOM: context.room,
     NINJA_WAKE_COUNT: String(batch.length),
-    NINJA_WAKE_FROM: unique(batch.map((envelope) => envelope.from.streamId)).join(","),
-    NINJA_WAKE_TYPES: unique(batch.map((envelope) => envelope.type)).join(","),
+    NINJA_WAKE_FROM: joinBounded(unique(batch.map((envelope) => envelope.from.streamId))),
+    NINJA_WAKE_TYPES: joinBounded(unique(batch.map((envelope) => envelope.type))),
     NINJA_WAKE_TEXT: firstText(batch),
   };
 }
@@ -181,10 +185,18 @@ export class WakeRunner {
       return;
     }
 
-    child.on("exit", () => {
+    let settled = false;
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
       this.running = false;
+      if (error) this.log(`[wake] process error: ${error.message}`);
       this.settle();
-    });
+    };
+    // A failed asynchronous spawn emits `error`; without a listener Node treats
+    // it as uncaught, and without settling the runner stays busy forever.
+    child.on("error", (error) => finish(error));
+    child.on("exit", () => finish());
   }
 
   /** After a run finishes, start another if messages arrived meanwhile. */
@@ -212,12 +224,26 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
+function joinBounded(values: string[]): string {
+  let joined = "";
+  for (const value of values) {
+    const next = joined ? `${joined},${value}` : value;
+    if (next.length > MAX_WAKE_CONTEXT_LENGTH) break;
+    joined = next;
+  }
+  return joined;
+}
+
 function firstText(batch: MessageEnvelope[]): string {
   for (const envelope of batch) {
     const payload = envelope.payload;
     if (typeof payload !== "object" || payload === null) continue;
     const text = (payload as Record<string, unknown>).text;
-    if (typeof text === "string" && text.trim()) return text;
+    if (typeof text === "string" && text.trim()) {
+      return text.length <= MAX_WAKE_TEXT_LENGTH
+        ? text
+        : `${text.slice(0, MAX_WAKE_TEXT_LENGTH - 1)}…`;
+    }
   }
   return "";
 }

@@ -1,7 +1,7 @@
 {
   "name": "@vdoninja/ninja-p2p",
   "version": "0.2.0",
-  "description": "Open source P2P agent messaging and coordination over VDO.Ninja WebRTC data channels",
+  "description": "P2P agent messaging, wake hooks, and resumable file swarms over VDO.Ninja WebRTC data channels",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -65,6 +65,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "npm test && npm run build",
     "validate:live": "node ./scripts/validate-live.mjs",
+    "validate:swarm": "node ./scripts/validate-swarm-live.mjs",
     "sync:docs": "node -e \"const fs=require('node:fs'); fs.mkdirSync('docs',{recursive:true}); fs.copyFileSync('dashboard.html','docs/dashboard.html');\"",
     "prepare": "npm run build"
   },
@@ -83,7 +84,10 @@
     "bot",
     "nat-traversal",
     "hole-punching",
-    "remote-control"
+    "file-transfer",
+    "swarm",
+    "wake-hook",
+    "social-stream"
   ],
   "author": "Steve Seguin",
   "license": "MIT",
@@ -102,7 +106,8 @@
   },
   "homepage": "https://github.com/steveseguin/ninja-p2p#readme",
   "dependencies": {
-    "@vdoninja/sdk": "^1.4.0"
+    "@vdoninja/sdk": "^1.4.1",
+    "ws": "^8.21.0"
   },
   "peerDependencies": {
     "@roamhq/wrtc": "^0.8.0"

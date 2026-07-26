@@ -19,6 +19,9 @@ The application envelope contains an ID, timestamp, sender identity, message typ
 - The persistent CLI sidecar additionally stores actions on disk before its live process sends them.
 - There is no durable remote broker and no exactly-once guarantee. Applications that require confirmation should use message IDs with `ack` or `command_response` and make handlers idempotent.
 - Room broadcasts are best-effort. They are not retained independently for every absent peer.
+- A history request is capped at 200 entries (invalid or non-positive counts
+  default to 50) and can replay broadcasts plus messages sent to or by the
+  requester. Direct messages involving other peers are filtered before replay.
 
 ## Connection race this prevents
 
@@ -48,6 +51,19 @@ with it.
 Binary requires `@vdoninja/sdk` 1.4.1 or newer. Older peers are not excluded —
 each request states whether its sender can receive bytes, so the answer is
 chosen per request and a room can mix versions freely.
+
+### Why the manifest is paged
+
+The offer originally carried one 64-character hash per chunk. At 250 MB with
+the default 64 KB chunks, that produces an offer around 275 KB — already larger
+than a common 256 KB SCTP message limit. The transfer was valid but impossible
+to announce.
+
+Offers now carry the file shape plus a digest of the ordered chunk-hash list.
+Small lists remain inline. Large lists are requested in pages of at most 256
+hashes, and the assembled list is checked against its digest before a part file
+is opened. This bounds every control message and also keeps an unsolicited
+large offer from allocating a full manifest until somebody asks for the file.
 
 ### Why ties are broken at random
 
@@ -81,6 +97,7 @@ reply useful and guarantees the exchange terminates after one round.
   negotiated SCTP limit is used as a safety check instead: at the 64 KB default
   a base64 chunk is 85 KB, which would be refused by a peer negotiating the
   65536 every implementation must support.
+
 ### Losing a chunk on a healthy link
 
 Chunks are occasionally dropped with nothing wrong anywhere: measured on an idle
@@ -170,6 +187,37 @@ file is also locked while in use, so the one genuinely ambiguous case — two
 downloads of the same file into the same folder — fails with a clear message
 instead of interleaving writes. Locks left by a killed process go stale after
 five minutes.
+
+## Simple one-to-one transfer
+
+The older one-to-one file offer, chunk, and completion messages are transient
+too. Replaying a partial run after reconnect cannot reconstruct the missing
+transport state, and retaining hundreds of chunks used to evict actual
+conversation from the history ring. The sender now fails when the transport
+rejects any step, and receivers validate transfer IDs, sender ownership, size,
+chunk count, chunk length, and final sha256 before moving a file into place.
+
+The simple path is capped at 256 MiB because the sender buffers the file. A
+sidecar accepts at most 16 incomplete transfers and 512 MiB of promised
+incomplete data. Destinations are chosen without overwriting existing files and
+the final move is exclusive. The browser uses the same wire messages but caps
+in-memory receives at 64 MiB.
+
+## Untrusted wire input
+
+The room is not a trust boundary, so parsing is deliberately stricter than the
+TypeScript types:
+
+- envelope identity, route, topic, name, and type strings are bounded before an
+  envelope is accepted
+- a data connection is bound to its observed stream identity; it cannot start
+  sending envelopes as another established peer
+- swarm summaries must have internally consistent size, chunk size, and chunk
+  count fields
+- a swarm may describe at most 1,000,000 chunks, each hash must be lowercase
+  sha256, and paged manifests are authenticated by a digest over the ordered
+  hash list before disk I/O starts
+- malformed messages are rejected locally and do not tear down the room
 
 ## Compatibility
 

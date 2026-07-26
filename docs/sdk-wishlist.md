@@ -11,6 +11,11 @@ Verified against a local v1.4.1 build on 2026-07-25 with two live Node peers ove
 real signalling — not by reading the source. Results and two corrections to the
 SDK's own Node caveats are in [Verification](#verification) at the end.
 
+`ninja-p2p` now declares `@vdoninja/sdk` `^1.4.1` and uses the SDK's published
+types directly. Runtime feature detection remains so a room containing an older
+already-installed peer automatically uses the verified base64 swarm fallback
+for that peer.
+
 | # | Item | Status | API |
 |---|------|--------|-----|
 | 1 | Binary send path | **landed** | `sendBinary()` / `binaryReceived` |

@@ -11,6 +11,7 @@
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
+import type { VDONinja } from "@vdoninja/sdk";
 import { sendFileFromPath } from "./file-transfer.js";
 import { MessageBus, type MessageBusOptions } from "./message-bus.js";
 import { PeerRegistry } from "./peer-registry.js";
@@ -80,7 +81,7 @@ export class VDOBridge extends EventEmitter {
   readonly bus: MessageBus;
   readonly identity: PeerIdentity;
 
-  private sdk: InstanceType<typeof import("@vdoninja/sdk")> | null = null;
+  private sdk: VDONinja | null = null;
   private readonly options: VDOBridgeOptions;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private connected = false;
@@ -123,12 +124,12 @@ export class VDOBridge extends EventEmitter {
     // Dynamic import for CJS SDK in ESM context
     const { createRequire } = await import("node:module");
     const require = createRequire(import.meta.url);
-    const VDONinjaSDK = require("@vdoninja/sdk");
+    const VDONinjaSDK = require("@vdoninja/sdk") as typeof import("@vdoninja/sdk").VDONinja;
     this.sdk = new VDONinjaSDK({
       host: this.options.host ?? "wss://wss.vdo.ninja",
       debug: this.options.debug ?? false,
       forceTURN: this.options.forceTurn ?? false,
-    }) as InstanceType<typeof VDONinjaSDK>;
+    });
 
     this.wireSDKEvents();
 
@@ -146,7 +147,7 @@ export class VDOBridge extends EventEmitter {
     await this.sdk!.connect();
 
     // Build joinRoom options
-    const joinOpts: Record<string, unknown> = { room: this.options.room };
+    const joinOpts: { room: string; password?: string | false } = { room: this.options.room };
     if (this.options.password !== undefined) {
       joinOpts.password = this.options.password;
     }
@@ -191,8 +192,8 @@ export class VDOBridge extends EventEmitter {
 
     // Tearing the process down before the SDK has finished closing peer
     // connections kills the native WebRTC module mid-cleanup, so wait for real
-    // completion. From v1.4.1 disconnect() resolves exactly then; older builds
-    // return void and need the state polled instead.
+    // completion. The 1.4.1 floor resolves exactly then; the state-poll fallback
+    // keeps forced older installs and a rejected teardown from exiting halfway.
     try {
       const result = sdk.disconnect() as unknown;
       if (result && typeof (result as Promise<void>).then === "function") {
@@ -227,15 +228,12 @@ export class VDOBridge extends EventEmitter {
   /**
    * Resolve once the SDK has genuinely finished tearing down.
    *
-   * Its "disconnected" event is not a reliable signal: the WebSocket close
-   * handler fires it well before the real cleanup, which runs later in a
-   * promise chain the SDK never hands back. Waiting on the event let callers
-   * exit while peer connections were still closing, which crashed the native
-   * WebRTC module. So observe the state the cleanup actually clears, and cap
-   * the wait so a changed SDK can never wedge a shutdown.
+   * Fallback for an overridden pre-1.4.1 SDK or a teardown promise that rejects.
+   * The early socket-phase "disconnected" event is not completion, so observe
+   * the state the cleanup clears and cap the wait.
    */
   private async waitForSdkTeardown(
-    sdk: InstanceType<typeof import("@vdoninja/sdk")>,
+    sdk: VDONinja,
     timeoutMs = TEARDOWN_TIMEOUT_MS,
   ): Promise<void> {
     const state = sdk as unknown as {
@@ -460,7 +458,7 @@ export class VDOBridge extends EventEmitter {
   }
 
   /** Access the underlying VDO.Ninja SDK instance for advanced media workflows. */
-  getSDK(): InstanceType<typeof import("@vdoninja/sdk")> | null {
+  getSDK(): VDONinja | null {
     return this.sdk;
   }
 
@@ -470,7 +468,7 @@ export class VDOBridge extends EventEmitter {
     if (!this.sdk) return;
 
     // Peer connected (WebRTC connection established)
-    this.sdk.addEventListener("peerConnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
+    this.addSDKEventListener("peerConnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
       const streamId = event.detail?.streamID ?? uuid;
       this.peers.addPeer(streamId, uuid);
@@ -478,7 +476,7 @@ export class VDOBridge extends EventEmitter {
     });
 
     // Data channel opened — send our announce
-    this.sdk.addEventListener("dataChannelOpen", (event: { detail?: { uuid?: string; streamID?: string } }) => {
+    this.addSDKEventListener("dataChannelOpen", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
       const mappedStreamId = this.peers.streamIdForUuid(uuid);
       const eventStreamId = event.detail?.streamID;
@@ -489,7 +487,7 @@ export class VDOBridge extends EventEmitter {
       // Send announce to this specific peer
       const announce = createEnvelope(this.identity, "announce", this.getAnnouncePayload(), { to: streamId });
       try {
-        this.sdk!.sendData(envelopeToWire(announce), { UUID: uuid });
+        this.sdk!.sendData(envelopeToWire(announce), { uuid });
       } catch { /* peer may have disconnected */ }
 
       // Flush any queued offline messages for this peer
@@ -502,7 +500,7 @@ export class VDOBridge extends EventEmitter {
     });
 
     // Data received — parse and route through MessageBus
-    this.sdk.addEventListener("dataReceived", (event: { detail?: { data?: unknown; uuid?: string; streamID?: string } }) => {
+    this.addSDKEventListener("dataReceived", (event: { detail?: { data?: unknown; uuid?: string; streamID?: string } }) => {
       const raw = event.detail?.data;
       const uuid = event.detail?.uuid ?? "unknown";
 
@@ -515,7 +513,23 @@ export class VDOBridge extends EventEmitter {
 
       // If we don't have a streamId mapping for this uuid, use the envelope's from
       const senderStreamId = envelope.from.streamId;
-      if (!this.peers.getPeer(senderStreamId)) {
+      const mappedSender = this.peers.streamIdForUuid(uuid);
+      const claimedPeer = this.peers.getPeer(senderStreamId);
+      if (
+        (mappedSender && mappedSender !== uuid && mappedSender !== senderStreamId) ||
+        (claimedPeer && claimedPeer.uuid !== uuid && claimedPeer.connected)
+      ) {
+        if (this.options.debug) {
+          console.warn(
+            `[P2P] Rejected identity switch on ${uuid}: ` +
+              `${mappedSender ?? "unmapped"} -> ${senderStreamId}`,
+          );
+        }
+        return;
+      }
+      if (claimedPeer && claimedPeer.uuid !== uuid && !claimedPeer.connected) {
+        this.peers.addPeer(senderStreamId, uuid);
+      } else if (!claimedPeer) {
         const orphanPeer = this.peers.getPeer(uuid);
         if (orphanPeer && orphanPeer.streamId === uuid) {
           this.peers.rekeyPeer(uuid, senderStreamId);
@@ -546,15 +560,28 @@ export class VDOBridge extends EventEmitter {
           break;
 
         case "history_request": {
-          // Send recent history to the requesting peer
-          const count = typeof envelope.payload === "object" && envelope.payload !== null
-            ? ((envelope.payload as Record<string, unknown>).count as number) ?? 50
+          // A peer may see broadcasts and its own conversation with us, but
+          // never direct messages exchanged with somebody else. Filtering
+          // after taking the last N entries could let unrelated traffic crowd
+          // out every eligible message, so filter the bounded history ring
+          // first and slice second.
+          const requested = typeof envelope.payload === "object" && envelope.payload !== null
+            ? (envelope.payload as Record<string, unknown>).count
+            : undefined;
+          const count = Number.isInteger(requested) && (requested as number) > 0
+            ? Math.min(requested as number, 200)
             : 50;
-          const history = this.bus.getHistory(count);
+          const history = this.bus.getHistory()
+            .filter((message) =>
+              !message.to ||
+              message.to === senderStreamId ||
+              message.from.streamId === senderStreamId
+            )
+            .slice(-count);
           for (const msg of history) {
             const replay = createEnvelope(this.identity, "history_replay", msg, { to: senderStreamId });
             try {
-              this.sdk!.sendData(envelopeToWire(replay), { UUID: uuid });
+              this.sdk!.sendData(envelopeToWire(replay), { uuid });
             } catch { /* best effort */ }
           }
           break;
@@ -566,7 +593,7 @@ export class VDOBridge extends EventEmitter {
     });
 
     // Peer disconnected
-    this.sdk.addEventListener("peerDisconnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
+    this.addSDKEventListener("peerDisconnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
       const streamId = event.detail?.streamID ?? this.peers.streamIdForUuid(uuid) ?? uuid;
       this.viewedStreamIds.delete(streamId);
@@ -577,7 +604,7 @@ export class VDOBridge extends EventEmitter {
 
     // Raw bytes from a peer's sendBinary(). No envelope, no routing beyond the
     // sender, so whatever framing the payload needs lives inside the bytes.
-    this.sdk.addEventListener(
+    this.addSDKEventListener(
       "binaryReceived",
       (event: { detail?: { uuid?: string; streamID?: string; bytes?: unknown } }) => {
         const raw = event.detail?.bytes;
@@ -589,7 +616,7 @@ export class VDOBridge extends EventEmitter {
     );
 
     // SDK-level connection events
-    this.sdk.addEventListener(
+    this.addSDKEventListener(
       "disconnected",
       (event: { detail?: { intentional?: boolean; willReconnect?: boolean; phase?: string } }) => {
         // From SDK v1.4.1 the event says whether a reconnect is actually coming.
@@ -605,11 +632,11 @@ export class VDOBridge extends EventEmitter {
       },
     );
 
-    this.sdk.addEventListener("reconnecting", () => {
+    this.addSDKEventListener("reconnecting", () => {
       this.restoring = true;
     });
 
-    this.sdk.addEventListener("reconnected", () => {
+    this.addSDKEventListener("reconnected", () => {
       console.log("[P2P] WebSocket reconnected.");
       // The SDK replays its own view intent right after this. Rebuilding a
       // connection on top of that replay races it — both sides manipulate the
@@ -626,7 +653,7 @@ export class VDOBridge extends EventEmitter {
     });
 
     // Room listing (existing peers when we join)
-    this.sdk.addEventListener("listing", (event: { detail?: { list?: Array<{ streamID?: string }> } }) => {
+    this.addSDKEventListener("listing", (event: { detail?: { list?: Array<{ streamID?: string }> } }) => {
       const list = event.detail?.list ?? [];
       for (const entry of list) {
         if (entry.streamID && entry.streamID !== this.options.streamId) {
@@ -635,19 +662,31 @@ export class VDOBridge extends EventEmitter {
       }
     });
 
-    this.sdk.addEventListener("videoaddedtoroom", (event: { detail?: { streamID?: string } }) => {
+    this.addSDKEventListener("videoaddedtoroom", (event: { detail?: { streamID?: string } }) => {
       this.maybeViewPeer(event.detail?.streamID);
     });
 
-    this.sdk.addEventListener("streamAdded", (event: { detail?: { streamID?: string } }) => {
+    this.addSDKEventListener("streamAdded", (event: { detail?: { streamID?: string } }) => {
       this.maybeViewPeer(event.detail?.streamID);
     });
 
     // Error handling
-    this.sdk.addEventListener("error", (event: { detail?: { error?: unknown } }) => {
+    this.addSDKEventListener("error", (event: { detail?: { error?: unknown } }) => {
       console.error("[P2P] SDK error:", event.detail?.error);
       this.emitBridgeError(event.detail?.error);
     });
+  }
+
+  /**
+   * The SDK types enumerate the stable public events but the bridge also
+   * listens to long-standing compatibility aliases. Keep the cast at this one
+   * boundary rather than weakening every handler.
+   */
+  private addSDKEventListener<T>(
+    name: string,
+    handler: (event: { detail?: T }) => void,
+  ): void {
+    this.sdk?.addEventListener(name, handler as unknown as EventListener);
   }
 
   // ── Heartbeat ────────────────────────────────────────────────────────────
@@ -682,7 +721,7 @@ export class VDOBridge extends EventEmitter {
     const peer = this.peers.getPeer(targetStreamId);
     if (peer) {
       try {
-        this.sdk.sendData(envelopeToWire(pong), { UUID: peer.uuid });
+        this.sdk.sendData(envelopeToWire(pong), { uuid: peer.uuid });
       } catch { /* best effort */ }
     }
   }

@@ -11,7 +11,8 @@
  * source for that 10%, which is what turns a one-to-one transfer into a swarm.
  */
 
-import { existsSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { constants, copyFileSync, existsSync, linkSync, rmSync } from "node:fs";
+import path from "node:path";
 import {
   ChunkFile,
   ChunkMap,
@@ -19,7 +20,7 @@ import {
   createPeerStats,
   planChunkRequests,
   recordPeerRtt,
-  sha256Hex,
+  sha256FileHex,
   type SwarmManifest,
   type SwarmPeerState,
   type SwarmPeerStats,
@@ -88,6 +89,14 @@ export type SwarmProgress = {
   peers: number;
   complete: boolean;
   percent: number;
+};
+
+export type SwarmFinishResult = {
+  ok: boolean;
+  savedPath?: string;
+  error?: string;
+  /** The part bytes cannot be resumed safely and should be discarded. */
+  integrityFailure?: boolean;
 };
 
 type InFlightRequest = {
@@ -180,10 +189,15 @@ export class SwarmSession {
    */
   onChunkRequest(peerId: string, index: number, binary = false): boolean {
     if (!this.have.has(index)) return false;
-    const bytes = this.file.readChunk(index);
-    if (!bytes) return false;
-    this.send.chunk(peerId, index, bytes, binary);
-    return true;
+    try {
+      const bytes = this.file.readChunk(index);
+      if (!bytes) return false;
+      this.send.chunk(peerId, index, bytes, binary);
+      return true;
+    } catch (error) {
+      this.log(`[swarm] could not serve chunk ${index} to ${peerId}: ${errorMessage(error)}`);
+      return false;
+    }
   }
 
   // ── Receiving ──────────────────────────────────────────────────────────────
@@ -195,7 +209,6 @@ export class SwarmSession {
    */
   onChunkData(peerId: string, index: number, data: Uint8Array): boolean {
     const request = this.inFlight.get(index);
-    if (request) this.inFlight.delete(index);
 
     if (this.have.has(index)) {
       // A duplicate from a slower peer. Harmless, and not a failure.
@@ -205,11 +218,25 @@ export class SwarmSession {
     const stats = this.peerStats.get(peerId) ?? createPeerStats();
     this.peerStats.set(peerId, stats);
 
-    if (!this.file.writeChunk(index, data)) {
+    let written = false;
+    try {
+      written = this.file.writeChunk(index, data);
+    } catch (error) {
+      this.log(`[swarm] could not store chunk ${index}: ${errorMessage(error)}`);
+      // Only release a request when the failing delivery came from the peer we
+      // asked. An unsolicited bad chunk must not cancel a good peer's work.
+      if (request?.peerId === peerId) this.inFlight.delete(index);
+      return false;
+    }
+    if (!written) {
+      if (request?.peerId === peerId) this.inFlight.delete(index);
       stats.failures += 1;
       this.log(`[swarm] bad chunk ${index} from ${peerId} (${stats.failures} failure(s))`);
       return false;
     }
+
+    // The chunk is now satisfied regardless of which peer delivered it.
+    if (request) this.inFlight.delete(index);
 
     // Anything arriving proves the path works, whatever came before.
     this.consecutiveTimeouts.delete(peerId);
@@ -437,34 +464,45 @@ export class SwarmSession {
    * braces — but it is cheap next to the download and it is the only thing that
    * catches a wrong manifest or a damaged part file.
    */
-  finish(): { ok: boolean; savedPath?: string; error?: string } {
+  finish(): SwarmFinishResult {
     if (!this.isComplete()) {
       return { ok: false, error: `incomplete: ${this.have.count()}/${this.manifest.totalChunks} chunks` };
     }
     if (this.completed) {
       return { ok: true, savedPath: this.savedPath };
     }
-
-    this.file.close();
-
-    if (this.manifest.totalChunks === 0) {
-      // An empty file still needs to exist at the destination.
-      renameSync(this.file.filePath, this.savedPath);
+    // Seed sessions point at the final file already. `finish()` is harmless on
+    // them rather than trying to move a file onto itself and reporting EEXIST.
+    if (path.resolve(this.file.filePath) === path.resolve(this.savedPath)) {
       this.completed = true;
       return { ok: true, savedPath: this.savedPath };
     }
 
-    const assembled = new Uint8Array(readFileSync(this.file.filePath));
-    if (assembled.byteLength !== this.manifest.size) {
-      return { ok: false, error: `size mismatch: ${assembled.byteLength} != ${this.manifest.size}` };
-    }
-    if (sha256Hex(assembled) !== this.manifest.fileId) {
-      return { ok: false, error: "sha256 mismatch on the assembled file" };
-    }
+    // Close the data handle but keep the destination lock until verification
+    // and the final move both finish. Releasing it first lets a second process
+    // claim and mutate the same part file during a long final hash.
+    this.file.closeHandle();
+    try {
+      const assembled = sha256FileHex(this.file.filePath);
+      if (assembled.size !== this.manifest.size) {
+        return {
+          ok: false,
+          error: `size mismatch: ${assembled.size} != ${this.manifest.size}`,
+          integrityFailure: true,
+        };
+      }
+      if (assembled.sha256 !== this.manifest.fileId) {
+        return { ok: false, error: "sha256 mismatch on the assembled file", integrityFailure: true };
+      }
 
-    renameSync(this.file.filePath, this.savedPath);
-    this.completed = true;
-    return { ok: true, savedPath: this.savedPath };
+      moveFileExclusive(this.file.filePath, this.savedPath);
+      this.completed = true;
+      return { ok: true, savedPath: this.savedPath };
+    } catch (error) {
+      return { ok: false, error: errorMessage(error) };
+    } finally {
+      this.file.releaseExclusiveLock();
+    }
   }
 
   close(): void {
@@ -504,3 +542,41 @@ export function createSeedSession(
 }
 
 export { chunkLength };
+
+/**
+ * Move without overwriting an existing destination and without assuming the
+ * temp directory shares a filesystem with the user's download directory.
+ */
+function moveFileExclusive(source: string, destination: string): void {
+  let linked = false;
+  try {
+    linkSync(source, destination);
+    linked = true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") throw error;
+    if (!["EXDEV", "EPERM", "EACCES", "ENOTSUP", "UNKNOWN"].includes(code ?? "")) {
+      throw error;
+    }
+  }
+  if (linked) {
+    try {
+      rmSync(source, { force: true });
+    } catch {
+      // Destination is already complete and immutable from our perspective.
+    }
+    return;
+  }
+
+  copyFileSync(source, destination, constants.COPYFILE_EXCL);
+  try {
+    rmSync(source, { force: true });
+  } catch {
+    // The completed destination is authoritative; a stale part can be cleaned
+    // on the next run without turning a successful transfer into a failure.
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

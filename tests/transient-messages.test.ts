@@ -29,11 +29,22 @@ function makeBus(accept: boolean): { bus: MessageBus; peers: PeerRegistry; sent:
 }
 
 describe("transient message classification", () => {
-  it("covers every swarm type and nothing else", () => {
-    for (const type of ["swarm_offer", "swarm_announce", "swarm_request", "swarm_chunk", "swarm_have"] as const) {
+  it("covers transfer traffic and nothing durable", () => {
+    for (const type of [
+      "file_offer",
+      "file_chunk",
+      "file_complete",
+      "swarm_offer",
+      "swarm_manifest_request",
+      "swarm_manifest_page",
+      "swarm_announce",
+      "swarm_request",
+      "swarm_chunk",
+      "swarm_have",
+    ] as const) {
       assert.equal(isTransientType(type), true, type);
     }
-    for (const type of ["chat", "command", "ack", "event", "file_offer", "history_replay"] as const) {
+    for (const type of ["chat", "command", "ack", "event", "file_ack", "history_replay"] as const) {
       assert.equal(isTransientType(type), false, type);
     }
   });
@@ -60,6 +71,21 @@ describe("history is not flooded by transfers", () => {
       bus.send("them", "swarm_chunk", { fileId: "f", index: i, data: "" });
     }
     assert.equal(bus.getHistory().length, 1);
+  });
+
+  it("does not let simple file chunks evict the conversation either", () => {
+    const { bus } = makeBus(true);
+    bus.broadcast("chat", { text: "keep me" });
+    for (let i = 0; i < 500; i += 1) {
+      bus.trySend("them", "file_chunk", {
+        transferId: "abcdefgh",
+        index: i,
+        totalChunks: 500,
+        data: "",
+      });
+    }
+    assert.equal(bus.getHistory().length, 1);
+    assert.equal(bus.getHistory()[0].type, "chat");
   });
 });
 

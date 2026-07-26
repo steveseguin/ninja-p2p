@@ -72,6 +72,12 @@ test("isValidEnvelope rejects invalid data", () => {
   assert.ok(!isValidEnvelope({ v: 2, id: "x", type: "chat", from: testIdentity, ts: 1 }));
   assert.ok(!isValidEnvelope({ v: 1, id: "x", type: "chat", from: null, ts: 1 }));
   assert.ok(!isValidEnvelope({ v: 1, id: "x", type: "chat", from: { noStreamId: true }, ts: 1 }));
+  assert.ok(!isValidEnvelope({ ...createEnvelope(testIdentity, "chat", {}), id: "x".repeat(129) }));
+  assert.ok(!isValidEnvelope({
+    ...createEnvelope(testIdentity, "chat", {}),
+    from: { ...testIdentity, streamId: "x".repeat(129) },
+  }));
+  assert.ok(!isValidEnvelope({ ...createEnvelope(testIdentity, "chat", {}), ts: Number.POSITIVE_INFINITY }));
 });
 
 test("parseEnvelope parses valid JSON string", () => {

@@ -29,6 +29,8 @@ export type MessageType =
   // Swarm transfer. High volume and machine-only: these must never reach an
   // agent inbox, or a single file would bury every real message.
   | "swarm_offer"
+  | "swarm_manifest_request"
+  | "swarm_manifest_page"
   | "swarm_announce"
   | "swarm_request"
   | "swarm_chunk"
@@ -37,14 +39,20 @@ export type MessageType =
 /**
  * Messages that are only worth delivering right now.
  *
- * Swarm traffic is high volume and time-sensitive: a chunk request replayed
- * from an offline queue minutes later asks for something the requester already
- * has, and a history ring full of chunk requests has evicted every real message
- * a peer asking for history actually wanted. Neither is retained or replayed —
- * anything missed is re-announced on the next interval.
+ * Transfer traffic is high volume and stateful: a chunk request replayed from
+ * an offline queue minutes later asks for something the requester already has,
+ * while replaying half of a simple file transfer cannot restore its missing
+ * half. A history ring full of chunks also evicts every real message a peer
+ * asking for history actually wanted. Swarm state is re-announced; a rejected
+ * simple transfer fails explicitly and can be retried from the start.
  */
 export const TRANSIENT_MESSAGE_TYPES: ReadonlySet<MessageType> = new Set<MessageType>([
+  "file_offer",
+  "file_chunk",
+  "file_complete",
   "swarm_offer",
+  "swarm_manifest_request",
+  "swarm_manifest_page",
   "swarm_announce",
   "swarm_request",
   "swarm_chunk",
@@ -93,7 +101,33 @@ export type SwarmOfferPayload = {
   size: number;
   chunkSize: number;
   totalChunks: number;
-  chunkHashes: string[];
+  /** sha256 over the raw 32-byte chunk hashes, in chunk order. */
+  chunkHashesHash?: string;
+  /**
+   * Small manifests ride inline. Large manifests are requested in bounded
+   * pages, otherwise one offer eventually exceeds the negotiated SCTP message
+   * limit and silently becomes impossible to send.
+   */
+  chunkHashes?: string[];
+  manifestPageSize?: number;
+  manifestPages?: number;
+};
+
+/** Ask a source for selected pages of a large chunk-hash manifest. */
+export type SwarmManifestRequestPayload = {
+  fileId: string;
+  pageSize: number;
+  pages: number[];
+};
+
+/** One bounded page of chunk hashes. */
+export type SwarmManifestPagePayload = {
+  fileId: string;
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  chunkHashesHash: string;
+  hashes: string[];
 };
 
 /** A peer's full chunk bitfield, base64 encoded. */
@@ -237,15 +271,27 @@ export function createEnvelope(
 export function isValidEnvelope(data: unknown): data is MessageEnvelope {
   if (typeof data !== "object" || data === null) return false;
   const d = data as Record<string, unknown>;
+  const from = typeof d.from === "object" && d.from !== null
+    ? d.from as Record<string, unknown>
+    : null;
   return (
     d.v === 1 &&
-    typeof d.id === "string" &&
-    typeof d.type === "string" &&
-    typeof d.from === "object" &&
-    d.from !== null &&
-    typeof (d.from as Record<string, unknown>).streamId === "string" &&
-    typeof d.ts === "number"
+    isBoundedText(d.id, 128) &&
+    isBoundedText(d.type, 64) &&
+    from !== null &&
+    isBoundedText(from.streamId, 128) &&
+    isBoundedText(from.role, 64) &&
+    isBoundedText(from.name, 256) &&
+    isBoundedText(from.instanceId, 128) &&
+    typeof d.ts === "number" &&
+    Number.isFinite(d.ts) &&
+    (d.to === null || d.to === undefined || isBoundedText(d.to, 128)) &&
+    (d.topic === null || d.topic === undefined || isBoundedText(d.topic, 256))
   );
+}
+
+function isBoundedText(value: unknown, maxLength: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maxLength && !value.includes("\0");
 }
 
 /** Parse raw data received from a data channel into an envelope. Returns null on failure. */

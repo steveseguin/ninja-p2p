@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
   buildManifest,
+  buildManifestFromFile,
   ChunkFile,
   ChunkMap,
   chunkLength,
@@ -13,6 +14,7 @@ import {
   createPeerStats,
   manifestsAgree,
   planChunkRequests,
+  partPathFor,
   recordPeerRtt,
   scorePeer,
   sha256Hex,
@@ -315,6 +317,33 @@ test("buildManifest handles an empty file", () => {
   const manifest = buildManifest(new Uint8Array(0), "empty.txt", "text/plain");
   assert.equal(manifest.totalChunks, 0);
   assert.deepEqual(manifest.chunkHashes, []);
+});
+
+test("streaming manifest construction matches the in-memory form", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-manifest-"));
+  try {
+    const data = bytes(50_123, 19);
+    const filePath = path.join(dir, "stream.bin");
+    writeFileSync(filePath, data);
+
+    assert.deepEqual(
+      buildManifestFromFile(filePath, "stream.bin", "application/octet-stream", 4_096),
+      buildManifest(data, "stream.bin", "application/octet-stream", 4_096),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("part paths reject peer-controlled values that are not content ids", () => {
+  assert.throws(
+    () => partPathFor("work", "..\\..\\outside", "download.bin"),
+    /lowercase sha256/,
+  );
+  assert.throws(
+    () => partPathFor("work", "A".repeat(64), "download.bin"),
+    /lowercase sha256/,
+  );
 });
 
 test("manifestsAgree rejects a peer describing different bytes", () => {

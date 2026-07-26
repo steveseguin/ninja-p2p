@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { VDOBridge } from "../src/vdo-bridge.js";
-import { createEnvelope, type PeerIdentity } from "../src/protocol.js";
+import { createEnvelope, parseEnvelope, type MessageEnvelope, type PeerIdentity } from "../src/protocol.js";
 
 import { readFileSync } from "node:fs";
 
@@ -73,6 +73,81 @@ test("wireSDKEvents views existing and newly added peers without duplicating vie
   ]);
 });
 
+test("SDK-targeted protocol replies use the published lowercase uuid target", () => {
+  const bridge = makeBridge();
+  const handlers = new Map<string, (event: any) => void>();
+  const sent: Array<{ data: unknown; target?: unknown }> = [];
+
+  (bridge as unknown as {
+    sdk: {
+      addEventListener: (name: string, handler: (event: any) => void) => void;
+      sendData: (data: unknown, target?: unknown) => boolean;
+    };
+    wireSDKEvents: () => void;
+  }).sdk = {
+    addEventListener(name, handler) {
+      handlers.set(name, handler);
+    },
+    sendData(data, target) {
+      sent.push({ data, target });
+      return true;
+    },
+  };
+  (bridge as unknown as { wireSDKEvents: () => void }).wireSDKEvents();
+
+  handlers.get("dataChannelOpen")?.({
+    detail: { uuid: "uuid_worker", streamID: other.streamId },
+  });
+
+  assert.equal(parseEnvelope(sent[0]?.data)?.type, "announce");
+  assert.deepEqual(sent[0]?.target, { uuid: "uuid_worker" });
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(sent[0]?.target ?? {}, "UUID"),
+    false,
+  );
+});
+
+test("an established connection cannot impersonate another stream id", () => {
+  const bridge = makeBridge();
+  const handlers = new Map<string, (event: any) => void>();
+  (bridge as unknown as {
+    sdk: {
+      addEventListener: (name: string, handler: (event: any) => void) => void;
+      sendData: () => boolean;
+    };
+    wireSDKEvents: () => void;
+  }).sdk = {
+    addEventListener(name, handler) {
+      handlers.set(name, handler);
+    },
+    sendData() {
+      return true;
+    },
+  };
+  (bridge as unknown as { wireSDKEvents: () => void }).wireSDKEvents();
+
+  bridge.peers.addPeer(other.streamId, "uuid_worker");
+  bridge.peers.addPeer("attacker", "uuid_attacker");
+  const received: string[] = [];
+  bridge.bus.on("message:chat", (envelope) => received.push(envelope.from.streamId));
+
+  handlers.get("dataReceived")?.({
+    detail: {
+      uuid: "uuid_attacker",
+      data: createEnvelope(other, "chat", { text: "spoofed" }),
+    },
+  });
+  assert.deepEqual(received, []);
+
+  handlers.get("dataReceived")?.({
+    detail: {
+      uuid: "uuid_worker",
+      data: createEnvelope(other, "chat", { text: "real" }),
+    },
+  });
+  assert.deepEqual(received, [other.streamId]);
+});
+
 test("reply targets the sender of the original message", () => {
   const bridge = makeBridge();
   const incoming = createEnvelope(other, "chat", { text: "hello" });
@@ -137,6 +212,55 @@ test("requestHistory sends a history_request envelope", () => {
   assert.deepEqual(request.payload, { count: 25 });
 });
 
+test("history replay never exposes direct messages involving other peers", () => {
+  const bridge = makeBridge();
+  const handlers = new Map<string, (event: any) => void>();
+  const sent: unknown[] = [];
+  (bridge as unknown as {
+    sdk: {
+      addEventListener: (name: string, handler: (event: any) => void) => void;
+      sendData: (data: unknown) => boolean;
+    };
+    wireSDKEvents: () => void;
+  }).sdk = {
+    addEventListener(name, handler) {
+      handlers.set(name, handler);
+    },
+    sendData(data) {
+      sent.push(data);
+      return true;
+    },
+  };
+  (bridge as unknown as { wireSDKEvents: () => void }).wireSDKEvents();
+  bridge.peers.addPeer(other.streamId, "uuid_other");
+
+  const third: PeerIdentity = {
+    streamId: "reviewer_bot",
+    role: "agent",
+    name: "Reviewer",
+    instanceId: "inst_third",
+  };
+  bridge.bus.broadcast("chat", { text: "public" });
+  bridge.bus.send(other.streamId, "chat", { text: "to requester" });
+  bridge.bus.send(third.streamId, "chat", { text: "private outgoing" });
+  bridge.bus.handleIncoming(createEnvelope(other, "chat", { text: "from requester" }, { to: me.streamId }));
+  bridge.bus.handleIncoming(createEnvelope(third, "chat", { text: "private incoming" }, { to: me.streamId }));
+
+  handlers.get("dataReceived")?.({
+    detail: {
+      uuid: "uuid_other",
+      data: createEnvelope(other, "history_request", { count: 200 }, { to: me.streamId }),
+    },
+  });
+
+  const replayed = sent
+    .map((value) => parseEnvelope(value))
+    .filter((value): value is MessageEnvelope => value?.type === "history_replay")
+    .map((value) => (value.payload as MessageEnvelope).payload as { text?: string })
+    .map((payload) => payload.text);
+  assert.deepEqual(replayed, ["public", "to requester", "from requester"]);
+});
+
 test("sendRaw broadcasts arbitrary data when connected", () => {
   const bridge = makeBridge();
   const sent: Array<{ data: unknown; target?: unknown }> = [];
@@ -165,6 +289,41 @@ test("sendRaw targets a known peer by UUID", () => {
   assert.equal(ok, true);
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].target, { uuid: "uuid_other", allowFallback: true });
+});
+
+test("binary helpers use the SDK 1.4.1 lane and expose its limits", async () => {
+  const bridge = makeBridge();
+  const sent: Array<{ bytes: Uint8Array; uuid: string }> = [];
+  bridge.peers.addPeer(other.streamId, "uuid_other");
+
+  (bridge as unknown as {
+    sdk: {
+      sendBinary: (bytes: Uint8Array, uuid: string) => Promise<boolean>;
+      getBufferedAmount: (uuid: string, label: string) => number;
+      getMaxMessageSize: (uuid: string) => number;
+    };
+  }).sdk = {
+    async sendBinary(bytes, uuid) {
+      sent.push({ bytes, uuid });
+      return true;
+    },
+    getBufferedAmount(uuid, label) {
+      assert.equal(uuid, "uuid_other");
+      assert.equal(label, "bin");
+      return 4096;
+    },
+    getMaxMessageSize(uuid) {
+      assert.equal(uuid, "uuid_other");
+      return 262144;
+    },
+  };
+
+  const bytes = new Uint8Array([1, 2, 3]);
+  assert.equal(bridge.supportsBinary(), true);
+  assert.equal(await bridge.sendBinaryTo(other.streamId, bytes), true);
+  assert.deepEqual(sent, [{ bytes, uuid: "uuid_other" }]);
+  assert.equal(bridge.bufferedBytesFor(other.streamId), 4096);
+  assert.equal(bridge.maxMessageSizeFor(other.streamId), 262144);
 });
 
 test("sendRaw reports an SDK-level rejected send", () => {

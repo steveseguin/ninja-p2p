@@ -14,6 +14,7 @@ import {
   completeIncomingTransfer,
   createFailedFileAckPayload,
   createFileAckPayload,
+  discardIncomingTransfer,
   sendFileFromPath,
   type CompletedTransferResult,
 } from "./file-transfer.js";
@@ -1054,6 +1055,7 @@ function maybeHandleSidecarFileTransfer(bridge: VDOBridge, stateDir: string, env
 
 function handleIncomingFileOffer(bridge: VDOBridge, stateDir: string, envelope: MessageEnvelope): boolean {
   const payload = envelope.payload as FileOfferPayload;
+  const transferId = transferIdForError(envelope.payload);
   try {
     beginIncomingTransfer(stateDir, envelope.from, payload);
     storeInboxMessage(stateDir, createFileTransferEventEnvelope(envelope.from, "file_offered", {
@@ -1065,9 +1067,9 @@ function handleIncomingFileOffer(bridge: VDOBridge, stateDir: string, envelope: 
       totalChunks: payload.totalChunks,
     }));
   } catch (error) {
-    bridge.bus.send(envelope.from.streamId, "file_ack", createFailedFileAckPayload(payload.transferId, error));
+    bridge.bus.send(envelope.from.streamId, "file_ack", createFailedFileAckPayload(transferId, error));
     storeInboxMessage(stateDir, createFileTransferEventEnvelope(envelope.from, "file_receive_failed", {
-      transferId: payload.transferId,
+      transferId,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -1076,12 +1078,14 @@ function handleIncomingFileOffer(bridge: VDOBridge, stateDir: string, envelope: 
 
 function handleIncomingFileChunk(bridge: VDOBridge, stateDir: string, envelope: MessageEnvelope): boolean {
   const payload = envelope.payload as FileChunkPayload;
+  const transferId = transferIdForError(envelope.payload);
   try {
-    appendIncomingTransferChunk(stateDir, payload);
+    appendIncomingTransferChunk(stateDir, payload, envelope.from.streamId);
   } catch (error) {
-    bridge.bus.send(envelope.from.streamId, "file_ack", createFailedFileAckPayload(payload.transferId, error));
+    discardIncomingTransfer(stateDir, transferId, envelope.from.streamId);
+    bridge.bus.send(envelope.from.streamId, "file_ack", createFailedFileAckPayload(transferId, error));
     storeInboxMessage(stateDir, createFileTransferEventEnvelope(envelope.from, "file_receive_failed", {
-      transferId: payload.transferId,
+      transferId,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -1090,14 +1094,16 @@ function handleIncomingFileChunk(bridge: VDOBridge, stateDir: string, envelope: 
 
 function handleIncomingFileComplete(bridge: VDOBridge, stateDir: string, envelope: MessageEnvelope): boolean {
   const payload = envelope.payload as FileCompletePayload;
+  const transferId = transferIdForError(envelope.payload);
   try {
-    const completed = completeIncomingTransfer(stateDir, payload);
+    const completed = completeIncomingTransfer(stateDir, payload, envelope.from.streamId);
     bridge.bus.send(envelope.from.streamId, "file_ack", createFileAckPayload(completed));
     storeInboxMessage(stateDir, createReceivedFileEventEnvelope(envelope.from, completed));
   } catch (error) {
-    bridge.bus.send(envelope.from.streamId, "file_ack", createFailedFileAckPayload(payload.transferId, error));
+    discardIncomingTransfer(stateDir, transferId, envelope.from.streamId);
+    bridge.bus.send(envelope.from.streamId, "file_ack", createFailedFileAckPayload(transferId, error));
     storeInboxMessage(stateDir, createFileTransferEventEnvelope(envelope.from, "file_receive_failed", {
-      transferId: payload.transferId,
+      transferId,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -1105,7 +1111,9 @@ function handleIncomingFileComplete(bridge: VDOBridge, stateDir: string, envelop
 }
 
 function handleIncomingFileAck(stateDir: string, envelope: MessageEnvelope): boolean {
+  if (typeof envelope.payload !== "object" || envelope.payload === null) return true;
   const payload = envelope.payload as FileAckPayload;
+  if (typeof payload.transferId !== "string" || typeof payload.ok !== "boolean") return true;
   storeInboxMessage(stateDir, createFileTransferEventEnvelope(envelope.from, payload.ok ? "file_delivered" : "file_delivery_failed", {
     transferId: payload.transferId,
     name: payload.name ?? null,
@@ -1117,6 +1125,12 @@ function handleIncomingFileAck(stateDir: string, envelope: MessageEnvelope): boo
     error: payload.error ?? null,
   }));
   return true;
+}
+
+function transferIdForError(payload: unknown): string {
+  if (typeof payload !== "object" || payload === null) return "invalid";
+  const transferId = (payload as Record<string, unknown>).transferId;
+  return typeof transferId === "string" && transferId ? transferId.slice(0, 128) : "invalid";
 }
 
 function createReceivedFileEventEnvelope(from: PeerIdentity, completed: CompletedTransferResult): MessageEnvelope {
@@ -1588,6 +1602,7 @@ async function runFetch(
   const bridge = createSwarmBridge(options, options.name || "Fetcher", "fetcher");
 
   let done: ((completion: SwarmCompletion | null) => void) | null = null;
+  let failed: string | null = null;
   const finished = new Promise<SwarmCompletion | null>((resolve) => { done = resolve; });
 
   const manager = new SwarmManager({
@@ -1596,6 +1611,10 @@ async function runFetch(
     workDir: swarmWorkDir(),
     log: (message) => console.log(message),
     onComplete: (completion) => done?.(completion),
+    onError: (message) => {
+      failed = message;
+      done?.(null);
+    },
   });
 
   await bridge.connect();
@@ -1603,7 +1622,9 @@ async function runFetch(
   console.log(`joined ${options.room} as ${options.streamId}, looking for "${query}"`);
 
   // Offers arrive on announce, so give the room a moment before giving up.
-  const deadline = Date.now() + Math.min(timeoutMs || 300_000, 60_000);
+  const deadline = timeoutMs > 0
+    ? Date.now() + Math.min(timeoutMs, 60_000)
+    : Number.POSITIVE_INFINITY;
   let manifest = manager.resolveOffer(query);
   while (!manifest && Date.now() < deadline) {
     await delay(500);
@@ -1627,7 +1648,14 @@ async function runFetch(
 
   console.log(`fetching ${manifest.name} (${formatBytes(manifest.size)}, ${manifest.totalChunks} chunks)`);
   const startedAt = Date.now();
-  manager.fetch(manifest.fileId);
+  const accepted = manager.fetch(manifest.fileId);
+  if (!accepted && failed) {
+    console.error(failed);
+    manager.stop();
+    await bridge.disconnect();
+    process.exitCode = 1;
+    return;
+  }
 
   const progressTimer = setInterval(() => {
     const progress = manager.sessionFor(manifest!.fileId)?.progress();
@@ -1646,7 +1674,11 @@ async function runFetch(
 
   if (!completion) {
     const progress = manager.sessionFor(manifest.fileId)?.progress();
-    console.error(`timed out after ${formatDuration(Date.now() - startedAt)} at ${progress?.percent ?? 0}%`);
+    if (failed) {
+      console.error(failed);
+    } else {
+      console.error(`timed out after ${formatDuration(Date.now() - startedAt)} at ${progress?.percent ?? 0}%`);
+    }
     manager.stop();
     await bridge.disconnect();
     process.exitCode = 1;

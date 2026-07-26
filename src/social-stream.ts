@@ -13,6 +13,8 @@
  * that would remove the relay entirely.
  */
 
+import { createRequire } from "node:module";
+
 export const DEFAULT_SSN_HOST = "wss://io.socialstream.ninja";
 export const DEFAULT_SSN_IN_CHANNEL = 4;
 export const DEFAULT_SSN_OUT_CHANNEL = 1;
@@ -43,6 +45,13 @@ export type SocialSocket = {
 };
 
 export type SocialSocketFactory = (url: string) => SocialSocket;
+type SocialSocketConstructor = new (url: string) => SocialSocket;
+type SocketModule = {
+  WebSocket?: SocialSocketConstructor;
+  default?: SocialSocketConstructor;
+};
+
+const requireFromHere = createRequire(import.meta.url);
 
 export type SocialStreamBridgeOptions = {
   session: string;
@@ -238,12 +247,39 @@ export class SocialStreamBridge {
   }
 }
 
-function defaultSocketFactory(url: string): SocialSocket {
-  const Impl = globalThis.WebSocket;
-  if (!Impl) {
-    throw new Error("no global WebSocket; use Node 22 or newer");
+/**
+ * Pick the platform WebSocket when present, with `ws` as the Node 20 fallback.
+ *
+ * Node 20 is the package's supported floor but does not expose WebSocket by
+ * default. The bridge used to advertise Node 20 support and then fail at
+ * runtime on exactly that version.
+ */
+export function resolveSocialSocketConstructor(
+  platform: SocialSocketConstructor | null | undefined =
+    globalThis.WebSocket as unknown as SocialSocketConstructor | undefined,
+  load: () => unknown = () => requireFromHere("ws"),
+): SocialSocketConstructor {
+  if (platform) return platform;
+
+  let loaded: unknown;
+  try {
+    loaded = load();
+  } catch (error) {
+    throw new Error(`no WebSocket implementation available: ${errorMessage(error)}`);
   }
-  return new Impl(url) as unknown as SocialSocket;
+  const module = loaded as SocketModule | SocialSocketConstructor;
+  const implementation = typeof module === "function"
+    ? module
+    : module.WebSocket ?? module.default;
+  if (typeof implementation !== "function") {
+    throw new Error("the ws package did not export a WebSocket constructor");
+  }
+  return implementation;
+}
+
+function defaultSocketFactory(url: string): SocialSocket {
+  const Impl = resolveSocialSocketConstructor();
+  return new Impl(url);
 }
 
 function parseJson(data: unknown): unknown {

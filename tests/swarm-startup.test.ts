@@ -75,9 +75,13 @@ describe("announce handshake", () => {
         send: recordingSend([]),
       });
 
-      // Without this the reply to a reply would loop forever between two peers.
-      leech.onPeerAnnounce("seed", ChunkMap.full(manifest.totalChunks).toBase64());
-      assert.equal(leech.canHelp("seed"), false);
+      try {
+        // Without this the reply to a reply would loop forever between two peers.
+        leech.onPeerAnnounce("seed", ChunkMap.full(manifest.totalChunks).toBase64());
+        assert.equal(leech.canHelp("seed"), false);
+      } finally {
+        leech.close();
+      }
     });
   });
 

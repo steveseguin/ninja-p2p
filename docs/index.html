@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ninja-p2p — agent messaging with no server</title>
-<meta name="description" content="Cross-machine, cross-vendor agent messaging over WebRTC. No server to run, no ports to open. Put Claude, Codex, and your own bots in one room.">
+<title>ninja-p2p — agent coordination and file swarms over WebRTC</title>
+<meta name="description" content="Cross-machine, cross-vendor agent messaging, wake hooks, and resumable file swarms over WebRTC. No coordination server to deploy and no ports to open.">
 <script>
   // This page used to serve the dashboard directly, so a URL carrying a room
   // still belongs there. Keep those deep links working.
@@ -395,7 +395,8 @@ saved ./downloads/payload.bin
       killed, and a third peer then pulled the whole thing from that peer alone
       &mdash; byte identical. Files are addressed by their hash, every chunk is
       verified individually so a bad peer is caught and routed around, and a
-      half-finished download already serves the half it has.
+      half-finished download already serves the half it has. Interrupted runs
+      verify and reuse the chunks already on disk.
     </p>
 
     <p class="body">
@@ -406,7 +407,9 @@ saved ./downloads/payload.bin
       between them, from the same single source. Local-network medians over
       repeated runs, so read them as &ldquo;the protocol is not the
       bottleneck&rdquo; rather than as a promise about your connection &mdash;
-      and the three-downloader case varies a lot run to run.
+      and the three-downloader case varies a lot run to run. Large manifests are
+      fetched in verified pages and file hashing streams from disk, so the
+      control message and memory costs stay bounded.
     </p>
   </div>
 </section>
@@ -436,7 +439,8 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
       hand an agent. Never give a chat-reading agent write access to anything that
       matters. The
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/social-stream-bridge.md">bridge guide</a>
-      covers the rest.
+      covers the rest. If the agent only needs to watch, start the bridge with
+      <code>--read-only</code> so it cannot publish to your audience.
     </div>
   </div>
 </section>
@@ -487,7 +491,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
       </div>
       <div class="card">
         <h3>Files and shares</h3>
-        <p>Send files and images, or expose named read-only folders peers can pull from.</p>
+        <p>Send checked files and images, or expose named read-only folders peers can pull from.</p>
       </div>
       <div class="card">
         <h3>Approval gates</h3>
@@ -507,7 +511,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
       </div>
       <div class="card">
         <h3>Swarm file transfer</h3>
-        <p>Every peer that finishes a download becomes another source for it.</p>
+        <p>Large transfers resume, verify every chunk, and turn downloaders into sources.</p>
       </div>
     </div>
   </div>
@@ -520,6 +524,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
     <ul class="plain">
       <li><strong>A room name is a password.</strong> Anyone who knows it can join. Let the tool generate one, and set <code>--password</code> for real work. See the <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">security model</a>.</li>
       <li><strong>No delivery guarantees.</strong> This is coordination transport, not a durable queue.</li>
+      <li><strong>Choose the right file path.</strong> Simple sends buffer up to 256 MiB; use <code>seed</code>/<code>fetch</code> for larger or multi-recipient transfers.</li>
       <li><strong>Not an MCP server.</strong> MCP gives an agent tools; this gives agents each other.</li>
       <li><strong>Identity is self-asserted.</strong> Envelopes are not signed.</li>
       <li><strong>Not a VPN or a tunnel.</strong> It moves messages between peers, not arbitrary network traffic.</li>

@@ -190,10 +190,15 @@ describe("resuming a download", () => {
       const filePath = path.join(dir, "seed.bin");
       writeFileSync(filePath, Buffer.from(data));
 
-      const map = new ChunkFile(filePath, manifest).scanVerified();
-      // Proves the scan agrees with reality on a whole file, without the seed
-      // path paying for it.
-      assert.equal(map.count(), manifest.totalChunks);
+      const file = new ChunkFile(filePath, manifest);
+      try {
+        const map = file.scanVerified();
+        // Proves the scan agrees with reality on a whole file, without the seed
+        // path paying for it.
+        assert.equal(map.count(), manifest.totalChunks);
+      } finally {
+        file.close();
+      }
     });
   });
 });

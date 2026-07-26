@@ -10,6 +10,9 @@ import {
   bytesToBase64,
   completeIncomingTransfer,
   createFileAckPayload,
+  discardIncomingTransfer,
+  MAX_INCOMPLETE_TRANSFERS,
+  MAX_BASIC_TRANSFER_SIZE,
   prepareFileTransferFromPath,
 } from "../src/file-transfer.js";
 import { createMessageId, type FileOfferPayload, type PeerIdentity } from "../src/protocol.js";
@@ -73,6 +76,25 @@ test("sendFile sends offer, chunk, and complete envelopes to a connected peer", 
   }
 });
 
+test("sendFile reports when the transport rejects the transfer", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const filePath = path.join(dir, "notes.txt");
+    writeFileSync(filePath, "hello", "utf8");
+    const bridge = makeBridge();
+    (bridge as unknown as { connected: boolean }).connected = true;
+    bridge.peers.addPeer(other.streamId, "uuid_receiver");
+    bridge.bus.setSendDataFn(() => false);
+
+    assert.throws(
+      () => bridge.sendFile(other.streamId, filePath),
+      /did not accept file offer/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("incoming file transfer assembles bytes on disk and creates an ack payload", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
   try {
@@ -81,7 +103,7 @@ test("incoming file transfer assembles bytes on disk and creates an ack payload"
     writeFileSync(sourcePath, sourceBytes);
 
     const prepared = prepareFileTransferFromPath(sourcePath, "image");
-    const chunkSize = 4;
+    const chunkSize = 1_024;
     const offer: FileOfferPayload = {
       transferId: createMessageId(),
       name: prepared.name,
@@ -133,9 +155,9 @@ test("incoming file transfer rejects out-of-order chunks", () => {
       name: "notes.txt",
       mimeType: "text/plain",
       kind: "file",
-      size: 6,
-      sha256: "abc",
-      chunkSize: 3,
+      size: 2_048,
+      sha256: "0".repeat(64),
+      chunkSize: 1_024,
       totalChunks: 2,
     };
     beginIncomingTransfer(dir, other, offer);
@@ -145,9 +167,145 @@ test("incoming file transfer rejects out-of-order chunks", () => {
         transferId: offer.transferId,
         index: 1,
         totalChunks: 2,
-        data: bytesToBase64(new Uint8Array([1, 2, 3])),
+        data: bytesToBase64(new Uint8Array(1_024)),
       });
     }, /unexpected chunk index/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("incoming transfer ids cannot escape the state directory", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    assert.throws(
+      () => beginIncomingTransfer(dir, other, {
+        transferId: "..\\..\\outside",
+        name: "notes.txt",
+        mimeType: "text/plain",
+        kind: "file",
+        size: 0,
+        sha256: "0".repeat(64),
+        chunkSize: 1_024,
+        totalChunks: 0,
+      }),
+      /invalid transfer id/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("incoming offers are bounded and internally consistent", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const base: FileOfferPayload = {
+      transferId: createMessageId(),
+      name: "large.bin",
+      mimeType: "application/octet-stream",
+      kind: "file",
+      size: MAX_BASIC_TRANSFER_SIZE + 1,
+      sha256: "0".repeat(64),
+      chunkSize: 1_024,
+      totalChunks: 1,
+    };
+    assert.throws(() => beginIncomingTransfer(dir, other, base), /maximum/);
+    assert.throws(
+      () => beginIncomingTransfer(dir, other, {
+        ...base,
+        size: 4_096,
+        totalChunks: 3,
+      }),
+      /does not match/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("incoming chunks must match the offered size and sender", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const offer: FileOfferPayload = {
+      transferId: createMessageId(),
+      name: "notes.txt",
+      mimeType: "text/plain",
+      kind: "file",
+      size: 1_024,
+      sha256: "0".repeat(64),
+      chunkSize: 1_024,
+      totalChunks: 1,
+    };
+    beginIncomingTransfer(dir, other, offer);
+
+    assert.throws(
+      () => appendIncomingTransferChunk(dir, {
+        transferId: offer.transferId,
+        index: 0,
+        totalChunks: 1,
+        data: bytesToBase64(new Uint8Array(2_048)),
+      }, "attacker"),
+      /does not own/,
+    );
+    assert.throws(
+      () => appendIncomingTransferChunk(dir, {
+        transferId: offer.transferId,
+        index: 0,
+        totalChunks: 1,
+        data: bytesToBase64(new Uint8Array(2_048)),
+      }, other.streamId),
+      /unexpected chunk length/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("incomplete transfer count is bounded and failed transfers can be discarded", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const ids: string[] = [];
+    for (let index = 0; index < MAX_INCOMPLETE_TRANSFERS; index += 1) {
+      const transferId = createMessageId();
+      ids.push(transferId);
+      beginIncomingTransfer(dir, other, {
+        transferId,
+        name: `${index}.txt`,
+        mimeType: "text/plain",
+        kind: "file",
+        size: 0,
+        sha256: "0".repeat(64),
+        chunkSize: 1_024,
+        totalChunks: 0,
+      });
+    }
+
+    assert.throws(
+      () => beginIncomingTransfer(dir, other, {
+        transferId: createMessageId(),
+        name: "one-too-many.txt",
+        mimeType: "text/plain",
+        kind: "file",
+        size: 0,
+        sha256: "0".repeat(64),
+        chunkSize: 1_024,
+        totalChunks: 0,
+      }),
+      /too many incomplete/,
+    );
+
+    assert.equal(discardIncomingTransfer(dir, ids[0], "attacker"), false);
+    assert.equal(discardIncomingTransfer(dir, ids[0], other.streamId), true);
+    assert.doesNotThrow(() => beginIncomingTransfer(dir, other, {
+      transferId: createMessageId(),
+      name: "replacement.txt",
+      mimeType: "text/plain",
+      kind: "file",
+      size: 0,
+      sha256: "0".repeat(64),
+      chunkSize: 1_024,
+      totalChunks: 0,
+    }));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

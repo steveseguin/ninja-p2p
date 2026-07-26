@@ -17,8 +17,8 @@ room.
 
 ### Swarm file transfer
 
-`ninja-p2p seed <file>` and `ninja-p2p fetch <name-or-id>` replace the old
-one-sender-pushes-to-one-receiver path.
+`ninja-p2p seed <file>` and `ninja-p2p fetch <name-or-id>` add a bulk,
+multi-recipient path alongside the existing one-to-one `send-file` flow.
 
 - Files are content-addressed by sha256 and every chunk is hashed individually,
   so a peer serving corrupt data is caught per chunk and routed around.
@@ -31,6 +31,10 @@ one-sender-pushes-to-one-receiver path.
 - Interrupted downloads resume, verifying what is already on disk by hashing it.
 - Concurrent downloads of one file are kept apart by destination and locked, so
   they cannot overwrite each other.
+- Large chunk-hash manifests are requested in verified, bounded pages instead
+  of eventually exceeding the data-channel message limit.
+- Seeding and final verification stream from disk, keeping memory bounded for
+  large files.
 
 Median 12.7 MB/s for one downloader on a local network; roughly 13 MB/s total
 across three. The multi-downloader figure varies substantially run to run — see
@@ -62,6 +66,31 @@ the README for the spread.
 - A disconnect no longer logs that a reconnect is coming when it is not.
 - Swarm traffic is never retained or replayed: it was filling the message
   history ring, evicting the conversation that history replay exists to serve.
+- Peer-controlled transfer IDs can no longer reach filesystem paths. Simple
+  file offers and chunks now have strict shape, sender, and size validation,
+  never overwrite an existing destination, and do not pollute message history.
+- Wire envelopes have bounded identity and routing fields, and an established
+  WebRTC connection cannot silently switch to another peer's stream ID.
+- Empty swarm files finish correctly, fresh downloads claim their lock before
+  the first chunk, and an invalid completed part is discarded instead of
+  poisoning every retry.
+- The Social Stream bridge now works on the documented Node 20 floor via its
+  explicit `ws` fallback.
+- The SDK dependency floor is now 1.4.1, enabling its published binary,
+  backpressure, teardown, and TypeScript surfaces without a local type shim.
+- Wake subprocess errors no longer crash or permanently wedge the runner, and
+  peer text is bounded before entering the process environment.
+- The dashboard observes rejected sends, applies real data-channel
+  backpressure, validates inbound transfers, and reports delivery
+  acknowledgements.
+- History replay now returns only broadcasts and messages involving the
+  requester; a peer can no longer disclose unrelated direct-message history.
+- The mobile dashboard keeps chat controls reachable during long conversations,
+  hides replayed control-message noise, and reports intentional disconnects
+  accurately.
+- The full suite now closes swarm fixtures deterministically on the Node 20
+  support floor. A reusable live swarm validator covers both the 1.4.1 binary
+  lane and the 1.4.0 base64 fallback.
 
 ### Documentation
 
@@ -70,6 +99,10 @@ the README for the spread.
 - New: the security model, the Social Stream bridge guide, and a protocol and
   reliability document covering how transfer actually behaves, including what
   was measured and deliberately not built.
+- The README and bundled Codex/Claude skills now distinguish simple sends,
+  allowlisted shared folders, browser limits, and resumable swarm transfer.
+- The library guide now documents the actual binary API (`sendBinaryTo` and the
+  `binary` event) instead of implying that `sendRaw` bypasses JSON.
 
 ## 0.1.4 and earlier
 

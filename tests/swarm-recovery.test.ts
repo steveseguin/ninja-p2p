@@ -21,11 +21,25 @@ function bytes(length: number, seed = 1): Uint8Array {
   return out;
 }
 
+const sessionsByDir = new Map<string, Set<SwarmSession>>();
+
+function trackSession<T extends SwarmSession>(dir: string, session: T): T {
+  let sessions = sessionsByDir.get(dir);
+  if (!sessions) {
+    sessions = new Set();
+    sessionsByDir.set(dir, sessions);
+  }
+  sessions.add(session);
+  return session;
+}
+
 function withTempDir<T>(fn: (dir: string) => T): T {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-recovery-"));
   try {
     return fn(dir);
   } finally {
+    for (const session of sessionsByDir.get(dir) ?? []) session.close();
+    sessionsByDir.delete(dir);
     rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -65,13 +79,13 @@ function harness(dir: string, peers: string[]): Harness {
     announceTo: () => {},
   };
 
-  const session = new SwarmSession({
+  const session = trackSession(dir, new SwarmSession({
     manifest,
     partPath: path.join(dir, "x.part"),
     savedPath: path.join(dir, "x.bin"),
     send,
     now: () => clock.now,
-  });
+  }));
   for (const peerId of peers) {
     session.setPeerChunks(peerId, ChunkMap.full(manifest.totalChunks));
   }

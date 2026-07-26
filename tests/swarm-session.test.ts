@@ -13,6 +13,24 @@ function bytes(length: number, seed = 1): Uint8Array {
   return out;
 }
 
+const sessionsByDir = new Map<string, Set<SwarmSession>>();
+
+function trackSession<T extends SwarmSession>(dir: string, session: T): T {
+  let sessions = sessionsByDir.get(dir);
+  if (!sessions) {
+    sessions = new Set();
+    sessionsByDir.set(dir, sessions);
+  }
+  sessions.add(session);
+  return session;
+}
+
+function removeTempDir(dir: string): void {
+  for (const session of sessionsByDir.get(dir) ?? []) session.close();
+  sessionsByDir.delete(dir);
+  rmSync(dir, { recursive: true, force: true });
+}
+
 type Envelope =
   | { type: "request"; from: string; to: string; index: number }
   | { type: "chunk"; from: string; to: string; index: number; data: Uint8Array }
@@ -123,13 +141,13 @@ test("a leecher downloads a whole file from a single seeder", () => {
     const { manifest, filePath } = seedFile(dir, "source.bin", data, 4_096);
     const net = new SwarmNetwork();
 
-    net.sessions.set("seed", createSeedSession(manifest, filePath, net.sendFor("seed")));
-    net.sessions.set("leech", new SwarmSession({
+    net.sessions.set("seed", trackSession(dir, createSeedSession(manifest, filePath, net.sendFor("seed"))));
+    net.sessions.set("leech", trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "leech.part"),
       savedPath: path.join(dir, "leech.bin"),
       send: net.sendFor("leech"),
-    }));
+    })));
 
     net.sessions.get("seed")!.announce();
     net.deliver();
@@ -139,7 +157,89 @@ test("a leecher downloads a whole file from a single seeder", () => {
     assert.equal(result.ok, true, result.error);
     assert.equal(sha256Hex(new Uint8Array(readFileSync(result.savedPath!))), manifest.fileId);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
+  }
+});
+
+test("a fresh download claims its part file before the first chunk arrives", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-swarmnet-"));
+  const data = bytes(8_000, 3);
+  const manifest = buildManifest(data, "locked.bin", "application/octet-stream", 4_096);
+  const partPath = path.join(dir, "shared.part");
+  const send: SwarmSend = {
+    request: () => true,
+    chunk: () => {},
+    have: () => {},
+    announce: () => {},
+    announceTo: () => {},
+  };
+  let first: SwarmSession | null = null;
+  try {
+    first = trackSession(dir, new SwarmSession({
+      manifest,
+      partPath,
+      savedPath: path.join(dir, "one.bin"),
+      send,
+    }));
+    assert.throws(
+      () => new SwarmSession({
+        manifest,
+        partPath,
+        savedPath: path.join(dir, "two.bin"),
+        send,
+      }),
+      /another download .* already running/,
+    );
+  } finally {
+    first?.close();
+    removeTempDir(dir);
+  }
+});
+
+test("an empty file completes without waiting for a chunk", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-swarmnet-"));
+  try {
+    const manifest = buildManifest(new Uint8Array(0), "empty.txt", "text/plain");
+    const savedPath = path.join(dir, "empty.txt");
+    const session = trackSession(dir, new SwarmSession({
+      manifest,
+      partPath: path.join(dir, "empty.part"),
+      savedPath,
+      send: {
+        request: () => true,
+        chunk: () => {},
+        have: () => {},
+        announce: () => {},
+        announceTo: () => {},
+      },
+    }));
+
+    assert.equal(session.isComplete(), true);
+    const result = session.finish();
+    assert.equal(result.ok, true, result.error);
+    assert.equal(readFileSync(savedPath).byteLength, 0);
+  } finally {
+    removeTempDir(dir);
+  }
+});
+
+test("finish is harmless when called on a seed session", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-swarmnet-"));
+  try {
+    const data = bytes(4_000, 5);
+    const { manifest, filePath } = seedFile(dir, "seed.bin", data, 1_024);
+    const seed = trackSession(dir, createSeedSession(manifest, filePath, {
+      request: () => true,
+      chunk: () => {},
+      have: () => {},
+      announce: () => {},
+      announceTo: () => {},
+    }));
+    const result = seed.finish();
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(new Uint8Array(readFileSync(filePath)), data);
+  } finally {
+    removeTempDir(dir);
   }
 });
 
@@ -151,13 +251,13 @@ test("a peer re-serves a file it downloaded, after the original seeder leaves", 
     const net = new SwarmNetwork();
 
     // Phase 1: A pulls the file from the original seeder.
-    net.sessions.set("seed", createSeedSession(manifest, filePath, net.sendFor("seed")));
-    net.sessions.set("a", new SwarmSession({
+    net.sessions.set("seed", trackSession(dir, createSeedSession(manifest, filePath, net.sendFor("seed"))));
+    net.sessions.set("a", trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "a.part"),
       savedPath: path.join(dir, "a.bin"),
       send: net.sendFor("a"),
-    }));
+    })));
 
     net.sessions.get("seed")!.announce();
     net.deliver();
@@ -166,15 +266,18 @@ test("a peer re-serves a file it downloaded, after the original seeder leaves", 
 
     // Phase 2: the seeder disappears entirely, and B arrives knowing only A.
     net.sessions.delete("seed");
-    const aSeeder = createSeedSession(manifest, path.join(dir, "a.bin"), net.sendFor("a"));
+    const aSeeder = trackSession(
+      dir,
+      createSeedSession(manifest, path.join(dir, "a.bin"), net.sendFor("a")),
+    );
     net.sessions.set("a", aSeeder);
 
-    net.sessions.set("b", new SwarmSession({
+    net.sessions.set("b", trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "b.part"),
       savedPath: path.join(dir, "b.bin"),
       send: net.sendFor("b"),
-    }));
+    })));
 
     aSeeder.announce();
     net.deliver();
@@ -185,7 +288,7 @@ test("a peer re-serves a file it downloaded, after the original seeder leaves", 
     assert.equal(sha256Hex(new Uint8Array(readFileSync(result.savedPath!))), manifest.fileId);
     assert.ok(net.served("a", "b") > 0, "B must have been served by A, not the original seeder");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 
@@ -196,14 +299,14 @@ test("a partially complete peer serves what it already has", () => {
     const { manifest, filePath } = seedFile(dir, "big.bin", data, 4_096);
     const net = new SwarmNetwork();
 
-    net.sessions.set("seed", createSeedSession(manifest, filePath, net.sendFor("seed")));
-    const a = new SwarmSession({
+    net.sessions.set("seed", trackSession(dir, createSeedSession(manifest, filePath, net.sendFor("seed"))));
+    const a = trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "a.part"),
       savedPath: path.join(dir, "a.bin"),
       send: net.sendFor("a"),
       maxInFlightTotal: 2,
-    });
+    }));
     net.sessions.set("a", a);
 
     net.sessions.get("seed")!.announce();
@@ -218,12 +321,12 @@ test("a partially complete peer serves what it already has", () => {
     assert.ok(a.chunkMap().count() > 0, "A should hold some chunks");
 
     // B joins and can pull from both the seeder and the half-finished A.
-    net.sessions.set("b", new SwarmSession({
+    net.sessions.set("b", trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "b.part"),
       savedPath: path.join(dir, "b.bin"),
       send: net.sendFor("b"),
-    }));
+    })));
     net.sessions.get("seed")!.announce();
     a.announce();
     net.deliver();
@@ -233,7 +336,7 @@ test("a partially complete peer serves what it already has", () => {
     assert.equal(net.sessions.get("b")!.finish().ok, true);
     assert.ok(net.served("a", "b") > 0, "the partially complete peer should have contributed");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 
@@ -244,14 +347,17 @@ test("a peer serving corrupt chunks is detected and routed around", () => {
     const { manifest, filePath } = seedFile(dir, "honest.bin", data, 4_096);
     const net = new SwarmNetwork();
 
-    net.sessions.set("honest", createSeedSession(manifest, filePath, net.sendFor("honest")));
+    net.sessions.set(
+      "honest",
+      trackSession(dir, createSeedSession(manifest, filePath, net.sendFor("honest"))),
+    );
 
-    const leech = new SwarmSession({
+    const leech = trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "leech.part"),
       savedPath: path.join(dir, "leech.bin"),
       send: net.sendFor("leech"),
-    });
+    }));
     net.sessions.set("leech", leech);
 
     // A liar that claims to hold everything and answers with well-formed
@@ -272,7 +378,7 @@ test("a peer serving corrupt chunks is detected and routed around", () => {
     assert.equal(leech.statsFor("liar")?.delivered ?? 0, 0, "none of its chunks were accepted");
     assert.ok(net.served("honest", "leech") > 0, "the honest peer supplied the real bytes");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 
@@ -284,7 +390,7 @@ test("requests that never come back time out and are charged to the peer", () =>
 
     let clock = 1_000;
     const sent: number[] = [];
-    const session = new SwarmSession({
+    const session = trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "s.part"),
       savedPath: path.join(dir, "s.bin"),
@@ -297,7 +403,7 @@ test("requests that never come back time out and are charged to the peer", () =>
         announce: () => {},
         announceTo: () => {},
       },
-    });
+    }));
 
     session.setPeerChunks("ghost", ChunkMap.full(manifest.totalChunks));
     assert.ok(session.pump() > 0, "should issue requests");
@@ -311,7 +417,7 @@ test("requests that never come back time out and are charged to the peer", () =>
     assert.equal(session.statsFor("ghost")!.failures, expired);
     assert.equal(session.progress().inFlight, 0, "expired requests must free their slots");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 
@@ -320,12 +426,12 @@ test("removing a peer frees the chunks it owed", () => {
   try {
     const data = bytes(16_000, 12);
     const manifest = buildManifest(data, "gone.bin", "application/octet-stream", 4_096);
-    const session = new SwarmSession({
+    const session = trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "g.part"),
       savedPath: path.join(dir, "g.bin"),
       send: { request: () => true, chunk: () => {}, have: () => {}, announce: () => {}, announceTo: () => {} },
-    });
+    }));
 
     session.setPeerChunks("leaver", ChunkMap.full(manifest.totalChunks));
     session.pump();
@@ -335,7 +441,7 @@ test("removing a peer frees the chunks it owed", () => {
     assert.equal(session.progress().inFlight, 0, "their outstanding requests are never arriving");
     assert.equal(session.peerCount(), 0);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 
@@ -344,12 +450,12 @@ test("progress reports and finish refuses an incomplete transfer", () => {
   try {
     const data = bytes(12_000, 14);
     const manifest = buildManifest(data, "p.bin", "application/octet-stream", 4_096);
-    const session = new SwarmSession({
+    const session = trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "p.part"),
       savedPath: path.join(dir, "p.bin"),
       send: { request: () => true, chunk: () => {}, have: () => {}, announce: () => {}, announceTo: () => {} },
-    });
+    }));
 
     const before = session.progress();
     assert.equal(before.totalChunks, 3);
@@ -365,7 +471,7 @@ test("progress reports and finish refuses an incomplete transfer", () => {
     assert.equal(session.progress().haveChunks, 1);
     assert.equal(session.progress().percent, 33);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 
@@ -374,12 +480,12 @@ test("a duplicate chunk from a slower peer is accepted without penalty", () => {
   try {
     const data = bytes(8_000, 16);
     const manifest = buildManifest(data, "d.bin", "application/octet-stream", 4_096);
-    const session = new SwarmSession({
+    const session = trackSession(dir, new SwarmSession({
       manifest,
       partPath: path.join(dir, "d.part"),
       savedPath: path.join(dir, "d.bin"),
       send: { request: () => true, chunk: () => {}, have: () => {}, announce: () => {}, announceTo: () => {} },
-    });
+    }));
 
     assert.equal(session.onChunkData("fast", 0, data.subarray(0, 4_096)), true);
     // The same chunk arriving late from another peer is a race, not a fault.
@@ -387,6 +493,6 @@ test("a duplicate chunk from a slower peer is accepted without penalty", () => {
     assert.equal(session.statsFor("slow")?.failures ?? 0, 0);
     assert.equal(session.chunkMap().count(), 1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });

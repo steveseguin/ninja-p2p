@@ -6,6 +6,7 @@ import {
   buildSocialStreamUrl,
   describeSocialMessage,
   normalizeSocialMessage,
+  resolveSocialSocketConstructor,
   SocialStreamBridge,
   type SocialMessage,
   type SocialSocket,
@@ -23,6 +24,15 @@ test("buildSocialStreamUrl trims a trailing slash and encodes the session", () =
     buildSocialStreamUrl("a b/c", "wss://example.test/", 2, 3),
     "wss://example.test/join/a%20b%2Fc/2/3",
   );
+});
+
+test("Node 20 can fall back to the ws package when no global WebSocket exists", () => {
+  class FallbackSocket {}
+  const implementation = resolveSocialSocketConstructor(
+    null,
+    () => ({ WebSocket: FallbackSocket }),
+  );
+  assert.equal(implementation, FallbackSocket);
 });
 
 test("normalizeSocialMessage flattens a chat payload", () => {

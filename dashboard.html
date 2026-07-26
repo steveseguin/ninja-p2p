@@ -97,15 +97,18 @@ input:focus,select:focus{border-color:var(--accent)}
 @media(max-width:960px){
   body{flex-direction:column;height:auto;min-height:100vh;overflow:auto}
   #sidebar{width:100%;height:auto;max-height:none;border-right:none;border-bottom:1px solid var(--border)}
+  #main{overflow:visible}
+  #messages{overflow:visible;padding-bottom:72px}
   #peer-section{flex:none;max-height:180px}
   #details-panel{max-height:220px}
-  #chat-bar{flex-wrap:wrap;align-items:stretch}
+  #chat-bar{position:fixed;z-index:10;left:0;right:0;bottom:0;flex-wrap:wrap;align-items:stretch;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
   #chat-bar select{flex:1 1 160px;min-width:0}
   #chat-bar input{flex:1 1 100%}
   #chat-bar button{flex:0 0 auto}
 }
 
 @media(max-width:700px){
+  #messages{padding-bottom:124px}
   #conn-panel .row,
   .share-browser .row{flex-direction:column;align-items:stretch}
   .details-actions button,
@@ -162,14 +165,22 @@ input:focus,select:focus{border-color:var(--accent)}
   let connected = false;
   let myStreamId = '';
   let myIdentity = null;
-  const DASHBOARD_VERSION = '0.1.4';
+  const DASHBOARD_VERSION = '0.2.0';
   const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
   const peerUuidToStream = new Map();
   const messages = [];
   const MAX_MESSAGES = 500;
+  const MAX_BROWSER_RECEIVE_SIZE = 64 * 1024 * 1024;
+  const MAX_BROWSER_SEND_SIZE = 256 * 1024 * 1024;
+  const MAX_BROWSER_CHUNK_SIZE = 1024 * 1024;
+  const INCOMING_TRANSFER_TIMEOUT_MS = 120000;
+  const TRANSFER_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+  const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+  const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
   let selectedPeer = ''; // empty = broadcast
   const pendingRequests = new Map(); // requestId -> {command,target,args}
   const incomingTransfers = new Map(); // transferId -> browser-side receive state
+  const pendingUploads = new Map(); // transferId -> {name,target,timer}
   const shareBrowser = { peer: '', share: '', path: '', entries: [], truncated: false };
 
   // ── DOM refs ───────────────────────────────────────────────────────────
@@ -239,11 +250,6 @@ input:focus,select:focus{border-color:var(--accent)}
       binary += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
     }
     return btoa(binary);
-  }
-
-  async function sha256Hex(bytes) {
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
   function formatBytes(size) {
@@ -321,7 +327,11 @@ input:focus,select:focus{border-color:var(--accent)}
   function addMessage(type, sender, body, ts, meta, extra) {
     const msg = Object.assign({ type, sender, body, ts: ts || Date.now(), meta }, extra || {});
     messages.push(msg);
-    if (messages.length > MAX_MESSAGES) messages.shift();
+    if (messages.length > MAX_MESSAGES) {
+      const removed = messages.shift();
+      if (removed && removed.downloadUrl) URL.revokeObjectURL(removed.downloadUrl);
+      messagesEl.firstElementChild?.remove();
+    }
     renderMessage(msg);
   }
 
@@ -593,7 +603,18 @@ input:focus,select:focus{border-color:var(--accent)}
   function parseEnvelope(data) {
     try {
       const obj = typeof data === 'string' ? JSON.parse(data) : data;
-      if (obj && obj.v === 1 && typeof obj.type === 'string' && obj.from) return obj;
+      if (
+        obj &&
+        obj.v === 1 &&
+        typeof obj.id === 'string' &&
+        typeof obj.type === 'string' &&
+        obj.from &&
+        typeof obj.from === 'object' &&
+        typeof obj.from.streamId === 'string' &&
+        obj.from.streamId &&
+        Number.isFinite(obj.ts) &&
+        (obj.to === null || obj.to === undefined || typeof obj.to === 'string')
+      ) return obj;
       return null;
     } catch(e) { return null; }
   }
@@ -650,18 +671,37 @@ input:focus,select:focus{border-color:var(--accent)}
 
   function handleIncomingFileOffer(env) {
     const payload = env.payload || {};
-    incomingTransfers.set(payload.transferId, {
-      from: env.from,
-      name: payload.name || 'download',
-      mimeType: payload.mimeType || 'application/octet-stream',
-      transferKind: payload.kind || 'file',
-      size: payload.size || 0,
-      sha256: payload.sha256 || '',
-      totalChunks: payload.totalChunks || 0,
-      receivedBytes: 0,
-      parts: new Array(payload.totalChunks || 0),
-    });
-    addMessage('event', env.from.name || env.from.streamId, 'sending ' + (payload.name || 'file'), env.ts, payload.kind || 'file');
+    try {
+      validateIncomingFileOffer(payload);
+      if (incomingTransfers.has(payload.transferId)) {
+        throw new Error('transfer id is already active');
+      }
+      const promisedBytes = Array.from(incomingTransfers.values())
+        .reduce((total, transfer) => total + transfer.size, 0);
+      if (promisedBytes + payload.size > MAX_BROWSER_RECEIVE_SIZE) {
+        throw new Error('active browser downloads would exceed ' + formatBytes(MAX_BROWSER_RECEIVE_SIZE));
+      }
+
+      const transfer = {
+        from: env.from,
+        name: payload.name,
+        mimeType: payload.mimeType,
+        transferKind: payload.kind,
+        size: payload.size,
+        sha256: payload.sha256,
+        chunkSize: payload.chunkSize,
+        totalChunks: payload.totalChunks,
+        receivedChunks: 0,
+        receivedBytes: 0,
+        parts: new Array(payload.totalChunks),
+        timer: null,
+      };
+      incomingTransfers.set(payload.transferId, transfer);
+      armIncomingTransferTimeout(payload.transferId, transfer);
+      addMessage('event', env.from.name || env.from.streamId, 'sending ' + payload.name, env.ts, payload.kind);
+    } catch (err) {
+      rejectIncomingTransfer(env, payload.transferId, err);
+    }
     return true;
   }
 
@@ -669,9 +709,31 @@ input:focus,select:focus{border-color:var(--accent)}
     const payload = env.payload || {};
     const transfer = incomingTransfers.get(payload.transferId);
     if (!transfer) return true;
-    const bytes = bytesFromBase64(payload.data || '');
-    transfer.parts[payload.index] = bytes;
-    transfer.receivedBytes += bytes.length;
+    try {
+      if (transfer.from.streamId !== env.from.streamId) throw new Error('chunk came from the wrong peer');
+      if (!Number.isInteger(payload.index) || payload.index !== transfer.receivedChunks) {
+        throw new Error('unexpected chunk index');
+      }
+      if (payload.totalChunks !== transfer.totalChunks) throw new Error('chunk count changed');
+      if (typeof payload.data !== 'string' || !BASE64_PATTERN.test(payload.data)) {
+        throw new Error('chunk is not valid base64');
+      }
+      const expectedLength = Math.min(
+        transfer.chunkSize,
+        transfer.size - payload.index * transfer.chunkSize,
+      );
+      const maxEncodedLength = Math.ceil(expectedLength / 3) * 4;
+      if (payload.data.length !== maxEncodedLength) throw new Error('chunk length is invalid');
+      const bytes = bytesFromBase64(payload.data);
+      if (bytes.length !== expectedLength) throw new Error('chunk length is invalid');
+
+      transfer.parts[payload.index] = bytes;
+      transfer.receivedChunks += 1;
+      transfer.receivedBytes += bytes.length;
+      armIncomingTransferTimeout(payload.transferId, transfer);
+    } catch (err) {
+      rejectIncomingTransfer(env, payload.transferId, err);
+    }
     return true;
   }
 
@@ -681,10 +743,15 @@ input:focus,select:focus{border-color:var(--accent)}
     if (!transfer) return true;
 
     try {
-      const missing = transfer.parts.some((part) => !part);
-      if (missing) throw new Error('file transfer incomplete');
+      if (transfer.from.streamId !== env.from.streamId) throw new Error('completion came from the wrong peer');
+      if (payload.totalChunks !== transfer.totalChunks || transfer.receivedChunks !== transfer.totalChunks) {
+        throw new Error('file transfer incomplete');
+      }
       if (transfer.receivedBytes !== transfer.size || payload.size !== transfer.size) {
         throw new Error('file size mismatch');
+      }
+      if (payload.sha256 !== transfer.sha256 || !SHA256_PATTERN.test(payload.sha256 || '')) {
+        throw new Error('file checksum metadata changed');
       }
 
       const bytes = concatBytes(transfer.parts, transfer.size);
@@ -724,6 +791,7 @@ input:focus,select:focus{border-color:var(--accent)}
       }, { to: env.from.streamId });
       addMessage('system', 'System', 'File receive failed: ' + (err && err.message ? err.message : String(err)), Date.now());
     } finally {
+      clearTimeout(transfer.timer);
       incomingTransfers.delete(payload.transferId);
     }
 
@@ -732,8 +800,69 @@ input:focus,select:focus{border-color:var(--accent)}
 
   function handleIncomingFileAck(env) {
     const payload = env.payload || {};
+    const pending = pendingUploads.get(payload.transferId);
+    if (pending && pending.target === env.from.streamId) {
+      clearTimeout(pending.timer);
+      pendingUploads.delete(payload.transferId);
+      setUploadStatus(
+        payload.ok
+          ? 'Delivered ' + pending.name + ' to ' + pending.target + '.'
+          : 'Delivery failed for ' + pending.name + ': ' + (payload.error || 'receiver rejected it'),
+      );
+    }
     addMessage('event', env.from.name || env.from.streamId, (payload.ok ? 'delivery confirmed for ' : 'delivery failed for ') + (payload.name || payload.transferId), env.ts);
     return true;
+  }
+
+  function validateIncomingFileOffer(payload) {
+    if (!TRANSFER_ID_PATTERN.test(payload.transferId || '')) throw new Error('invalid transfer id');
+    if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.length > 1024 || payload.name.includes('\0')) {
+      throw new Error('invalid file name');
+    }
+    if (typeof payload.mimeType !== 'string' || payload.mimeType.length > 256) throw new Error('invalid mime type');
+    if (payload.kind !== 'file' && payload.kind !== 'image') throw new Error('invalid transfer kind');
+    if (!Number.isSafeInteger(payload.size) || payload.size < 0 || payload.size > MAX_BROWSER_RECEIVE_SIZE) {
+      throw new Error('browser downloads are limited to ' + formatBytes(MAX_BROWSER_RECEIVE_SIZE));
+    }
+    if (!SHA256_PATTERN.test(payload.sha256 || '')) throw new Error('invalid file checksum');
+    if (!Number.isInteger(payload.chunkSize) || payload.chunkSize < 1024 || payload.chunkSize > MAX_BROWSER_CHUNK_SIZE) {
+      throw new Error('invalid chunk size');
+    }
+    const expectedChunks = payload.size === 0 ? 0 : Math.ceil(payload.size / payload.chunkSize);
+    if (!Number.isInteger(payload.totalChunks) || payload.totalChunks !== expectedChunks) {
+      throw new Error('chunk count does not match file size');
+    }
+  }
+
+  function armIncomingTransferTimeout(transferId, transfer) {
+    clearTimeout(transfer.timer);
+    transfer.timer = setTimeout(() => {
+      if (incomingTransfers.get(transferId) !== transfer) return;
+      incomingTransfers.delete(transferId);
+      sendEnvelope('file_ack', {
+        transferId: transferId,
+        ok: false,
+        error: 'file transfer timed out',
+      }, { to: transfer.from.streamId });
+      addMessage('system', 'System', 'File receive timed out: ' + transfer.name, Date.now());
+    }, INCOMING_TRANSFER_TIMEOUT_MS);
+  }
+
+  function rejectIncomingTransfer(env, transferId, error) {
+    const active = incomingTransfers.get(transferId);
+    if (active) {
+      clearTimeout(active.timer);
+      incomingTransfers.delete(transferId);
+    }
+    const message = error && error.message ? error.message : String(error);
+    if (TRANSFER_ID_PATTERN.test(transferId || '')) {
+      sendEnvelope('file_ack', {
+        transferId: transferId,
+        ok: false,
+        error: message,
+      }, { to: env.from.streamId });
+    }
+    addMessage('system', 'System', 'File receive rejected: ' + message, Date.now());
   }
 
   // ── Connection ─────────────────────────────────────────────────────────
@@ -765,6 +894,7 @@ input:focus,select:focus{border-color:var(--accent)}
         host: 'wss://wss.vdo.ninja',
         debug: false
       });
+      const connectionSdk = sdk;
 
       // Wire events
       sdk.addEventListener('peerConnected', (e) => {
@@ -784,8 +914,8 @@ input:focus,select:focus{border-color:var(--accent)}
           topics: ['events', 'bots', 'support'],
           agent: {
             runtime: 'dashboard-ui',
-            summary: 'Browser operator console for room chat, bot inspection, shared-folder browsing, and file downloads',
-            can: ['chat', 'direct-message', 'command', 'operator', 'browse-shares', 'download-file'],
+            summary: 'Browser operator console for room chat, bot inspection, shared-folder browsing, and checked file transfers',
+            can: ['chat', 'direct-message', 'command', 'operator', 'browse-shares', 'send-file', 'receive-file'],
             asks: [
               { name: 'status', description: 'Ask connected bots for current status' },
               { name: 'peers', description: 'Ask connected bots for peer lists' },
@@ -794,7 +924,7 @@ input:focus,select:focus{border-color:var(--accent)}
             ]
           }
         });
-        try { sdk.sendData(announce, { UUID: uuid }); } catch(err) {}
+        try { sdk.sendData(announce, { uuid }); } catch(err) {}
       });
 
       sdk.addEventListener('dataReceived', (e) => {
@@ -805,6 +935,7 @@ input:focus,select:focus{border-color:var(--accent)}
 
         const sender = env.from.streamId;
         if (!sender || sender === myStreamId) return;
+        if (env.to && env.to !== myStreamId) return;
         // Update peer info
         upsertPeer(sender, uuid, env.from);
 
@@ -882,18 +1013,22 @@ input:focus,select:focus{border-color:var(--accent)}
             // Auto-respond with pong
             try {
               const pong = createEnvelope('pong', { pingId: env.id, pongTs: Date.now() }, { to: sender });
-              sdk.sendData(pong, { UUID: uuid });
+              sdk.sendData(pong, { uuid });
             } catch(err) {}
             break;
           case 'history_replay': {
             // Replay contains an original message as payload
             const orig = env.payload;
-            if (orig && orig.type) {
-              addMessage(orig.type, (orig.from?.name || 'replay'),
-                orig.payload?.text || orig.payload?.message || JSON.stringify(orig.payload),
-                orig.ts,
-                '[replay]');
-            }
+            if (!orig || !orig.type || !orig.from || typeof orig.from.streamId !== 'string') break;
+            // The replaying peer is allowed to share broadcasts and its
+            // conversation with this dashboard, never somebody else's DMs.
+            if (orig.from.streamId === myStreamId) break;
+            if (orig.to && orig.to !== myStreamId) break;
+            if (!['chat', 'event', 'command', 'command_response'].includes(orig.type)) break;
+            addMessage(orig.type, (orig.from.name || orig.from.streamId || 'replay'),
+              orig.payload?.text || orig.payload?.message || JSON.stringify(orig.payload),
+              orig.ts,
+              '[replay]');
             break;
           }
           default:
@@ -931,11 +1066,13 @@ input:focus,select:focus{border-color:var(--accent)}
       });
 
       sdk.addEventListener('disconnected', () => {
+        if (sdk !== connectionSdk) return;
         statusEl.textContent = 'WebSocket lost, reconnecting...';
         dot.classList.remove('on');
       });
 
       sdk.addEventListener('reconnected', () => {
+        if (sdk !== connectionSdk) return;
         statusEl.textContent = 'Reconnected';
         dot.classList.add('on');
       });
@@ -973,12 +1110,17 @@ input:focus,select:focus{border-color:var(--accent)}
   }
 
   function doDisconnect() {
-    if (sdk) {
-      try { sdk.leaveRoom(); } catch(e) {}
-      try { sdk.disconnect(); } catch(e) {}
-    }
+    const oldSdk = sdk;
     sdk = null;
     connected = false;
+    if (oldSdk) {
+      try { oldSdk.leaveRoom(); } catch(e) {}
+      try { oldSdk.disconnect(); } catch(e) {}
+    }
+    for (const upload of pendingUploads.values()) clearTimeout(upload.timer);
+    pendingUploads.clear();
+    for (const transfer of incomingTransfers.values()) clearTimeout(transfer.timer);
+    incomingTransfers.clear();
     peers.clear();
     dot.classList.remove('on');
     statusEl.textContent = 'Disconnected';
@@ -1135,6 +1277,9 @@ input:focus,select:focus{border-color:var(--accent)}
   // Matches the CLI's default. The receiver rebuilds the file by appending
   // chunks in order, so these must be sent sequentially and not reordered.
   const UPLOAD_CHUNK_SIZE = 12000;
+  const UPLOAD_BUFFER_HIGH_WATER = 512 * 1024;
+  const UPLOAD_SEND_TIMEOUT_MS = 15000;
+  const UPLOAD_ACK_TIMEOUT_MS = 30000;
   let uploadInProgress = false;
 
   function setUploadStatus(text) {
@@ -1157,15 +1302,22 @@ input:focus,select:focus{border-color:var(--accent)}
     }
 
     uploadInProgress = true;
+    let transferId = '';
     try {
+      if (file.size > MAX_BROWSER_SEND_SIZE) {
+        throw new Error(
+          'browser uploads are limited to ' + formatBytes(MAX_BROWSER_SEND_SIZE) +
+          '; use ninja-p2p seed/fetch for larger files',
+        );
+      }
       setUploadStatus('Reading ' + file.name + '...');
       const bytes = new Uint8Array(await file.arrayBuffer());
       const sha256 = await sha256Hex(bytes);
-      const transferId = randomId();
+      transferId = randomId();
       const totalChunks = bytes.length === 0 ? 0 : Math.ceil(bytes.length / UPLOAD_CHUNK_SIZE);
       const kind = (file.type || '').startsWith('image/') ? 'image' : 'file';
 
-      sendEnvelope('file_offer', {
+      await sendEnvelopeReliably('file_offer', {
         transferId: transferId,
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
@@ -1179,22 +1331,30 @@ input:focus,select:focus{border-color:var(--accent)}
       for (let index = 0; index < totalChunks; index += 1) {
         const start = index * UPLOAD_CHUNK_SIZE;
         const slice = bytes.subarray(start, Math.min(start + UPLOAD_CHUNK_SIZE, bytes.length));
-        sendEnvelope('file_chunk', {
+        await sendEnvelopeReliably('file_chunk', {
           transferId: transferId,
           index: index,
           totalChunks: totalChunks,
           data: bytesToBase64(slice)
         }, { to: target });
 
-        // Yield regularly: this keeps the tab responsive and gives the data
-        // channel a chance to drain instead of queueing the whole file at once.
+        // Older SDK builds do not expose bufferedAmount. Keep a small pacing
+        // fallback there; current builds are governed by the actual queue.
+        if (typeof sdk.getBufferedAmount !== 'function' && index % 8 === 7) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
         if (index % 16 === 15) {
           setUploadStatus('Sending ' + file.name + '... ' + Math.floor(((index + 1) / totalChunks) * 100) + '%');
-          await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
 
-      sendEnvelope('file_complete', {
+      const ackTimer = setTimeout(() => {
+        if (!pendingUploads.delete(transferId)) return;
+        setUploadStatus('Sent ' + file.name + ', but no confirmation arrived from ' + target + '.');
+      }, UPLOAD_ACK_TIMEOUT_MS);
+      pendingUploads.set(transferId, { name: file.name, target: target, timer: ackTimer });
+
+      await sendEnvelopeReliably('file_complete', {
         transferId: transferId,
         totalChunks: totalChunks,
         size: bytes.length,
@@ -1204,16 +1364,38 @@ input:focus,select:focus{border-color:var(--accent)}
       setUploadStatus('Sent ' + file.name + ' (' + formatBytes(bytes.length) + '), waiting for confirmation...');
       addMessage('event', 'You', 'sent ' + file.name + ' to ' + target, Date.now(), kind);
     } catch (err) {
+      const pending = transferId ? pendingUploads.get(transferId) : null;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingUploads.delete(transferId);
+      }
       setUploadStatus('Upload failed: ' + err.message);
     } finally {
       uploadInProgress = false;
     }
   }
 
+  function sendTarget(opts) {
+    if (!opts || !opts.to) return undefined;
+    const peer = peers.get(opts.to);
+    return peer && peer.uuid ? { uuid: peer.uuid } : { streamID: opts.to };
+  }
+
+  function sendCreatedEnvelope(env, opts, reportError) {
+    if (!sdk || !connected) return false;
+    try {
+      return sdk.sendData(env, sendTarget(opts)) !== false;
+    } catch (err) {
+      if (reportError) addMessage('system', 'System', 'Send error: ' + err.message, Date.now());
+      return false;
+    }
+  }
+
   function sendEnvelope(type, payload, opts) {
-    if (!sdk || !connected) return;
+    if (!sdk || !connected) return false;
     const env = createEnvelope(type, payload, opts);
-    if (type === 'command') {
+    const sent = sendCreatedEnvelope(env, opts, true);
+    if (sent && type === 'command') {
       pendingRequests.set(env.id, {
         command: payload && payload.command,
         target: opts && opts.to ? opts.to : null,
@@ -1221,20 +1403,41 @@ input:focus,select:focus{border-color:var(--accent)}
         createdAt: env.ts
       });
     }
-    try {
-      if (opts && opts.to) {
-        // Find the peer's UUID for targeted send
-        const p = peers.get(opts.to);
-        if (p) {
-          sdk.sendData(env, { UUID: p.uuid });
-        } else {
-          sdk.sendData(env, { streamID: opts.to });
-        }
-      } else {
-        sdk.sendData(env);
+    if (!sent) {
+      addMessage('system', 'System', 'Send rejected: no open channel to the requested peer.', Date.now());
+    }
+    return sent;
+  }
+
+  async function waitForUploadCapacity(target, deadline) {
+    if (!sdk || typeof sdk.getBufferedAmount !== 'function') return;
+    const uuid = peers.get(target)?.uuid;
+    if (!uuid) return;
+
+    while (sdk && connected) {
+      const buffered = sdk.getBufferedAmount(uuid);
+      if (buffered === null || buffered < UPLOAD_BUFFER_HIGH_WATER) return;
+      if (Date.now() >= deadline) throw new Error('data channel did not drain');
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error('disconnected during upload');
+  }
+
+  /**
+   * A false send means the SDK did not accept the message. Retry the same
+   * envelope (and therefore the same deduplication id) after the channel drains.
+   */
+  async function sendEnvelopeReliably(type, payload, opts) {
+    const deadline = Date.now() + UPLOAD_SEND_TIMEOUT_MS;
+    const env = createEnvelope(type, payload, opts);
+    for (;;) {
+      if (!sdk || !connected) throw new Error('disconnected during upload');
+      await waitForUploadCapacity(opts && opts.to, deadline);
+      if (sendCreatedEnvelope(env, opts, false)) return;
+      if (Date.now() >= deadline) {
+        throw new Error('peer did not accept ' + type + ' within ' + (UPLOAD_SEND_TIMEOUT_MS / 1000) + 's');
       }
-    } catch(err) {
-      addMessage('system', 'System', 'Send error: ' + err.message, Date.now());
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 

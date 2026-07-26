@@ -14,6 +14,22 @@ dramatically easier — that part is a proposal, not a dependency.
 
 ---
 
+## Install and preflight
+
+The bridge supports the package's Node 20 floor. `ws` is a direct dependency,
+so it does not rely on Node's optional global WebSocket implementation.
+
+```bash
+npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+ninja-p2p doctor
+```
+
+`doctor` checks the Node/WebRTC side and VDO.Ninja signaling. The quickest SSN
+check is still starting the bridge with `--echo` and sending one real chat
+message.
+
+---
+
 ## Setup
 
 ### 1. Turn on the two toggles
@@ -46,11 +62,28 @@ the toggles are right.
 | `--room <name>` | generated | ninja-p2p room to publish into |
 | `--id <streamId>` | `social` | the bridge's identity in the room |
 | `--topic <name>` | `social` | topic the chat events are published on |
-| `--read-only` | off | watch chat, refuse to send to it |
+| `--read-only` | off | watch chat, refuse to send to it; recommended unless publishing is required |
 | `--echo` | off | print each message to stdout |
 | `--in-channel <n>` | `4` | SSN channel carrying chat |
 | `--out-channel <n>` | `1` | SSN channel the extension listens on |
 | `--ssn-host <url>` | `wss://io.socialstream.ninja` | relay host |
+| `--password <value>` | `false` | optional VDO.Ninja room password; every room peer must match |
+
+---
+
+## Troubleshooting
+
+- **Connected, but no chat arrives:** enable both SSN toggles above, then send a
+  real message while `--echo` is running.
+- **A random or mistyped session still says connected:** the SSN relay currently
+  accepts the WebSocket without confirming that a publisher exists. A quiet
+  connection does not prove the session is valid.
+- **`say` is refused:** `--read-only` intentionally disables it. Without
+  read-only mode, the command response contains the relay error instead of
+  claiming success.
+- **Peers cannot see the bridge:** the bridge and agents must use the exact same
+  ninja-p2p `--room` and `--password`; the SSN session ID is a separate
+  credential.
 
 ---
 

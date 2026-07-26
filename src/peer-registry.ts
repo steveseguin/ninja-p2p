@@ -46,6 +46,12 @@ export class PeerRegistry extends EventEmitter {
   addPeer(streamId: string, uuid: string): PeerRecord {
     const existing = this.peers.get(streamId);
     if (existing) {
+      const duplicateForUuid = this.resolve(uuid);
+      if (duplicateForUuid && duplicateForUuid !== existing) {
+        this.peers.delete(duplicateForUuid.streamId);
+        this.uuidToStream.delete(duplicateForUuid.uuid);
+      }
+      if (existing.uuid !== uuid) this.uuidToStream.delete(existing.uuid);
       existing.uuid = uuid;
       existing.connected = true;
       existing.connectedAt = Date.now();

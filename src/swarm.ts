@@ -22,21 +22,32 @@
 import {
   closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readSync,
+  readFileSync,
   rmSync,
   statSync,
   utimesSync,
-  writeFileSync,
   writeSync,
 } from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 export const DEFAULT_SWARM_CHUNK_SIZE = 64_000;
 export const DEFAULT_MAX_IN_FLIGHT_PER_PEER = 4;
 export const DEFAULT_MAX_IN_FLIGHT_TOTAL = 24;
+
+/** Keep each paged manifest message comfortably below any SCTP limit. */
+export const SWARM_MANIFEST_PAGE_HASHES = 256;
+/** Small files stay one-message simple; large files request hash pages on demand. */
+export const SWARM_INLINE_MANIFEST_HASHES = 256;
+/** Bounds allocations from a peer-controlled manifest while still allowing ~64 GB at 64 KB chunks. */
+export const MAX_SWARM_TOTAL_CHUNKS = 1_000_000;
+/** A chunk must fit in memory and, in practice, one data-channel message. */
+export const MAX_SWARM_CHUNK_SIZE = 16 * 1024 * 1024;
+export const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
 
 /** Room left for the JSON envelope wrapped around a base64 chunk. */
 export const SWARM_ENVELOPE_HEADROOM = 4_096;
@@ -57,6 +68,9 @@ export const SWARM_LOCK_STALE_MS = 5 * 60_000;
  * again, lands on the same part file and picks up where it left off.
  */
 export function partPathFor(workDir: string, fileId: string, savedPath: string): string {
+  if (!isSha256Hex(fileId)) {
+    throw new Error("swarm file id must be a lowercase sha256 hex digest");
+  }
   const destination = sha256Hex(new TextEncoder().encode(path.resolve(savedPath))).slice(0, 12);
   return path.join(workDir, `${fileId}-${destination}.part`);
 }
@@ -91,7 +105,12 @@ export type SwarmManifest = {
   totalChunks: number;
   /** sha256 per chunk, so a bad chunk can be blamed on the peer that sent it. */
   chunkHashes: string[];
+  /** sha256 over the raw chunk hashes, used to authenticate paged manifests. */
+  chunkHashesHash: string;
 };
+
+/** Metadata that is safe to advertise before the full chunk-hash manifest arrives. */
+export type SwarmManifestSummary = Omit<SwarmManifest, "chunkHashes">;
 
 // ── Chunk bitfield ───────────────────────────────────────────────────────────
 
@@ -367,6 +386,7 @@ export class ChunkFile {
   readonly manifest: SwarmManifest;
   private fd: number | null = null;
   private lockPath: string | null = null;
+  private lockToken: string | null = null;
 
   /**
    * @param exclusive Refuse to open if another live process holds this file.
@@ -383,9 +403,14 @@ export class ChunkFile {
     if (this.fd !== null) return;
     mkdirSync(path.dirname(this.filePath), { recursive: true });
     this.acquireLock();
-    // r+ keeps whatever is already there so an interrupted transfer resumes;
-    // w+ creates it the first time.
-    this.fd = openSync(this.filePath, existsSync(this.filePath) ? "r+" : "w+");
+    try {
+      // r+ keeps whatever is already there so an interrupted transfer resumes;
+      // w+ creates it the first time.
+      this.fd = openSync(this.filePath, existsSync(this.filePath) ? "r+" : "w+");
+    } catch (error) {
+      this.releaseExclusiveLock();
+      throw error;
+    }
   }
 
   /**
@@ -405,12 +430,13 @@ export class ChunkFile {
    */
   scanVerified(): ChunkMap {
     const map = new ChunkMap(this.manifest.totalChunks);
-    if (!existsSync(this.filePath)) return map;
-
+    // Opening first is load-bearing. It creates a fresh part file and claims
+    // its lock before a second process can start the same destination. It also
+    // gives an empty download a real file to move at completion.
+    this.open();
     const size = statSync(this.filePath).size;
     if (size === 0) return map;
 
-    this.open();
     for (let index = 0; index < this.manifest.totalChunks; index += 1) {
       const length = chunkLength(index, this.manifest);
       const offset = chunkOffset(index, this.manifest.chunkSize);
@@ -419,7 +445,7 @@ export class ChunkFile {
       const buffer = new Uint8Array(length);
       if (length > 0) {
         try {
-          if (readSync(this.fd!, buffer, 0, length, offset) !== length) continue;
+          if (readFullySync(this.fd!, buffer, offset) !== length) continue;
         } catch {
           continue;
         }
@@ -430,11 +456,30 @@ export class ChunkFile {
   }
 
   close(): void {
+    this.closeHandle();
+    this.releaseExclusiveLock();
+  }
+
+  /** Close the data handle while retaining ownership through final verification. */
+  closeHandle(): void {
     if (this.fd !== null) {
       closeSync(this.fd);
       this.fd = null;
     }
-    this.releaseLock();
+  }
+
+  /** Release a download lock after its part file has been finalized or abandoned. */
+  releaseExclusiveLock(): void {
+    if (!this.lockPath || !this.lockToken) return;
+    try {
+      const current = readFileSync(this.lockPath, "utf8").trim();
+      if (current === this.lockToken) {
+        rmSync(this.lockPath, { force: true });
+      }
+    } catch {
+      // Missing or unreadable means we no longer own anything we can release.
+    }
+    this.lockToken = null;
   }
 
   /**
@@ -447,35 +492,53 @@ export class ChunkFile {
    * blocking that destination forever.
    */
   private acquireLock(): void {
-    if (!this.lockPath) return;
+    if (!this.lockPath || this.lockToken) return;
 
-    try {
-      closeSync(openSync(this.lockPath, "wx"));
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    const token = `${process.pid}:${randomBytes(12).toString("hex")}`;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        const lockFd = openSync(this.lockPath, "wx");
+        try {
+          writeSync(lockFd, `${token}\n`, undefined, "utf8");
+        } finally {
+          closeSync(lockFd);
+        }
+        this.lockToken = token;
+        return;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
 
-      const age = Date.now() - statSync(this.lockPath).mtimeMs;
-      if (age < SWARM_LOCK_STALE_MS) {
-        throw new Error(
-          `another download of this file to this location is already running ` +
-            `(lock held for ${Math.round(age / 1000)}s at ${this.lockPath})`,
-        );
+        let age: number;
+        try {
+          age = Date.now() - statSync(this.lockPath).mtimeMs;
+        } catch (statError) {
+          if ((statError as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw statError;
+        }
+        if (age < SWARM_LOCK_STALE_MS) {
+          throw new Error(
+            `another download of this file to this location is already running ` +
+              `(lock held for ${Math.round(age / 1000)}s at ${this.lockPath})`,
+          );
+        }
+        try {
+          rmSync(this.lockPath, { force: true });
+        } catch {
+          // Another contender may have replaced it. Retry the exclusive create.
+        }
       }
-      rmSync(this.lockPath, { force: true });
-      closeSync(openSync(this.lockPath, "wx"));
     }
-    writeFileSync(this.lockPath, `${process.pid}\n`);
-  }
-
-  private releaseLock(): void {
-    if (!this.lockPath) return;
-    rmSync(this.lockPath, { force: true });
+    throw new Error(`could not claim download lock: ${this.lockPath}`);
   }
 
   /** Refresh the lock so a long, healthy transfer is never mistaken for stale. */
   touchLock(): void {
-    if (!this.lockPath || this.fd === null) return;
+    if (!this.lockPath || !this.lockToken || this.fd === null) return;
     try {
+      if (readFileSync(this.lockPath, "utf8").trim() !== this.lockToken) {
+        this.lockToken = null;
+        return;
+      }
       const now = new Date();
       utimesSync(this.lockPath, now, now);
     } catch { /* the lock going missing is not worth failing a transfer over */ }
@@ -492,7 +555,7 @@ export class ChunkFile {
     if (sha256Hex(bytes) !== this.manifest.chunkHashes[index]) return false;
 
     this.open();
-    writeSync(this.fd!, bytes, 0, bytes.byteLength, chunkOffset(index, this.manifest.chunkSize));
+    writeFullySync(this.fd!, bytes, chunkOffset(index, this.manifest.chunkSize));
     return true;
   }
 
@@ -503,7 +566,7 @@ export class ChunkFile {
     if (length === 0) return buffer;
 
     this.open();
-    const read = readSync(this.fd!, buffer, 0, length, chunkOffset(index, this.manifest.chunkSize));
+    const read = readFullySync(this.fd!, buffer, chunkOffset(index, this.manifest.chunkSize));
     if (read !== length) return null;
     return buffer;
   }
@@ -518,9 +581,12 @@ export function buildManifest(
   mimeType: string,
   chunkSize = DEFAULT_SWARM_CHUNK_SIZE,
 ): SwarmManifest {
-  const normalizedChunkSize = Math.max(1_024, chunkSize);
+  const normalizedChunkSize = normalizeChunkSize(chunkSize);
   const size = bytes.byteLength;
   const totalChunks = size === 0 ? 0 : Math.ceil(size / normalizedChunkSize);
+  if (totalChunks > MAX_SWARM_TOTAL_CHUNKS) {
+    throw new Error(`file requires too many chunks: ${totalChunks} > ${MAX_SWARM_TOTAL_CHUNKS}`);
+  }
   const chunkHashes: string[] = [];
 
   for (let index = 0; index < totalChunks; index += 1) {
@@ -536,7 +602,150 @@ export function buildManifest(
     chunkSize: normalizedChunkSize,
     totalChunks,
     chunkHashes,
+    chunkHashesHash: hashChunkHashes(chunkHashes),
   };
+}
+
+/**
+ * Build a manifest without loading the file into memory.
+ *
+ * The old path copied the whole file into a Buffer and then a Uint8Array before
+ * hashing it, and completion did the same again. That made the "large file"
+ * command consume roughly twice the file size in memory. This keeps the peak at
+ * one chunk while producing the same content and chunk digests.
+ */
+export function buildManifestFromFile(
+  filePath: string,
+  name: string,
+  mimeType: string,
+  chunkSize = DEFAULT_SWARM_CHUNK_SIZE,
+): SwarmManifest {
+  const normalizedChunkSize = normalizeChunkSize(chunkSize);
+  const fd = openSync(filePath, "r");
+  try {
+    const initial = fstatSync(fd);
+    if (!initial.isFile()) throw new Error(`not a file: ${filePath}`);
+    if (!Number.isSafeInteger(initial.size) || initial.size < 0) {
+      throw new Error(`unsupported file size: ${initial.size}`);
+    }
+
+    const size = initial.size;
+    const totalChunks = size === 0 ? 0 : Math.ceil(size / normalizedChunkSize);
+    if (totalChunks > MAX_SWARM_TOTAL_CHUNKS) {
+      throw new Error(`file requires too many chunks: ${totalChunks} > ${MAX_SWARM_TOTAL_CHUNKS}`);
+    }
+
+    const whole = createHash("sha256");
+    const chunkHashes: string[] = [];
+    const buffer = new Uint8Array(Math.min(normalizedChunkSize, Math.max(1, size)));
+
+    for (let index = 0; index < totalChunks; index += 1) {
+      const length = Math.min(normalizedChunkSize, size - index * normalizedChunkSize);
+      const view = length === buffer.length ? buffer : buffer.subarray(0, length);
+      const read = readFullySync(fd, view, index * normalizedChunkSize);
+      if (read !== length) {
+        throw new Error(`file changed while hashing: short read at chunk ${index}`);
+      }
+      whole.update(view);
+      chunkHashes.push(sha256Hex(view));
+    }
+
+    const final = fstatSync(fd);
+    if (final.size !== size || final.mtimeMs !== initial.mtimeMs) {
+      throw new Error("file changed while hashing; retry after writes finish");
+    }
+
+    return {
+      fileId: whole.digest("hex"),
+      name,
+      mimeType,
+      size,
+      chunkSize: normalizedChunkSize,
+      totalChunks,
+      chunkHashes,
+      chunkHashesHash: hashChunkHashes(chunkHashes),
+    };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** sha256 a file with bounded memory. */
+export function sha256FileHex(filePath: string): { sha256: string; size: number } {
+  const fd = openSync(filePath, "r");
+  try {
+    const hash = createHash("sha256");
+    const buffer = new Uint8Array(1024 * 1024);
+    let position = 0;
+    for (;;) {
+      const read = readSync(fd, buffer, 0, buffer.length, position);
+      if (read === 0) break;
+      hash.update(buffer.subarray(0, read));
+      position += read;
+    }
+    return { sha256: hash.digest("hex"), size: position };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Stable digest for a paged chunk-hash manifest. */
+export function hashChunkHashes(chunkHashes: readonly string[]): string {
+  const hash = createHash("sha256");
+  for (const chunkHash of chunkHashes) {
+    if (!isSha256Hex(chunkHash)) {
+      throw new Error("chunk hash must be a lowercase sha256 hex digest");
+    }
+    hash.update(Buffer.from(chunkHash, "hex"));
+  }
+  return hash.digest("hex");
+}
+
+export function toManifestSummary(manifest: SwarmManifest): SwarmManifestSummary {
+  const { chunkHashes: _chunkHashes, ...summary } = manifest;
+  return summary;
+}
+
+/** Return a useful reason rather than letting peer-controlled values reach I/O. */
+export function validateManifestSummary(manifest: SwarmManifestSummary): string | null {
+  if (!isSha256Hex(manifest.fileId)) return "fileId is not a lowercase sha256 digest";
+  if (typeof manifest.name !== "string" || !manifest.name.trim()) return "name is empty";
+  if (manifest.name.length > 1_024 || manifest.name.includes("\0")) return "name is too long or contains NUL";
+  if (typeof manifest.mimeType !== "string" || manifest.mimeType.length > 256) return "mimeType is invalid";
+  if (!Number.isSafeInteger(manifest.size) || manifest.size < 0) return "size is invalid";
+  if (!Number.isInteger(manifest.chunkSize) || manifest.chunkSize < 1_024 || manifest.chunkSize > MAX_SWARM_CHUNK_SIZE) {
+    return "chunkSize is invalid";
+  }
+  if (!Number.isInteger(manifest.totalChunks) || manifest.totalChunks < 0 || manifest.totalChunks > MAX_SWARM_TOTAL_CHUNKS) {
+    return "totalChunks is invalid";
+  }
+  const expectedChunks = manifest.size === 0 ? 0 : Math.ceil(manifest.size / manifest.chunkSize);
+  if (manifest.totalChunks !== expectedChunks) {
+    return `totalChunks ${manifest.totalChunks} does not match size/chunkSize (${expectedChunks})`;
+  }
+  if (!isSha256Hex(manifest.chunkHashesHash)) return "chunkHashesHash is invalid";
+  return null;
+}
+
+export function validateSwarmManifest(manifest: SwarmManifest): string | null {
+  const summaryError = validateManifestSummary(toManifestSummary(manifest));
+  if (summaryError) return summaryError;
+  if (!Array.isArray(manifest.chunkHashes) || manifest.chunkHashes.length !== manifest.totalChunks) {
+    return "chunkHashes length does not match totalChunks";
+  }
+  if (!manifest.chunkHashes.every(isSha256Hex)) return "chunkHashes contains an invalid digest";
+  try {
+    if (hashChunkHashes(manifest.chunkHashes) !== manifest.chunkHashesHash) {
+      return "chunkHashesHash does not match chunkHashes";
+    }
+  } catch {
+    return "chunkHashes contains an invalid digest";
+  }
+  return null;
+}
+
+export function isSha256Hex(value: unknown): value is string {
+  return typeof value === "string" && SHA256_HEX_PATTERN.test(value);
 }
 
 /**
@@ -549,10 +758,41 @@ export function manifestsAgree(a: SwarmManifest, b: SwarmManifest): boolean {
   if (a.size !== b.size) return false;
   if (a.chunkSize !== b.chunkSize) return false;
   if (a.totalChunks !== b.totalChunks) return false;
+  if (a.chunkHashesHash !== b.chunkHashesHash) return false;
   if (a.chunkHashes.length !== b.chunkHashes.length) return false;
   return a.chunkHashes.every((hash, index) => hash === b.chunkHashes[index]);
 }
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function normalizeChunkSize(chunkSize: number): number {
+  if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+    throw new Error(`invalid chunk size: ${chunkSize}`);
+  }
+  const normalized = Math.max(1_024, Math.floor(chunkSize));
+  if (normalized > MAX_SWARM_CHUNK_SIZE) {
+    throw new Error(`chunk size ${normalized} exceeds the ${MAX_SWARM_CHUNK_SIZE}-byte safety limit`);
+  }
+  return normalized;
+}
+
+function readFullySync(fd: number, buffer: Uint8Array, position: number): number {
+  let total = 0;
+  while (total < buffer.byteLength) {
+    const read = readSync(fd, buffer, total, buffer.byteLength - total, position + total);
+    if (read === 0) break;
+    total += read;
+  }
+  return total;
+}
+
+function writeFullySync(fd: number, bytes: Uint8Array, position: number): void {
+  let total = 0;
+  while (total < bytes.byteLength) {
+    const written = writeSync(fd, bytes, total, bytes.byteLength - total, position + total);
+    if (written <= 0) throw new Error("short write while storing swarm chunk");
+    total += written;
+  }
 }

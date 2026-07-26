@@ -50,8 +50,9 @@ export function checkNodeVersion(version: string): DiagnosticCheck {
 
 /**
  * The native WebRTC module is optional for the library but required for a Node
- * sidecar to actually hold a data channel, so a miss is a warning with a fix
- * rather than a hard failure.
+ * sidecar to actually hold a data channel. `doctor` diagnoses the Node sidecar,
+ * so reporting success without it sends users toward network debugging when
+ * the process cannot possibly connect.
  */
 export async function checkWebRtc(
   load: () => Promise<unknown> = () => import("@roamhq/wrtc"),
@@ -62,7 +63,7 @@ export async function checkWebRtc(
   } catch (error) {
     return {
       name: "webrtc",
-      status: "warn",
+      status: "fail",
       detail: `@roamhq/wrtc not loadable: ${errorMessage(error)}`,
       hint: "npm install -g @roamhq/wrtc (Node sidecars need it to hold data channels)",
     };

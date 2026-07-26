@@ -288,10 +288,12 @@ and tested. It is blocked from being a traction bet only by requirement A
 that lands — nothing in `ninja-p2p` needs to change first, and `--read-only`
 already gives streamers a safe way to try it today.
 
-**2026-07-25 — the SDK granted the wishlist, and the real bottlenecks turned out
-to be ours.** `@vdoninja/sdk` 1.4.1 landed nine of the ten items in
-`docs/sdk-wishlist.md`, including a genuine binary send path. Adopting it went
-nothing like expected and the story is worth keeping.
+**2026-07-25 — the SDK granted the runtime wishlist, and the real bottlenecks
+turned out to be ours.** `@vdoninja/sdk` 1.4.1 landed the runtime additions in
+`docs/sdk-wishlist.md`, including a genuine binary send path. Its npm tarball
+omitted the declaration file named by its metadata, so `ninja-p2p` retains a
+narrow local type shim. Adopting the runtime work went nothing like expected
+and the story is worth keeping.
 
 Binary chunks alone were worth **18%** — real, but nowhere near the headline
 33% that base64 supposedly cost. Measuring the swarm properly turned up three

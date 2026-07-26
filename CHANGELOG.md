@@ -76,8 +76,9 @@ the README for the spread.
   poisoning every retry.
 - The Social Stream bridge now works on the documented Node 20 floor via its
   explicit `ws` fallback.
-- The SDK dependency floor is now 1.4.1, enabling its published binary,
-  backpressure, teardown, and TypeScript surfaces without a local type shim.
+- The SDK dependency floor is now 1.4.1, enabling its binary, backpressure, and
+  teardown surfaces. Its npm tarball advertises but omits the declaration file,
+  so a narrow local type shim remains until a registry release includes it.
 - Wake subprocess errors no longer crash or permanently wedge the runner, and
   peer text is bounded before entering the process environment.
 - The dashboard observes rejected sends, applies real data-channel

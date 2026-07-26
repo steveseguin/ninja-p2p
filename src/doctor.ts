@@ -26,6 +26,7 @@ export type DiagnosticsReport = {
 
 export const MINIMUM_NODE_MAJOR = 20;
 export const DEFAULT_SIGNALING_URL = "wss://wss.vdo.ninja";
+const OPTIONAL_WEBRTC_MODULE = "@roamhq/wrtc";
 
 /** Node 20 is the documented floor; below that the ESM + native combo breaks. */
 export function checkNodeVersion(version: string): DiagnosticCheck {
@@ -55,7 +56,7 @@ export function checkNodeVersion(version: string): DiagnosticCheck {
  * the process cannot possibly connect.
  */
 export async function checkWebRtc(
-  load: () => Promise<unknown> = () => import("@roamhq/wrtc"),
+  load: () => Promise<unknown> = () => import(OPTIONAL_WEBRTC_MODULE),
 ): Promise<DiagnosticCheck> {
   try {
     await load();

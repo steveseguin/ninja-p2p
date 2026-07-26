@@ -9,6 +9,10 @@ function read(relativePath: string): string {
 const readme = read("README.md");
 const landingPage = read("docs/index.html");
 const socialStreamGuide = read("docs/social-stream-bridge.md");
+const sdkWishlist = read("docs/sdk-wishlist.md");
+const sdkTypeShim = read("src/vdoninja-sdk-types.ts");
+const doctorSource = read("src/doctor.ts");
+const bridgeSource = read("src/vdo-bridge.ts");
 const codexSkill = read(".codex/skills/ninja-p2p/SKILL.md");
 const agentsSkill = read(".agents/skills/ninja-p2p/SKILL.md");
 const claudeSkill = read(".claude/skills/ninja-p2p/SKILL.md");
@@ -59,11 +63,13 @@ test("the library guide and package metadata describe the SDK 1.4.1 binary API",
   assert.match(readme, /sendRaw\(\).*is not the binary API/);
   assert.equal(packageJson.dependencies["@vdoninja/sdk"], "^1.4.1");
   assert.match(packageJson.description, /resumable file swarms/);
-  assert.equal(
-    existsSync(new URL("../src/vdoninja-sdk.d.ts", import.meta.url)),
-    false,
-    "the SDK's published types replace the local shim",
-  );
+  assert.match(sdkWishlist, /npm 1\.4\.1 tarball does not contain/);
+  assert.match(sdkTypeShim, /tarball published on 2026-07-25 does not contain/);
+  assert.match(sdkTypeShim, /compiled into ninja-p2p's own public/);
+  assert.match(sdkTypeShim, /types, so consumers do not inherit/);
+  assert.match(doctorSource, /import\(OPTIONAL_WEBRTC_MODULE\)/);
+  assert.match(bridgeSource, /from "\.\/vdoninja-sdk-types\.js"/);
+  assert.doesNotMatch(bridgeSource, /from "@vdoninja\/sdk"/);
 });
 
 test("local links in the Markdown guides resolve", () => {

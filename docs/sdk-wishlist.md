@@ -4,17 +4,19 @@ Things `@vdoninja/sdk` could add that would directly remove workarounds in
 `ninja-p2p`. Every item came from friction actually hit while building, with the
 evidence and the workaround in place at the time.
 
-**Status: nine of ten landed in SDK v1.4.1.** Only item 10 is still open, and it
-is a VDO.Ninja decision rather than an SDK one.
+**Status: eight are usable from SDK v1.4.1 on npm, with one packaging fix and
+one VDO.Ninja decision still open.** Item 9 exists in the SDK source and package
+metadata, but its declaration file is absent from the published npm tarball.
 
 Verified against a local v1.4.1 build on 2026-07-25 with two live Node peers over
 real signalling — not by reading the source. Results and two corrections to the
 SDK's own Node caveats are in [Verification](#verification) at the end.
 
-`ninja-p2p` now declares `@vdoninja/sdk` `^1.4.1` and uses the SDK's published
-types directly. Runtime feature detection remains so a room containing an older
-already-installed peer automatically uses the verified base64 swarm fallback
-for that peer.
+`ninja-p2p` now declares `@vdoninja/sdk` `^1.4.1` and uses its runtime APIs
+directly. A narrow local type shim remains because the 1.4.1 npm tarball
+advertises `vdoninja-sdk.d.ts` but does not include it. Runtime feature detection
+also remains so a room containing an older already-installed peer automatically
+uses the verified base64 swarm fallback for that peer.
 
 | # | Item | Status | API |
 |---|------|--------|-----|
@@ -26,7 +28,7 @@ for that peer.
 | 6 | Max message size | **landed** | `getMaxMessageSize()` |
 | 7 | Per-peer connection quality | **landed** | `getPeerQuality()` |
 | 8 | Unambiguous lifecycle events | **landed** | `disconnected` detail: `intentional`, `reason`, `phase` |
-| 9 | TypeScript definitions | **landed** | `vdoninja-sdk.d.ts` shipped |
+| 9 | TypeScript definitions | **packaging fix needed** | metadata points to an omitted `vdoninja-sdk.d.ts` |
 | 10 | Room/salt derivation contract | **open** | — |
 
 ---
@@ -121,10 +123,13 @@ derived from inbound RTP and a data-only peer carries none.
 logging "SDK will attempt reconnect" during deliberate shutdowns; `willReconnect`
 answers that directly and our local suppression flag can go.
 
-## 9. TypeScript definitions — landed
+## 9. TypeScript definitions — packaging fix needed
 
-`vdoninja-sdk.d.ts` ships in the package, with internals deliberately omitted.
-Retires our hand-maintained shim.
+`vdoninja-sdk.d.ts` exists in the SDK source and the package metadata points to
+it, with internals deliberately omitted. The npm 1.4.1 tarball does not contain
+the file, so TypeScript consumers resolve the Node entry to untyped JavaScript.
+`ninja-p2p` therefore keeps its narrow shim until a registry release actually
+ships the advertised declaration.
 
 ## 10. A documented room and hash derivation contract — still open
 

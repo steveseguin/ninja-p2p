@@ -11,7 +11,6 @@
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
-import type { VDONinja } from "@vdoninja/sdk";
 import { sendFileFromPath } from "./file-transfer.js";
 import { MessageBus, type MessageBusOptions } from "./message-bus.js";
 import { PeerRegistry } from "./peer-registry.js";
@@ -28,6 +27,7 @@ import {
   type PeerIdentity,
   type SkillUpdatePayload,
 } from "./protocol.js";
+import type { VDONinja, VDONinjaConstructor } from "./vdoninja-sdk-types.js";
 
 /**
  * The version advertised to peers.
@@ -124,7 +124,7 @@ export class VDOBridge extends EventEmitter {
     // Dynamic import for CJS SDK in ESM context
     const { createRequire } = await import("node:module");
     const require = createRequire(import.meta.url);
-    const VDONinjaSDK = require("@vdoninja/sdk") as typeof import("@vdoninja/sdk").VDONinja;
+    const VDONinjaSDK = require("@vdoninja/sdk") as VDONinjaConstructor;
     this.sdk = new VDONinjaSDK({
       host: this.options.host ?? "wss://wss.vdo.ninja",
       debug: this.options.debug ?? false,

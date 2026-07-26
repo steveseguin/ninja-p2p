@@ -48,8 +48,18 @@ jobs:
         run: node scripts/validate-adapter.mjs "${{ matrix.adapter.expected }}"
 
   install-smoke:
-    name: Node 24 / current npm install
+    name: Node 24 / current npm / ${{ matrix.adapter.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter:
+          - name: wrtc
+            package: "@roamhq/wrtc@^0.8.0"
+            expected: "@roamhq/wrtc"
+          - name: node-datachannel
+            package: "node-datachannel@^0.32.3"
+            expected: "node-datachannel"
     steps:
       - uses: actions/checkout@v4
 
@@ -57,11 +67,13 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install the normal user dependency set
-        run: npm install
+      - name: Install the documented Node dependency set
+        env:
+          WEBRTC_PACKAGE: ${{ matrix.adapter.package }}
+        run: npm install --no-save "$WEBRTC_PACKAGE"
 
       - name: Test and build
         run: npm run check
 
-      - name: Verify the recommended adapter
-        run: node scripts/validate-adapter.mjs "@roamhq/wrtc"
+      - name: Verify selected adapter
+        run: node scripts/validate-adapter.mjs "${{ matrix.adapter.expected }}"

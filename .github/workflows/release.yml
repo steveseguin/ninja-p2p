@@ -20,8 +20,8 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies with the recommended WebRTC adapter
+        run: npm install --no-save "@roamhq/wrtc@^0.8.0"
 
       - name: Verify tag matches package version
         run: |

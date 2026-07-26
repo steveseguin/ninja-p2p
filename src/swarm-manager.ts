@@ -129,6 +129,8 @@ export class SwarmManager {
   private announceTimer: ReturnType<typeof setInterval> | null = null;
   private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
+  /** Invalidates asynchronous sends when stop() begins. */
+  private lifecycleGeneration = 0;
 
   constructor(options: SwarmManagerOptions) {
     this.bridge = options.bridge;
@@ -149,6 +151,7 @@ export class SwarmManager {
   start(): void {
     if (this.started) return;
     this.started = true;
+    this.lifecycleGeneration += 1;
 
     mkdirSync(this.downloadDir, { recursive: true });
     mkdirSync(this.workDir, { recursive: true });
@@ -218,6 +221,10 @@ export class SwarmManager {
   }
 
   stop(): void {
+    // A refused binary send normally falls back to base64. Invalidate pending
+    // sends first so that fallback never starts on a channel being torn down.
+    this.started = false;
+    this.lifecycleGeneration += 1;
     if (this.pumpTimer) clearInterval(this.pumpTimer);
     if (this.announceTimer) clearInterval(this.announceTimer);
     if (this.coalesceTimer) clearTimeout(this.coalesceTimer);
@@ -225,7 +232,6 @@ export class SwarmManager {
     this.announceTimer = null;
     this.coalesceTimer = null;
     for (const session of this.sessions.values()) session.close();
-    this.started = false;
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -788,15 +794,26 @@ export class SwarmManager {
       chunk: (peerId, index, bytes, binary) => {
         if (binary && this.bridge.supportsBinary() && isBinaryFileId(fileId)) {
           const frame = encodeChunkFrame(fileId, index, bytes);
+          const generation = this.lifecycleGeneration;
           // Fire and forget, but fall back if the lane refuses the bytes —
           // a peer that asked for binary and then got nothing would stall
           // until its request timed out, once per chunk.
           void this.bridge
             .sendBinaryTo(peerId, frame)
             .then((sent) => {
-              if (!sent) this.sendChunkAsBase64(peerId, fileId, index, bytes);
+              if (
+                !sent &&
+                this.started &&
+                this.lifecycleGeneration === generation
+              ) {
+                this.sendChunkAsBase64(peerId, fileId, index, bytes);
+              }
             })
-            .catch(() => this.sendChunkAsBase64(peerId, fileId, index, bytes));
+            .catch(() => {
+              if (this.started && this.lifecycleGeneration === generation) {
+                this.sendChunkAsBase64(peerId, fileId, index, bytes);
+              }
+            });
           return;
         }
         this.sendChunkAsBase64(peerId, fileId, index, bytes);

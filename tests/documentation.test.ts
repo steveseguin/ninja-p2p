@@ -8,6 +8,8 @@ function read(relativePath: string): string {
 
 const readme = read("README.md");
 const landingPage = read("docs/index.html");
+const dashboard = read("dashboard.html");
+const pagesDashboard = read("docs/dashboard.html");
 const socialStreamGuide = read("docs/social-stream-bridge.md");
 const sdkWishlist = read("docs/sdk-wishlist.md");
 const sdkTypeShim = read("src/vdoninja-sdk-types.ts");
@@ -19,6 +21,7 @@ const claudeSkill = read(".claude/skills/ninja-p2p/SKILL.md");
 const packageJson = JSON.parse(read("package.json")) as {
   description: string;
   dependencies: Record<string, string>;
+  peerDependencies: Record<string, string>;
 };
 const markdownGuides = [
   "README.md",
@@ -68,19 +71,35 @@ test("the landing page surfaces the main end-user capabilities", () => {
   assert.match(landingPage, /built-in capability, not a separate add-on/);
 });
 
-test("the library guide and package metadata describe the SDK 1.4.1 binary API", () => {
+test("the dashboard uses one reviewed SDK build", () => {
+  assert.equal(pagesDashboard, dashboard);
+  assert.match(dashboard, /ninjasdk@v1\.5\.2\/vdoninja-sdk\.min\.js/);
+  assert.doesNotMatch(dashboard, /ninjasdk@latest/);
+});
+
+test("the library guide and package metadata preserve SDK compatibility", () => {
   assert.match(readme, /sendBinaryTo/);
   assert.match(readme, /bridge\.on\("binary"/);
   assert.match(readme, /sendRaw\(\).*is not the binary API/);
   assert.equal(packageJson.dependencies["@vdoninja/sdk"], "^1.4.1");
+  assert.equal(packageJson.peerDependencies["@roamhq/wrtc"], "^0.8.0");
+  assert.equal(packageJson.peerDependencies["node-datachannel"], "^0.32.3");
   assert.match(packageJson.description, /resumable file swarms/);
-  assert.match(sdkWishlist, /npm 1\.4\.1 tarball does not contain/);
-  assert.match(sdkTypeShim, /tarball published on 2026-07-25 does not contain/);
-  assert.match(sdkTypeShim, /compiled into ninja-p2p's own public/);
-  assert.match(sdkTypeShim, /types, so consumers do not inherit/);
-  assert.match(doctorSource, /import\(OPTIONAL_WEBRTC_MODULE\)/);
+  assert.match(sdkWishlist, /SDK 1\.5\.2 fixes that packaging gap/);
+  assert.match(sdkWishlist, /node-datachannel/);
+  assert.match(sdkTypeShim, /SDK 1\.5\.2 now ships declarations/);
+  assert.match(sdkTypeShim, /ESM \+ Node16 TypeScript/);
+  assert.match(sdkTypeShim, /consumers do not inherit/);
+  assert.match(doctorSource, /getWebRTCInfo/);
+  assert.match(doctorSource, /node-datachannel/);
   assert.match(bridgeSource, /from "\.\/vdoninja-sdk-types\.js"/);
   assert.doesNotMatch(bridgeSource, /from "@vdoninja\/sdk"/);
+});
+
+test("license documentation distinguishes ninja-p2p from its SDK dependency", () => {
+  assert.match(readme, /`ninja-p2p` is MIT licensed/);
+  assert.match(readme, /SDK core is AGPL-3\.0-only/);
+  assert.match(readme, /unmodified linking exception/);
 });
 
 test("local links in the Markdown guides resolve", () => {

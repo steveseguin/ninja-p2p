@@ -100,7 +100,7 @@ six-command onboarding the biggest drop-off, so:
   DM, reply, request/response) and prints pass or fail per step in about a
   second. It is both the thirty-second pitch and a self-test. `--keep` holds the
   room open so it can be watched in the browser dashboard.
-- `ninja-p2p doctor` checks Node version, the native WebRTC module, signaling
+- `ninja-p2p doctor` checks Node version, the selected WebRTC adapter, signaling
   reachability, state-folder writability, and which sidecars are alive.
 
 The README now opens with `demo` rather than a six-step setup.

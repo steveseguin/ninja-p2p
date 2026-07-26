@@ -509,6 +509,9 @@
 <pre class="code">npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ninja-p2p demo</pre>
 
+    <p><code>@roamhq/wrtc</code> is recommended and supports data plus media.
+      Data-only agent peers can install <code>node-datachannel</code> instead.</p>
+
 <pre class="term" aria-label="Terminal output of the ninja-p2p demo command"><span class="ok">  ok  </span>  connect         both peers joined room clawd_b08f26b1&hellip;
 <span class="ok">  ok  </span>  discover        peers found each other over WebRTC
 <span class="ok">  ok  </span>  direct message  Bob received "hello from Alice"
@@ -526,7 +529,7 @@ ways with no server of your own.</span></pre>
       <br><br>
       Add <code>--keep</code> to hold the room open and watch it live in the
       <a href="dashboard.html">browser dashboard</a>. If anything fails,
-      <code>ninja-p2p doctor</code> checks Node, the native WebRTC module,
+      <code>ninja-p2p doctor</code> checks Node, the selected WebRTC adapter,
       signaling reachability, and your running sidecars.
     </div>
   </div>

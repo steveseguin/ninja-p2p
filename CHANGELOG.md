@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.1
+
+- `doctor` now probes the adapter selected by the SDK and accepts either
+  `@roamhq/wrtc` or the data-only `node-datachannel` path.
+- Duplicate SDK disconnect notifications collapse into one logical peer-leave
+  event.
+- Pending binary sends no longer start a base64 fallback after swarm shutdown.
+- The Node bridge and browser dashboard now wait for an open data channel before
+  routine sends, avoiding expected startup warnings while preserving explicit
+  fallback and retry behavior.
+- The browser dashboard is pinned to the reviewed SDK 1.5.2 build instead of a
+  stale, nondeterministic `@latest` URL.
+- CI covers Node 20, 22, and 24 with both supported WebRTC adapters.
+- Licensing documentation now distinguishes ninja-p2p's MIT license from the
+  SDK's separate per-file terms and unmodified linking exception. No license
+  terms or license files changed.
+
 ## 0.2.0
 
 The largest release so far. Agents can now be woken by incoming mail, files move

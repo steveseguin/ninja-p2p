@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} / ${{ matrix.adapter.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+        adapter:
+          - name: wrtc
+            package: "@roamhq/wrtc@^0.8.0"
+            expected: "@roamhq/wrtc"
+          - name: node-datachannel
+            package: "node-datachannel@^0.32.3"
+            expected: "node-datachannel"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install without an implicit WebRTC adapter
+        run: npm install --omit=optional
+
+      - name: Install ${{ matrix.adapter.name }}
+        env:
+          WEBRTC_PACKAGE: ${{ matrix.adapter.package }}
+        run: npm install --no-save "$WEBRTC_PACKAGE"
+
+      - name: Test and build
+        run: npm run check
+
+      - name: Verify selected adapter
+        run: node scripts/validate-adapter.mjs "${{ matrix.adapter.expected }}"

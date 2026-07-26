@@ -38,9 +38,10 @@ npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ninja-p2p doctor
 ```
 
-`doctor` checks the Node/WebRTC side and VDO.Ninja signaling. The quickest SSN
-check is still starting the bridge with `--echo` and sending one real chat
-message.
+`doctor` checks the Node/WebRTC side and VDO.Ninja signaling. It accepts
+`@roamhq/wrtc` or the data-only `node-datachannel` adapter; the install above
+uses the recommended media-capable option. The quickest SSN check is still
+starting the bridge with `--echo` and sending one real chat message.
 
 ---
 

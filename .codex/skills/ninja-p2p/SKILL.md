@@ -57,10 +57,11 @@ Before debugging anything by hand, use the two built-in commands:
 
 ```bash
 ninja-p2p demo      # full live round trip between two peers, pass/fail per step
-ninja-p2p doctor    # Node, native WebRTC, signaling reachability, running sidecars
+ninja-p2p doctor    # Node, WebRTC adapter, signaling reachability, running sidecars
 ```
 
 `demo` proves the transport works on this machine. `doctor` exits non-zero when a required check fails.
+The recommended adapter is `@roamhq/wrtc`; data-only peers may use `node-datachannel`.
 
 ## Choose the file path
 

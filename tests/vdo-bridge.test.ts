@@ -107,6 +107,78 @@ test("SDK-targeted protocol replies use the published lowercase uuid target", ()
   );
 });
 
+test("duplicate SDK disconnect notifications produce one logical disconnect", () => {
+  const bridge = makeBridge();
+  const handlers = new Map<string, (event: any) => void>();
+  (bridge as unknown as {
+    sdk: {
+      addEventListener: (name: string, handler: (event: any) => void) => void;
+    };
+    wireSDKEvents: () => void;
+  }).sdk = {
+    addEventListener(name, handler) {
+      handlers.set(name, handler);
+    },
+  };
+  (bridge as unknown as { wireSDKEvents: () => void }).wireSDKEvents();
+  bridge.peers.addPeer(other.streamId, "uuid_worker");
+
+  let bridgeDisconnects = 0;
+  let registryLeaves = 0;
+  bridge.on("peer:disconnected", () => { bridgeDisconnects += 1; });
+  bridge.peers.on("peer:leave", () => { registryLeaves += 1; });
+
+  handlers.get("peerDisconnected")?.({
+    detail: { uuid: "uuid_worker", streamID: other.streamId },
+  });
+  handlers.get("peerDisconnected")?.({ detail: { uuid: "uuid_worker" } });
+  handlers.get("peerDisconnected")?.({
+    detail: { uuid: "uuid_worker", streamID: other.streamId },
+  });
+
+  assert.equal(bridgeDisconnects, 1);
+  assert.equal(registryLeaves, 1);
+  assert.equal(bridge.peers.getPeer(other.streamId)?.connected, false);
+});
+
+test("SDK sends wait for dataChannelOpen unless fallback is explicit", () => {
+  const bridge = makeBridge();
+  const handlers = new Map<string, (event: any) => void>();
+  (bridge as unknown as {
+    sdk: {
+      addEventListener: (name: string, handler: (event: any) => void) => void;
+      sendData: () => boolean;
+    };
+    wireSDKEvents: () => void;
+  }).sdk = {
+    addEventListener(name, handler) {
+      handlers.set(name, handler);
+    },
+    sendData() {
+      return true;
+    },
+  };
+  (bridge as unknown as { wireSDKEvents: () => void }).wireSDKEvents();
+
+  const canSend = (target?: unknown): boolean => (
+    bridge as unknown as { canAttemptSDKSend: (value?: unknown) => boolean }
+  ).canAttemptSDKSend(target);
+
+  bridge.peers.addPeer(other.streamId, "uuid_worker");
+  assert.equal(canSend(), false);
+  assert.equal(canSend({ uuid: "uuid_worker" }), false);
+  assert.equal(canSend({ allowFallback: true }), true);
+
+  handlers.get("dataChannelOpen")?.({
+    detail: { uuid: "uuid_worker", streamID: other.streamId },
+  });
+  assert.equal(canSend(), true);
+  assert.equal(canSend({ uuid: "uuid_worker" }), true);
+
+  handlers.get("peerDisconnected")?.({ detail: { uuid: "uuid_worker" } });
+  assert.equal(canSend(), false);
+});
+
 test("an established connection cannot impersonate another stream id", () => {
   const bridge = makeBridge();
   const handlers = new Map<string, (event: any) => void>();

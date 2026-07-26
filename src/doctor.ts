@@ -8,6 +8,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 export type CheckStatus = "ok" | "warn" | "fail";
@@ -26,7 +27,47 @@ export type DiagnosticsReport = {
 
 export const MINIMUM_NODE_MAJOR = 20;
 export const DEFAULT_SIGNALING_URL = "wss://wss.vdo.ninja";
-const OPTIONAL_WEBRTC_MODULE = "@roamhq/wrtc";
+const requireFromHere = createRequire(import.meta.url);
+
+export type WebRtcRuntimeInfo = {
+  implementation: string;
+  hasMediaSupport: boolean;
+};
+
+type WebRtcSDK = {
+  getWebRTCInfo?: () => {
+    implementation?: unknown;
+    hasMediaSupport?: unknown;
+  };
+};
+
+type WebRtcSDKConstructor = new (options?: { debug?: boolean }) => WebRtcSDK;
+
+/**
+ * Load the same SDK entry point a real sidecar uses, then ask which adapter it
+ * selected. Merely resolving a native package is not enough: this catches an
+ * installed adapter that the current SDK cannot actually initialize.
+ */
+async function probeWebRtcRuntime(): Promise<WebRtcRuntimeInfo> {
+  const loaded = requireFromHere("@vdoninja/sdk") as
+    | WebRtcSDKConstructor
+    | { default?: WebRtcSDKConstructor };
+  const SDK = typeof loaded === "function" ? loaded : loaded.default;
+  if (typeof SDK !== "function") {
+    throw new Error("@vdoninja/sdk did not export a Node constructor");
+  }
+
+  const sdk = new SDK({ debug: false });
+  const info = sdk.getWebRTCInfo?.();
+  if (!info || typeof info.implementation !== "string") {
+    throw new Error("@vdoninja/sdk did not report a WebRTC implementation");
+  }
+
+  return {
+    implementation: info.implementation,
+    hasMediaSupport: info.hasMediaSupport === true,
+  };
+}
 
 /** Node 20 is the documented floor; below that the ESM + native combo breaks. */
 export function checkNodeVersion(version: string): DiagnosticCheck {
@@ -50,23 +91,28 @@ export function checkNodeVersion(version: string): DiagnosticCheck {
 }
 
 /**
- * The native WebRTC module is optional for the library but required for a Node
- * sidecar to actually hold a data channel. `doctor` diagnoses the Node sidecar,
- * so reporting success without it sends users toward network debugging when
- * the process cannot possibly connect.
+ * A native WebRTC adapter is optional for the library but required for a Node
+ * sidecar to actually hold a data channel. Probe through the SDK so doctor
+ * accepts either supported adapter and reports only configurations the runtime
+ * itself can initialize.
  */
 export async function checkWebRtc(
-  load: () => Promise<unknown> = () => import(OPTIONAL_WEBRTC_MODULE),
+  probe: () => Promise<WebRtcRuntimeInfo> = probeWebRtcRuntime,
 ): Promise<DiagnosticCheck> {
   try {
-    await load();
-    return { name: "webrtc", status: "ok", detail: "@roamhq/wrtc is installed" };
+    const info = await probe();
+    const capability = info.hasMediaSupport ? "data + media" : "data channels only";
+    return {
+      name: "webrtc",
+      status: "ok",
+      detail: `${info.implementation} is usable (${capability})`,
+    };
   } catch (error) {
     return {
       name: "webrtc",
       status: "fail",
-      detail: `@roamhq/wrtc not loadable: ${errorMessage(error)}`,
-      hint: "npm install -g @roamhq/wrtc (Node sidecars need it to hold data channels)",
+      detail: `no usable Node WebRTC adapter: ${errorMessage(error)}`,
+      hint: "install @roamhq/wrtc (recommended), or node-datachannel for data-only peers",
     };
   }
 }

@@ -39,6 +39,18 @@ test("markDisconnected sets connected=false", () => {
   assert.ok(!peer!.connected);
 });
 
+test("markDisconnected emits one leave for one state transition", () => {
+  const reg = new PeerRegistry();
+  reg.addPeer("bot_1", "uuid_1");
+  let leaves = 0;
+  reg.on("peer:leave", () => { leaves += 1; });
+
+  reg.markDisconnected("bot_1");
+  reg.markDisconnected("uuid_1");
+
+  assert.equal(leaves, 1);
+});
+
 test("markDisconnected works with uuid", () => {
   const reg = new PeerRegistry();
   reg.addPeer("bot_1", "uuid_1");

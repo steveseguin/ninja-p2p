@@ -32,20 +32,34 @@ test("checkNodeVersion warns rather than fails on an unparseable version", () =>
   assert.equal(check.status, "warn");
 });
 
-test("checkWebRtc reports ok when the native module loads", async () => {
-  const check = await checkWebRtc(async () => ({}));
+test("checkWebRtc reports the SDK-selected media adapter", async () => {
+  const check = await checkWebRtc(async () => ({
+    implementation: "@roamhq/wrtc",
+    hasMediaSupport: true,
+  }));
   assert.equal(check.status, "ok");
+  assert.match(check.detail, /@roamhq\/wrtc is usable \(data \+ media\)/);
 });
 
-test("checkWebRtc fails when a Node sidecar cannot load the native module", async () => {
+test("checkWebRtc accepts the SDK-selected data-only adapter", async () => {
+  const check = await checkWebRtc(async () => ({
+    implementation: "node-datachannel",
+    hasMediaSupport: false,
+  }));
+  assert.equal(check.status, "ok");
+  assert.match(check.detail, /node-datachannel is usable \(data channels only\)/);
+});
+
+test("checkWebRtc fails when the SDK cannot initialize an adapter", async () => {
   const check = await checkWebRtc(async () => {
-    throw new Error("Cannot find module '@roamhq/wrtc'");
+    throw new Error("No WebRTC implementation found");
   });
   // The library remains usable in a browser, but this command diagnoses the
   // Node sidecar, which cannot carry a data channel without WebRTC.
   assert.equal(check.status, "fail");
-  assert.match(check.detail, /Cannot find module/);
-  assert.match(check.hint ?? "", /npm install/);
+  assert.match(check.detail, /No WebRTC implementation found/);
+  assert.match(check.hint ?? "", /@roamhq\/wrtc/);
+  assert.match(check.hint ?? "", /node-datachannel/);
 });
 
 test("checkStateRoot confirms a writable folder and cleans up its probe", () => {

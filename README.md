@@ -46,6 +46,9 @@ Install once:
 npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ```
 
+`@roamhq/wrtc` is the recommended adapter and supports both data and media.
+Data-only agent peers can install `node-datachannel` instead.
+
 Then prove the whole thing in one command:
 
 ```bash
@@ -64,7 +67,7 @@ Demo passed.
 
 Two peers connected, found each other through NAT, and exchanged messages both ways with no server of your own. Add `--keep` to hold the room open and watch it in the browser dashboard.
 
-If something goes wrong, `ninja-p2p doctor` checks Node, the native WebRTC module, signaling reachability, and any sidecars you have running.
+If something goes wrong, `ninja-p2p doctor` checks Node, the selected WebRTC adapter, signaling reachability, and any sidecars you have running.
 
 ## Start Two Agents
 
@@ -629,13 +632,16 @@ ninja-p2p doctor
 
 ```text
 [ok  ] node       Node v22.14.0
-[ok  ] webrtc     @roamhq/wrtc is installed
+[ok  ] webrtc     @roamhq/wrtc is usable (data + media)
 [ok  ] signaling  wss://wss.vdo.ninja reachable in 257ms
 [ok  ] state      C:\Users\steve\.ninja-p2p is writable
 [warn] sidecars   0 running, 6 stopped
 ```
 
-It checks the Node version, whether the native WebRTC module loads, whether the signaling server is reachable, whether the state folder is writable, and which sidecars this machine believes it started. It exits non-zero if a required check fails.
+It checks the Node version, whether the SDK can initialize either
+`@roamhq/wrtc` or `node-datachannel`, whether the signaling server is reachable,
+whether the state folder is writable, and which sidecars this machine believes
+it started. It exits non-zero if a required check fails.
 
 Common cases:
 
@@ -848,7 +854,8 @@ Notes:
 
 - `@vdoninja/sdk` 1.4.1 or newer is installed automatically
 - `ws` is installed directly for Node 20 and Social Stream compatibility
-- `@roamhq/wrtc` is recommended for Node bots that need WebRTC support
+- `@roamhq/wrtc` is recommended and supports data plus media
+- `node-datachannel` is a supported alternative for data-only peers
 
 ## Library Quick Start
 
@@ -1074,4 +1081,11 @@ npm run validate:swarm
 
 ## License
 
-MIT
+`ninja-p2p` is MIT licensed.
+
+Its `@vdoninja/sdk` dependency has its own terms: the Node wrapper and WebRTC
+adapter are MIT, while the SDK core is AGPL-3.0-only with an
+[unmodified linking exception](https://github.com/steveseguin/ninjasdk/blob/v1.5.2/LICENSE-SDK-EXCEPTION).
+`ninja-p2p` consumes the official SDK package without modifying it. Anyone
+bundling or redistributing the SDK should preserve the notices and license copy
+required by that exception.

@@ -95,6 +95,9 @@ export class PeerRegistry extends EventEmitter {
   markDisconnected(identifier: string): PeerRecord | undefined {
     const peer = this.resolve(identifier);
     if (!peer) return undefined;
+    // One logical disconnect can surface through several SDK paths. A leave
+    // event represents the state transition, not every low-level notification.
+    if (!peer.connected) return peer;
     peer.connected = false;
     peer.lastSeenAt = Date.now();
     this.emit("peer:leave", peer);

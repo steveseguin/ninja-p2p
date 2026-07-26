@@ -16,13 +16,15 @@ folders, resumable swarm transfer, and a Social Stream Ninja bridge.
 If the user is trying it for the first time, or something is not connecting, prefer these two before anything else:
 
 - `/ninja-p2p demo` runs a full live round trip between two peers and prints a pass or fail per step.
-- `/ninja-p2p doctor` checks Node, the native WebRTC module, signaling reachability, and running sidecars.
+- `/ninja-p2p doctor` checks Node, the selected WebRTC adapter, signaling reachability, and running sidecars.
 
 If the CLI is missing, tell the user to install it:
 
 ```bash
 npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
 ```
+
+`@roamhq/wrtc` is recommended; data-only peers may use `node-datachannel`.
 
 The arguments passed to this skill are:
 

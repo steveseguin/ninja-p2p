@@ -91,6 +91,8 @@ export class VDOBridge extends EventEmitter {
   private version = readPackageVersion();
   private agentProfile: AgentProfile | undefined;
   private readonly viewedStreamIds = new Set<string>();
+  /** UUIDs whose control data channel has actually opened. */
+  private readonly dataChannelReadyUuids = new Set<string>();
   private disconnecting = false;
   /** Set while the SDK is re-establishing signalling and replaying its intent. */
   private restoring = false;
@@ -136,6 +138,10 @@ export class VDOBridge extends EventEmitter {
     // Set the send function on the bus
     this.bus.setSendDataFn((data, target) => {
       if (!this.sdk) return false;
+      // peerConnected precedes dataChannelOpen. Calling sendData in that gap is
+      // a known refusal, and SDK 1.5.2 warns before returning false. Let the
+      // caller queue or retry without invoking a transport that is not ready.
+      if (!this.canAttemptSDKSend(target)) return false;
       try {
         return this.sdk.sendData(data, target ?? undefined) !== false;
       } catch (err) {
@@ -211,6 +217,7 @@ export class VDOBridge extends EventEmitter {
     this.disconnecting = false;
     this.sdk = null;
     this.viewedStreamIds.clear();
+    this.dataChannelReadyUuids.clear();
     this.peers.clear();
     console.log("[P2P] Disconnected.");
     this.emit("disconnected");
@@ -478,6 +485,7 @@ export class VDOBridge extends EventEmitter {
     // Data channel opened — send our announce
     this.addSDKEventListener("dataChannelOpen", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
+      if (uuid !== "unknown") this.dataChannelReadyUuids.add(uuid);
       const mappedStreamId = this.peers.streamIdForUuid(uuid);
       const eventStreamId = event.detail?.streamID;
       const streamId = mappedStreamId ?? (
@@ -595,7 +603,15 @@ export class VDOBridge extends EventEmitter {
     // Peer disconnected
     this.addSDKEventListener("peerDisconnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
       const uuid = event.detail?.uuid ?? "unknown";
-      const streamId = event.detail?.streamID ?? this.peers.streamIdForUuid(uuid) ?? uuid;
+      const knownPeer = this.peers.getPeer(uuid) ?? (
+        event.detail?.streamID ? this.peers.getPeer(event.detail.streamID) : undefined
+      );
+      // The SDK can surface one disconnect through failure, bye, and hangup
+      // notifications. Consumers need one logical transition.
+      if (knownPeer && !knownPeer.connected) return;
+      const streamId = knownPeer?.streamId ?? event.detail?.streamID ?? uuid;
+      this.dataChannelReadyUuids.delete(uuid);
+      if (knownPeer) this.dataChannelReadyUuids.delete(knownPeer.uuid);
       this.viewedStreamIds.delete(streamId);
       this.peers.markDisconnected(streamId);
       console.log(`[P2P] Peer disconnected: ${streamId}`);
@@ -687,6 +703,34 @@ export class VDOBridge extends EventEmitter {
     handler: (event: { detail?: T }) => void,
   ): void {
     this.sdk?.addEventListener(name, handler as unknown as EventListener);
+  }
+
+  /**
+   * Decide whether sendData has a channel it can use without producing a known
+   * refusal. Explicit WebSocket fallback remains allowed for callers that ask
+   * for it, preserving sendRaw's compatibility behavior.
+   */
+  private canAttemptSDKSend(target?: unknown): boolean {
+    if (typeof target === "object" && target !== null) {
+      const options = target as {
+        allowFallback?: unknown;
+        uuid?: unknown;
+        streamID?: unknown;
+      };
+      if (options.allowFallback === true) return true;
+      if (typeof options.uuid === "string") {
+        return this.dataChannelReadyUuids.has(options.uuid);
+      }
+      if (typeof options.streamID === "string") {
+        const peer = this.peers.getPeer(options.streamID);
+        return peer ? this.dataChannelReadyUuids.has(peer.uuid) : false;
+      }
+    }
+    if (typeof target === "string") {
+      const peer = this.peers.getPeer(target);
+      return this.dataChannelReadyUuids.has(peer?.uuid ?? target);
+    }
+    return this.dataChannelReadyUuids.size > 0;
   }
 
   // ── Heartbeat ────────────────────────────────────────────────────────────

@@ -4,19 +4,21 @@ Things `@vdoninja/sdk` could add that would directly remove workarounds in
 `ninja-p2p`. Every item came from friction actually hit while building, with the
 evidence and the workaround in place at the time.
 
-**Status: eight are usable from SDK v1.4.1 on npm, with one packaging fix and
-one VDO.Ninja decision still open.** Item 9 exists in the SDK source and package
-metadata, but its declaration file is absent from the published npm tarball.
+**Status: all nine SDK items are published, with one TypeScript interop caveat
+and one VDO.Ninja decision still open.** SDK 1.5.2 includes the declaration
+files that were missing from 1.4.1, and its Node runtime works with both
+`@roamhq/wrtc` and `node-datachannel`.
 
 Verified against a local v1.4.1 build on 2026-07-25 with two live Node peers over
 real signalling — not by reading the source. Results and two corrections to the
 SDK's own Node caveats are in [Verification](#verification) at the end.
 
-`ninja-p2p` now declares `@vdoninja/sdk` `^1.4.1` and uses its runtime APIs
-directly. A narrow local type shim remains because the 1.4.1 npm tarball
-advertises `vdoninja-sdk.d.ts` but does not include it. Runtime feature detection
-also remains so a room containing an older already-installed peer automatically
-uses the verified base64 swarm fallback for that peer.
+`ninja-p2p` declares `@vdoninja/sdk` `^1.4.1` and uses its runtime APIs directly.
+A narrow local type shim remains because that range still admits the incomplete
+1.4.1 tarball, and because the 1.5.2 Node default type import is not constructable
+under ESM + Node16 TypeScript resolution. Runtime feature detection also remains
+so a room containing an older already-installed peer automatically uses the
+verified base64 swarm fallback for that peer.
 
 | # | Item | Status | API |
 |---|------|--------|-----|
@@ -28,7 +30,7 @@ uses the verified base64 swarm fallback for that peer.
 | 6 | Max message size | **landed** | `getMaxMessageSize()` |
 | 7 | Per-peer connection quality | **landed** | `getPeerQuality()` |
 | 8 | Unambiguous lifecycle events | **landed** | `disconnected` detail: `intentional`, `reason`, `phase` |
-| 9 | TypeScript definitions | **packaging fix needed** | metadata points to an omitted `vdoninja-sdk.d.ts` |
+| 9 | TypeScript definitions | **landed; ESM caveat** | declarations ship in 1.5.2; named Node types work |
 | 10 | Room/salt derivation contract | **open** | — |
 
 ---
@@ -123,13 +125,18 @@ derived from inbound RTP and a data-only peer carries none.
 logging "SDK will attempt reconnect" during deliberate shutdowns; `willReconnect`
 answers that directly and our local suppression flag can go.
 
-## 9. TypeScript definitions — packaging fix needed
+## 9. TypeScript definitions — landed, with an ESM caveat
 
 `vdoninja-sdk.d.ts` exists in the SDK source and the package metadata points to
 it, with internals deliberately omitted. The npm 1.4.1 tarball does not contain
-the file, so TypeScript consumers resolve the Node entry to untyped JavaScript.
-`ninja-p2p` therefore keeps its narrow shim until a registry release actually
-ships the advertised declaration.
+the file; SDK 1.5.2 fixes that packaging gap and ships both browser and Node
+declarations.
+
+One interop issue remains: a default type import from `@vdoninja/sdk/node` is
+treated as a namespace rather than a constructable class in an ESM project using
+Node16 module resolution. Named type imports work. `ninja-p2p` keeps its narrow
+shim because its declared floor still admits 1.4.1 and because exporting the
+upstream default type would pass this ESM problem to consumers.
 
 ## 10. A documented room and hash derivation contract — still open
 
@@ -149,6 +156,14 @@ stable constrains VDO.Ninja. Recording it here as open rather than pressing.
 ---
 
 ## Verification
+
+The current compatibility pass used the published SDK 1.5.2 package:
+
+- 358 tests and the TypeScript build passed on Node 20, 22, and 24.
+- The full four-peer validator passed with direct files, images, and shared
+  folders using `@roamhq/wrtc`.
+- The same live validator and the 2 MiB / 2,048-chunk binary swarm passed with
+  `node-datachannel` only, including an exact sha256 match.
 
 Two Node peers, real signalling, `@roamhq/wrtc`, local build of v1.4.1.
 

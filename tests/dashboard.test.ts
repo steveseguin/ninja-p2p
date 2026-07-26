@@ -19,7 +19,10 @@ test("the dashboard announces the package version", () => {
 
 test("the dashboard has one checksum helper and observes rejected sends", () => {
   assert.equal((rootDashboard.match(/async function sha256Hex\(/g) ?? []).length, 1);
-  assert.match(rootDashboard, /sdk\.sendData\(env, sendTarget\(opts\)\) !== false/);
+  assert.match(rootDashboard, /if \(!isSendReady\(target\)\) return false/);
+  assert.match(rootDashboard, /sdk\.sendData\(env, target\) !== false/);
+  assert.match(rootDashboard, /readyUuids\.add\(uuid\)/);
+  assert.match(rootDashboard, /readyUuids\.delete\(uuid\)/);
   assert.match(rootDashboard, /getBufferedAmount/);
   assert.doesNotMatch(rootDashboard, /\{\s*UUID:/);
 });

@@ -1,6 +1,6 @@
 {
   "name": "@vdoninja/ninja-p2p",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Agent coordination and file handoffs over WebRTC, with wake hooks, resumable file swarms, and an optional Social Stream bridge",
   "type": "module",
   "main": "./dist/index.js",
@@ -110,10 +110,14 @@
     "ws": "^8.21.0"
   },
   "peerDependencies": {
-    "@roamhq/wrtc": "^0.8.0"
+    "@roamhq/wrtc": "^0.8.0",
+    "node-datachannel": "^0.32.3"
   },
   "peerDependenciesMeta": {
     "@roamhq/wrtc": {
+      "optional": true
+    },
+    "node-datachannel": {
       "optional": true
     }
   },

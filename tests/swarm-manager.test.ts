@@ -93,11 +93,20 @@ function withManager<T>(
     log: (m) => logs.push(m),
   });
   manager.start();
-  try {
-    return fn({ manager, bridge, dir, logs });
-  } finally {
+  const cleanup = (): void => {
     manager.stop();
     rmSync(dir, { recursive: true, force: true });
+  };
+  try {
+    const result = fn({ manager, bridge, dir, logs });
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      return (result as Promise<unknown>).finally(cleanup) as T;
+    }
+    cleanup();
+    return result;
+  } catch (error) {
+    cleanup();
+    throw error;
   }
 }
 
@@ -328,6 +337,42 @@ describe("serving chunks", () => {
       // once per chunk.
       assert.equal(bridge.ofType("swarm_chunk").length, 1);
     });
+  });
+
+  it("does not start a base64 fallback after the manager stops", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-mgr-stop-"));
+    const bridge = new FakeBridge();
+    const manager = new SwarmManager({
+      bridge: bridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+      downloadDir: path.join(dir, "dl"),
+      workDir: path.join(dir, "work"),
+    });
+    let resolveBinary!: (sent: boolean) => void;
+    bridge.sendBinaryTo = async () => new Promise<boolean>((resolve) => {
+      resolveBinary = resolve;
+    });
+
+    manager.start();
+    try {
+      const manifest = manager.seed(makeFile(dir, "a.bin"));
+      bridge.deliver("leech", "swarm_request", {
+        fileId: manifest.fileId,
+        index: 0,
+        bin: 1,
+      });
+      manager.stop();
+      resolveBinary(false);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.equal(
+        bridge.ofType("swarm_chunk").length,
+        0,
+        "shutdown must not fall back onto a closing control channel",
+      );
+    } finally {
+      manager.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("ignores a request for a file it does not have", () => {

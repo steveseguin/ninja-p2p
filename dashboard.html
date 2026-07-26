@@ -155,7 +155,7 @@ input:focus,select:focus{border-color:var(--accent)}
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@latest/vdoninja-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.2/vdoninja-sdk.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -165,9 +165,10 @@ input:focus,select:focus{border-color:var(--accent)}
   let connected = false;
   let myStreamId = '';
   let myIdentity = null;
-  const DASHBOARD_VERSION = '0.2.0';
+  const DASHBOARD_VERSION = '0.2.1';
   const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
   const peerUuidToStream = new Map();
+  const readyUuids = new Set(); // control data channels that have opened
   const messages = [];
   const MAX_MESSAGES = 500;
   const MAX_BROWSER_RECEIVE_SIZE = 64 * 1024 * 1024;
@@ -906,6 +907,7 @@ input:focus,select:focus{border-color:var(--accent)}
 
       sdk.addEventListener('dataChannelOpen', (e) => {
         const uuid = e.detail?.uuid;
+        if (uuid) readyUuids.add(uuid);
         // Send our announce
         const announce = createEnvelope('announce', {
           skills: ['dashboard-ui', 'chat'],
@@ -1040,6 +1042,7 @@ input:focus,select:focus{border-color:var(--accent)}
 
       sdk.addEventListener('peerDisconnected', (e) => {
         const uuid = e.detail?.uuid || '';
+        if (uuid) readyUuids.delete(uuid);
         const sid = e.detail?.streamID || '';
         // Find by uuid if no streamID
         let key = sid;
@@ -1048,6 +1051,7 @@ input:focus,select:focus{border-color:var(--accent)}
         }
         if (key && peers.has(key)) {
           const p = peers.get(key);
+          if (!p.connected) return;
           const name = p.identity?.name || key;
           p.connected = false;
           addMessage('system', name, 'disconnected', Date.now());
@@ -1096,7 +1100,7 @@ input:focus,select:focus{border-color:var(--accent)}
 
       // Request history from any peers
       setTimeout(() => {
-        if (sdk && connected) {
+        if (sdk && connected && readyUuids.size > 0) {
           const req = createEnvelope('history_request', { count: 50 });
           try { sdk.sendData(req); } catch(err) {}
         }
@@ -1121,6 +1125,7 @@ input:focus,select:focus{border-color:var(--accent)}
     pendingUploads.clear();
     for (const transfer of incomingTransfers.values()) clearTimeout(transfer.timer);
     incomingTransfers.clear();
+    readyUuids.clear();
     peers.clear();
     dot.classList.remove('on');
     statusEl.textContent = 'Disconnected';
@@ -1381,10 +1386,22 @@ input:focus,select:focus{border-color:var(--accent)}
     return peer && peer.uuid ? { uuid: peer.uuid } : { streamID: opts.to };
   }
 
+  function isSendReady(target) {
+    if (!target) return readyUuids.size > 0;
+    if (target.uuid) return readyUuids.has(target.uuid);
+    if (target.streamID) {
+      const peer = peers.get(target.streamID);
+      return !!(peer && readyUuids.has(peer.uuid));
+    }
+    return false;
+  }
+
   function sendCreatedEnvelope(env, opts, reportError) {
     if (!sdk || !connected) return false;
+    const target = sendTarget(opts);
+    if (!isSendReady(target)) return false;
     try {
-      return sdk.sendData(env, sendTarget(opts)) !== false;
+      return sdk.sendData(env, target) !== false;
     } catch (err) {
       if (reportError) addMessage('system', 'System', 'Send error: ' + err.message, Date.now());
       return false;

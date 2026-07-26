@@ -12,7 +12,8 @@
   fallback and retry behavior.
 - The browser dashboard is pinned to the reviewed SDK 1.5.2 build instead of a
   stale, nondeterministic `@latest` URL.
-- CI covers Node 20, 22, and 24 with both supported WebRTC adapters.
+- Release checks cover Node 20, 22, and 24 with both supported WebRTC adapters,
+  plus the current npm install path used by Node 24.
 - Licensing documentation now distinguishes ninja-p2p's MIT license from the
   SDK's separate per-file terms and unmodified linking exception. No license
   terms or license files changed.

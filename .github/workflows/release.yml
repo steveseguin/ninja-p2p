@@ -31,6 +31,9 @@ jobs:
       - name: Test and build
         run: npm run check
 
+      - name: Verify selected WebRTC adapter
+        run: node scripts/validate-adapter.mjs "@roamhq/wrtc"
+
       - name: Use current npm with trusted publishing support
         run: npm install --global npm@latest
 

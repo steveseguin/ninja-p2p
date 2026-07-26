@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Use npm 10 for isolated adapter installs
+        run: npm install --global npm@10.9.8
+
       - name: Install without an implicit WebRTC adapter
         run: npm install --omit=optional
 
@@ -43,3 +46,22 @@ jobs:
 
       - name: Verify selected adapter
         run: node scripts/validate-adapter.mjs "${{ matrix.adapter.expected }}"
+
+  install-smoke:
+    name: Node 24 / current npm install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install the normal user dependency set
+        run: npm install
+
+      - name: Test and build
+        run: npm run check
+
+      - name: Verify the recommended adapter
+        run: node scripts/validate-adapter.mjs "@roamhq/wrtc"

@@ -15,6 +15,7 @@ import {
 
 test("help text includes the simple install and connect flow", () => {
   const text = helpText();
+  assert.match(text, /lets separate AI tools work as a team/);
   assert.match(text, /ninja-p2p menu/);
   assert.match(text, /ninja-p2p start --id claude/);
   assert.match(text, /ninja-p2p room --id codex/);

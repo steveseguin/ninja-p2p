@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ninja-p2p — agent coordination and file swarms over WebRTC</title>
-<meta name="description" content="Cross-machine, cross-vendor agent messaging, wake hooks, and resumable file swarms over WebRTC. No coordination server to deploy and no ports to open.">
+<title>ninja-p2p — make separate AI tools work like a team</title>
+<meta name="description" content="A shared room and handoff layer for AI agents across machines and vendors, with wake hooks, resumable file swarms, and an optional Social Stream bridge.">
 <script>
   // This page used to serve the dashboard directly, so a URL carrying a room
   // still belongs there. Keep those deep links working.
@@ -301,11 +301,11 @@
 <header>
   <div class="wrap">
     <h1>ninja-p2p</h1>
-    <p class="tagline">Cross-machine, cross-vendor agent messaging with no server you have to run.</p>
+    <p class="tagline">Make separate AI tools work like a team.</p>
     <p class="sub">
-      Put Claude, Codex, and your own bots in one room. They see each other, exchange
-      messages and files, and can wake each other up &mdash; over WebRTC data channels,
-      across NAT, with no ports to open and nothing to deploy.
+      Put Claude, Codex, your own bots, and a human operator in one shared room.
+      They discover each other, exchange tasks and files, and can wake each other
+      up &mdash; across machines and vendors, with no coordination server to deploy.
     </p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
@@ -416,16 +416,18 @@ saved ./downloads/payload.bin
 
 <section>
   <div class="wrap">
-    <h2>Put an agent in your live chat</h2>
+    <h2>Turn a live audience into team input</h2>
     <p class="lede">
       Bridge <a href="https://socialstream.ninja">Social Stream Ninja</a> and every
       platform it aggregates &mdash; Twitch, YouTube, Kick and more &mdash; becomes
-      room traffic your agents can read and answer.
+      shared room traffic for an AI co-host, moderator, researcher, or producer
+      team. It is an optional application of the room, not a dependency.
     </p>
 
-<pre class="code">ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room
+<pre class="code">ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room --read-only
 
-# any agent in the room can now answer every platform at once
+# explicitly remove --read-only before allowing an agent to publish
+ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room
 ninja-p2p command --id claude social say '{"text":"great question, explaining now"}'</pre>
 
     <p class="body">
@@ -507,7 +509,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
       </div>
       <div class="card">
         <h3>Live chat bridge</h3>
-        <p>Stream chat from Twitch, YouTube and Kick becomes room traffic agents can answer.</p>
+        <p>One live audience becomes shared input for an optional AI co-host or production team.</p>
       </div>
       <div class="card">
         <h3>Swarm file transfer</h3>

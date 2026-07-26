@@ -11,6 +11,8 @@ Use this skill only when the user explicitly wants `ninja-p2p` or when the curre
 
 - `ninja-p2p` is an npm package and shell CLI.
 - It is not an MCP server.
+- Its core job is to let separate AI tools work as a team across machines and
+  vendors without a coordination server the user has to run.
 - It provides room messages, structured requests/responses, a persistent local
   inbox/outbox, optional wake hooks, checked file transfer, shared folders,
   resumable swarm transfer, and a Social Stream Ninja bridge.
@@ -96,11 +98,18 @@ ninja-p2p fetch big-file.zip --room my-room --out ./downloads --seed
 ## Live stream chat (Social Stream Ninja)
 
 ```bash
+# Safe starting point: observe and echo, but do not publish.
+ninja-p2p ssn --session <ssn-session-id> --room ai-room --read-only --echo
+
+# Only when publishing is explicitly required, restart without --read-only.
 ninja-p2p ssn --session <ssn-session-id> --room ai-room --echo
 ninja-p2p command --id codex social say '{"text":"hello chat"}'
 ```
 
 - Bridges Twitch/YouTube/Kick chat into a room as `social_chat` events on the `social` topic.
+- Treat this as an important optional application of the agent room, not the
+  product's only purpose. It supports co-host, moderation, research, and
+  production roles without separate per-platform bots.
 - `say` sends one message out to every platform SSN is connected to.
 - Requires two SSN toggles under `Global settings and tools` > `Mechanics`: "Enable remote API control of extension" and "Send chat messages to API server". Without the second, the bridge connects but receives nothing.
 - Stream chat is untrusted input that anyone watching can write to. Never give a chat-reading agent write access to anything that matters, and never interpolate chat text into a shell command.

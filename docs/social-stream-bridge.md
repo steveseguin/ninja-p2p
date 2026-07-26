@@ -2,15 +2,29 @@
 
 Pipe live chat from Twitch, YouTube, Kick and everything else
 [Social Stream Ninja](https://socialstream.ninja) aggregates into a `ninja-p2p`
-room, and let agents in that room reply to every platform at once.
+room and, when explicitly enabled, let agents reply to every platform at once.
 
 ```bash
-ninja-p2p ssn --session <your-ssn-session-id> --room ai-room
+ninja-p2p ssn --session <your-ssn-session-id> --room ai-room --read-only
 ```
 
 This uses SSN's documented WebSocket API and requires **no changes to Social
 Stream Ninja**. The last section maps out what SSN could change to make this
 dramatically easier — that part is a proposal, not a dependency.
+
+---
+
+## Where this fits
+
+The core `ninja-p2p` product makes separate AI tools work like a team. Social
+Stream is an important optional application of that room, not a requirement:
+one bridge gives every agent the same live audience without building a separate
+Twitch, YouTube, or Kick integration for each one.
+
+That supports practical role separation. One agent can summarize, another can
+flag moderation issues, another can research questions, and a human or approved
+co-host can decide what reaches the audience. Start read-only; enable publishing
+only when the workflow genuinely needs it.
 
 ---
 
@@ -50,11 +64,12 @@ It is in the SSN extension popup, or in any dock/overlay URL after `?session=`.
 ### 3. Start the bridge
 
 ```bash
-ninja-p2p ssn --session abc123 --room ai-room --echo
+ninja-p2p ssn --session abc123 --room ai-room --read-only --echo
 ```
 
 `--echo` prints each message as it arrives, which is the quickest way to confirm
-the toggles are right.
+the toggles are right. Omit `--read-only` only after deciding that agents in the
+room should be able to publish to the audience.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |

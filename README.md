@@ -2,13 +2,22 @@
 
 ## TL;DR
 
-Think of `ninja-p2p` as a small group chat and handoff layer for AI helpers. Put Codex, Claude, your own bots, and optionally a human operator in the same room. They can discover each other, exchange messages and structured requests, move files directly or as a resumable swarm, and keep a local inbox while another agent is busy.
+`ninja-p2p` is a shared room and handoff layer that makes separate AI tools work
+like a team. Put Codex, Claude, your own bots, and optionally a human operator
+in the same room. They can discover each other, exchange messages and structured
+requests, move files directly or as a resumable swarm, and keep a local inbox
+while another agent is busy.
 
-A sidecar can wake a turn-based agent when mail arrives, and an optional Social Stream Ninja bridge can turn live Twitch, YouTube, and Kick chat into room events.
+A sidecar can wake a turn-based agent when mail arrives. Social Stream Ninja is
+an important optional application of the same room: live Twitch, YouTube, Kick,
+and other chat becomes shared input for an AI co-host, moderator, researcher,
+or producer team.
 
 It runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not need to build or host a new chat server.
 
-**Best for:** always-on agent rooms, cross-machine handoffs, shell automation, and direct file distribution without deploying a coordination server.
+**Best for:** always-on agent rooms, cross-machine handoffs, shell automation,
+direct file distribution, and AI-assisted live production without deploying a
+coordination server.
 
 **Not for:** general network tunnelling, durable cloud storage, or very large public communities.
 
@@ -26,6 +35,8 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 - A **sidecar** keeps one agent connected and holds its local inbox.
 - The **CLI or skill** lets Codex and Claude read and write that inbox during their turns.
 - The optional **dashboard** lets a person watch, chat, inspect agents, and send or download files.
+- The optional **Social Stream bridge** turns one live audience into room events
+  the whole agent team can observe.
 
 ## See It Work First
 
@@ -553,10 +564,15 @@ memory; use `seed` / `fetch` for larger files.
 
 ## Live Stream Chat (Social Stream Ninja)
 
-Pipe live chat from Twitch, YouTube, Kick and everything else [Social Stream Ninja](https://socialstream.ninja) aggregates into a room, so agents can watch it and answer it.
+Pipe live chat from Twitch, YouTube, Kick and everything else
+[Social Stream Ninja](https://socialstream.ninja) aggregates into a room, so a
+team of agents can watch the same audience, divide up moderation, research,
+summarization, and hosting work, and optionally answer every platform through
+one bridge. This is a strong application of the agent room, not a dependency:
+`ninja-p2p` remains useful without Social Stream or a live broadcast.
 
 ```bash
-ninja-p2p ssn --session <your-ssn-session-id> --room ai-room --echo
+ninja-p2p ssn --session <your-ssn-session-id> --room ai-room --read-only --echo
 ```
 
 Each chat message is published as an event on the `social` topic, so any agent in the room reads it the normal way. Pair it with a wake hook and the agent reacts on its own:
@@ -566,9 +582,15 @@ ninja-p2p start --id claude --room ai-room \
   --on-message "claude -p 'New stream chat arrived. Run: ninja-p2p read --take 20'"
 ```
 
-The bridge also advertises a `say` command, so one message from an agent goes out to every connected platform at once:
+If an agent genuinely needs to publish, restart the bridge without
+`--read-only`. It then advertises a `say` command, so one message goes out to
+every connected platform at once:
 
 ```bash
+# terminal 1, after stopping the read-only bridge
+ninja-p2p ssn --session <your-ssn-session-id> --room ai-room --echo
+
+# terminal 2
 ninja-p2p command --id claude social say '{"text":"great question, explaining now"}'
 ```
 

@@ -1,7 +1,7 @@
 {
   "name": "@vdoninja/ninja-p2p",
   "version": "0.2.0",
-  "description": "P2P agent messaging, wake hooks, and resumable file swarms over VDO.Ninja WebRTC data channels",
+  "description": "Agent coordination and file handoffs over WebRTC, with wake hooks, resumable file swarms, and an optional Social Stream bridge",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

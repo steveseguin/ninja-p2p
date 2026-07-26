@@ -7,6 +7,8 @@ function read(relativePath: string): string {
 }
 
 const readme = read("README.md");
+const landingPage = read("docs/index.html");
+const socialStreamGuide = read("docs/social-stream-bridge.md");
 const codexSkill = read(".codex/skills/ninja-p2p/SKILL.md");
 const agentsSkill = read(".agents/skills/ninja-p2p/SKILL.md");
 const claudeSkill = read(".claude/skills/ninja-p2p/SKILL.md");
@@ -39,6 +41,16 @@ test("the user guides distinguish simple, shared, swarm, and browser file paths"
     assert.match(guide, /64 MiB/);
     assert.match(guide, /read-only/);
   }
+});
+
+test("the product story stays aligned across user-facing surfaces", () => {
+  for (const surface of [readme, landingPage, codexSkill, claudeSkill]) {
+    assert.match(surface, /separate AI tools work\s+(?:like|as) a team/);
+  }
+  assert.match(socialStreamGuide, /important optional application/);
+  assert.match(socialStreamGuide, /Start read-only/);
+  assert.match(packageJson.description, /Agent coordination and file handoffs/);
+  assert.match(packageJson.description, /optional Social Stream bridge/);
 });
 
 test("the library guide and package metadata describe the SDK 1.4.1 binary API", () => {

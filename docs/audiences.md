@@ -12,7 +12,8 @@ not just what sounded good.
 
 ## The one-sentence claim
 
-> Cross-machine, cross-vendor agent messaging with no server you have to run.
+> Make separate AI tools work like a team across machines and vendors, without
+> a coordination server you have to run.
 
 That is the only thing `ninja-p2p` does that nothing else does. Every audience
 pitch below is a different way of cashing in that same sentence. Alternatives
@@ -37,6 +38,15 @@ strong and true line.
 ---
 
 ## Status log
+
+**2026-07-26 — the product story converged.** The core user outcome is no
+longer framed as P2P for its own sake: separate AI tools get a shared room,
+inbox, and handoff layer so they can work as a team. Social Stream Ninja is the
+strongest optional application of that core — one live audience can feed a
+co-host, moderator, researcher, and producer team without per-platform bots —
+but it is not a dependency or the whole product. The README, landing page, npm
+metadata, CLI help, bundled skills, and Social Stream guide now say the same
+thing and lead with read-only chat access.
 
 **2026-07-25 — release audit turned the feature set into a bounded contract.**
 The v0.2 work was reviewed as hostile network input rather than only as a happy

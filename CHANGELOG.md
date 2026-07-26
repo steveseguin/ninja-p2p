@@ -45,7 +45,7 @@ the README for the spread.
 - **`ninja-p2p ssn --session <id>`** bridges Social Stream Ninja — Twitch,
   YouTube, Kick and everything else it aggregates — into a room as events on the
   `social` topic, with a `say` command to reply to every platform at once.
-  `--read-only` is available for trying it safely.
+  The guides start with `--read-only`; publishing is an explicit opt-in.
 
 ### Getting started and diagnosis
 
@@ -103,6 +103,9 @@ the README for the spread.
   allowlisted shared folders, browser limits, and resumable swarm transfer.
 - The library guide now documents the actual binary API (`sendBinaryTo` and the
   `binary` event) instead of implying that `sendRaw` bypasses JSON.
+- Product messaging now leads with the user outcome — separate AI tools working
+  as a team — and presents Social Stream Ninja as an important optional
+  co-host, moderation, research, and live-production use case.
 
 ## 0.1.4 and earlier
 

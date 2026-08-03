@@ -73,7 +73,7 @@ test("the landing page surfaces the main end-user capabilities", () => {
 
 test("the dashboard uses one reviewed SDK build", () => {
   assert.equal(pagesDashboard, dashboard);
-  assert.match(dashboard, /ninjasdk@v1\.5\.2\/vdoninja-sdk\.min\.js/);
+  assert.match(dashboard, /ninjasdk@v1\.5\.4\/vdoninja-sdk\.min\.js/);
   assert.doesNotMatch(dashboard, /ninjasdk@latest/);
 });
 
@@ -81,13 +81,13 @@ test("the library guide and package metadata preserve SDK compatibility", () => 
   assert.match(readme, /sendBinaryTo/);
   assert.match(readme, /bridge\.on\("binary"/);
   assert.match(readme, /sendRaw\(\).*is not the binary API/);
-  assert.equal(packageJson.dependencies["@vdoninja/sdk"], "^1.4.1");
+  assert.equal(packageJson.dependencies["@vdoninja/sdk"], "^1.5.4");
   assert.equal(packageJson.peerDependencies["@roamhq/wrtc"], "^0.8.0");
   assert.equal(packageJson.peerDependencies["node-datachannel"], "^0.32.3");
   assert.match(packageJson.description, /resumable file swarms/);
   assert.match(sdkWishlist, /SDK 1\.5\.2 fixes that packaging gap/);
   assert.match(sdkWishlist, /node-datachannel/);
-  assert.match(sdkTypeShim, /SDK 1\.5\.2 now ships declarations/);
+  assert.match(sdkTypeShim, /SDK 1\.5\.4 ships declarations/);
   assert.match(sdkTypeShim, /ESM \+ Node16 TypeScript/);
   assert.match(sdkTypeShim, /consumers do not inherit/);
   assert.match(doctorSource, /getWebRTCInfo/);
@@ -98,8 +98,8 @@ test("the library guide and package metadata preserve SDK compatibility", () => 
 
 test("license documentation distinguishes ninja-p2p from its SDK dependency", () => {
   assert.match(readme, /`ninja-p2p` is MIT licensed/);
-  assert.match(readme, /SDK core is AGPL-3\.0-only/);
-  assert.match(readme, /unmodified linking exception/);
+  assert.match(readme, /SDK package is\s+MPL-2\.0/);
+  assert.doesNotMatch(readme, /unmodified linking exception/);
 });
 
 test("local links in the Markdown guides resolve", () => {

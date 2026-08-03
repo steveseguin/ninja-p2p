@@ -1,11 +1,9 @@
 /**
  * Narrow compatibility types for @vdoninja/sdk.
  *
- * The declared SDK range still admits 1.4.1, whose npm tarball points at a
- * declaration file it does not contain. SDK 1.5.2 now ships declarations, but
- * its Node default export is not constructable under ESM + Node16 TypeScript
- * resolution. Keep this local interface so ninja-p2p supports its existing SDK
- * floor and consumers do not inherit either declaration problem.
+ * SDK 1.5.4 ships declarations, but its Node default export is not constructable
+ * under ESM + Node16 TypeScript resolution. Keep this local interface so
+ * ninja-p2p consumers do not inherit that declaration problem.
  */
 
 export type VDONinjaOptions = {

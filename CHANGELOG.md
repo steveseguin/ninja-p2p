@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2
+
+- Add the package's explicit MIT license with Steve Seguin as the copyright
+  holder.
+- Raise the installed SDK floor and browser dashboard pin to 1.5.4, the first
+  SDK release under MPL-2.0.
+- Update current licensing documentation and release checks for the SDK's new
+  terms. Runtime behavior is unchanged.
+
 ## 0.2.1
 
 - `doctor` now probes the adapter selected by the SDK and accepts either

@@ -558,7 +558,7 @@ A single downloader is consistent. Several downloaders are not: the same test va
 
 Two honest notes:
 
-- **The fast path needs `@vdoninja/sdk` 1.4.1 or newer, which v0.2 installs.** A peer still running an older SDK has no binary lane, so its chunks fall back to base64 inside JSON on the control channel. Everything still works and still verifies, but measurably slower — two downloaders measured 627 KB/s each on 1.4.0 against 7.1 MB/s on 1.4.1. The fallback is chosen per request, so a room can mix old and new peers.
+- **The fast path was introduced in `@vdoninja/sdk` 1.4.1; this release installs 1.5.4 or newer.** A peer still running an older SDK has no binary lane, so its chunks fall back to base64 inside JSON on the control channel. Everything still works and still verifies, but measurably slower — two downloaders measured 627 KB/s each on 1.4.0 against 7.1 MB/s on 1.4.1. The fallback is chosen per request, so a room can mix old and new peers.
 - **These are local-network numbers.** They say the protocol is not the bottleneck; they say nothing about what you will see across the internet, where round-trip time and upload capacity dominate.
 
 The older `send-file` / `send-image` path remains for small one-to-one
@@ -852,7 +852,7 @@ npm install @vdoninja/ninja-p2p @roamhq/wrtc
 
 Notes:
 
-- `@vdoninja/sdk` 1.4.1 or newer is installed automatically
+- `@vdoninja/sdk` 1.5.4 or newer is installed automatically
 - `ws` is installed directly for Node 20 and Social Stream compatibility
 - `@roamhq/wrtc` is recommended and supports data plus media
 - `node-datachannel` is a supported alternative for data-only peers
@@ -1081,11 +1081,10 @@ npm run validate:swarm
 
 ## License
 
-`ninja-p2p` is MIT licensed.
+`ninja-p2p` is MIT licensed. Copyright (c) 2026 Steve Seguin.
 
-Its `@vdoninja/sdk` dependency has its own terms: the Node wrapper and WebRTC
-adapter are MIT, while the SDK core is AGPL-3.0-only with an
-[unmodified linking exception](https://github.com/steveseguin/ninjasdk/blob/v1.5.2/LICENSE-SDK-EXCEPTION).
-`ninja-p2p` consumes the official SDK package without modifying it. Anyone
-bundling or redistributing the SDK should preserve the notices and license copy
-required by that exception.
+Its `@vdoninja/sdk` dependency has its own terms. The SDK package is
+MPL-2.0, with some separately marked wrappers and adapters under MIT. Anyone
+bundling or redistributing the SDK should preserve its copyright and license
+notices and comply with the MPL-2.0 for covered SDK files. Those terms do not
+require the rest of an application to use the MPL-2.0.

@@ -5,20 +5,19 @@ Things `@vdoninja/sdk` could add that would directly remove workarounds in
 evidence and the workaround in place at the time.
 
 **Status: all nine SDK items are published, with one TypeScript interop caveat
-and one VDO.Ninja decision still open.** SDK 1.5.2 includes the declaration
-files that were missing from 1.4.1, and its Node runtime works with both
-`@roamhq/wrtc` and `node-datachannel`.
+and one VDO.Ninja decision still open.** The current SDK 1.5.4 floor includes
+the declaration files that were missing from 1.4.1, and its Node runtime works
+with both `@roamhq/wrtc` and `node-datachannel`.
 
 Verified against a local v1.4.1 build on 2026-07-25 with two live Node peers over
 real signalling — not by reading the source. Results and two corrections to the
 SDK's own Node caveats are in [Verification](#verification) at the end.
 
-`ninja-p2p` declares `@vdoninja/sdk` `^1.4.1` and uses its runtime APIs directly.
-A narrow local type shim remains because that range still admits the incomplete
-1.4.1 tarball, and because the 1.5.2 Node default type import is not constructable
-under ESM + Node16 TypeScript resolution. Runtime feature detection also remains
-so a room containing an older already-installed peer automatically uses the
-verified base64 swarm fallback for that peer.
+`ninja-p2p` declares `@vdoninja/sdk` `^1.5.4` and uses its runtime APIs directly.
+A narrow local type shim remains because the Node default type import is not
+constructable under ESM + Node16 TypeScript resolution. Runtime feature
+detection also remains so a room containing an older already-installed peer
+automatically uses the verified base64 swarm fallback for that peer.
 
 | # | Item | Status | API |
 |---|------|--------|-----|
@@ -135,8 +134,8 @@ declarations.
 One interop issue remains: a default type import from `@vdoninja/sdk/node` is
 treated as a namespace rather than a constructable class in an ESM project using
 Node16 module resolution. Named type imports work. `ninja-p2p` keeps its narrow
-shim because its declared floor still admits 1.4.1 and because exporting the
-upstream default type would pass this ESM problem to consumers.
+shim because exporting the upstream default type would pass this ESM problem to
+consumers.
 
 ## 10. A documented room and hash derivation contract — still open
 
@@ -157,7 +156,7 @@ stable constrains VDO.Ninja. Recording it here as open rather than pressing.
 
 ## Verification
 
-The current compatibility pass used the published SDK 1.5.2 package:
+The compatibility pass documented here used the published SDK 1.5.2 package:
 
 - 358 tests and the TypeScript build passed on Node 20, 22, and 24.
 - The full four-peer validator passed with direct files, images, and shared

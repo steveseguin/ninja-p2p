@@ -155,7 +155,7 @@ input:focus,select:focus{border-color:var(--accent)}
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.2/vdoninja-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -165,7 +165,7 @@ input:focus,select:focus{border-color:var(--accent)}
   let connected = false;
   let myStreamId = '';
   let myIdentity = null;
-  const DASHBOARD_VERSION = '0.2.1';
+  const DASHBOARD_VERSION = '0.2.2';
   const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
   const peerUuidToStream = new Map();
   const readyUuids = new Set(); // control data channels that have opened

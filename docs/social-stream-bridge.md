@@ -89,6 +89,12 @@ room should be able to publish to the audience.
 
 ## Troubleshooting
 
+Reconnect attempts use a bounded backoff schedule; callbacks from closed or
+replaced sockets are ignored. HTML chat is decoded once, while text-only input
+retains its existing normalization path. See [Operations and recovery](operations.md)
+for sidecar inbox and wake troubleshooting. These changes do not add a delivery
+acknowledgement from streaming platforms.
+
 - **Connected, but no chat arrives:** enable both SSN toggles above, then send a
   real message while `--echo` is running.
 - **A random or mistyped session still says connected:** the SSN relay currently

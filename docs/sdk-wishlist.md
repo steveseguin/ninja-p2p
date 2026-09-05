@@ -19,7 +19,7 @@ constructable under ESM + Node16 TypeScript resolution. Runtime feature
 detection also remains so a room containing an older already-installed peer
 automatically uses the verified base64 swarm fallback for that peer.
 
-### September 2026 compatibility review
+### 0.2.3 compatibility review (September 2026)
 
 Published SDK **1.6.0** was tested on Windows with Node 22.14.0 and
 `@roamhq/wrtc` 0.8.0: the four-peer messaging/file/image/shared-folder validator

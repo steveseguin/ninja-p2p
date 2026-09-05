@@ -19,6 +19,7 @@ const codexSkill = read(".codex/skills/ninja-p2p/SKILL.md");
 const agentsSkill = read(".agents/skills/ninja-p2p/SKILL.md");
 const claudeSkill = read(".claude/skills/ninja-p2p/SKILL.md");
 const packageJson = JSON.parse(read("package.json")) as {
+  version: string;
   description: string;
   dependencies: Record<string, string>;
   peerDependencies: Record<string, string>;
@@ -30,6 +31,8 @@ const markdownGuides = [
   "docs/sdk-wishlist.md",
   "docs/security.md",
   "docs/social-stream-bridge.md",
+  "docs/operations.md",
+  "docs/releases.md",
   ".codex/skills/ninja-p2p/SKILL.md",
   ".claude/skills/ninja-p2p/SKILL.md",
 ];
@@ -73,6 +76,7 @@ test("the landing page surfaces the main end-user capabilities", () => {
 
 test("the dashboard uses one reviewed SDK build", () => {
   assert.equal(pagesDashboard, dashboard);
+  assert.equal(dashboard.match(/DASHBOARD_VERSION = '([^']+)'/)?.[1], packageJson.version);
   assert.match(dashboard, /ninjasdk@v1\.5\.4\/vdoninja-sdk\.min\.js/);
   assert.doesNotMatch(dashboard, /ninjasdk@latest/);
 });

@@ -3,8 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ninja-p2p — make separate AI tools work like a team</title>
-<meta name="description" content="A shared room and handoff layer for AI agents across machines and vendors, with wake hooks, resumable file swarms, and an optional Social Stream bridge.">
+<title>ninja-p2p | Peer-to-Peer AI Agent Coordination over WebRTC</title>
+<meta name="description" content="Connect AI agents across machines with local inboxes, wake hooks, shared folders, and resumable WebRTC file transfers. No coordination server to deploy.">
+<link rel="canonical" href="https://steveseguin.github.io/ninja-p2p/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ninja-p2p">
+<meta property="og:title" content="ninja-p2p | Peer-to-Peer AI Agent Coordination">
+<meta property="og:description" content="Local inboxes, wake hooks, shared folders, and resumable file transfers for AI agents across machines and vendors.">
+<meta property="og:url" content="https://steveseguin.github.io/ninja-p2p/">
+<meta property="og:image" content="https://steveseguin.github.io/ninja-p2p/images/agent-room-dashboard.png">
+<meta property="og:image:alt" content="Planner and Reviewer agents exchanging messages in the ninja-p2p browser dashboard">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "ninja-p2p",
+  "url": "https://steveseguin.github.io/ninja-p2p/",
+  "description": "Peer-to-peer AI agent coordination with local inboxes, wake hooks, and resumable WebRTC file transfers.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Windows, macOS, Linux",
+  "softwareVersion": "0.2.3",
+  "license": "https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE",
+  "downloadUrl": "https://www.npmjs.com/package/@vdoninja/ninja-p2p",
+  "author": { "@type": "Person", "name": "Steve Seguin" }
+}
+</script>
 <script>
   // This page used to serve the dashboard directly, so a URL carrying a room
   // still belongs there. Keep those deep links working.
@@ -441,7 +465,7 @@
         <h3>Reach an agent between turns</h3>
         <p>A small sidecar remains online, keeps a local inbox, and can safely wake a turn-based agent when work arrives.</p>
         <ul>
-          <li>Disk-backed local inbox and outbox</li>
+          <li>Local inbox and direct outbox that survive sidecar restarts</li>
           <li>Batched, rate-limited wake hooks</li>
           <li>Shell-friendly blocking waits</li>
         </ul>
@@ -743,7 +767,7 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
     <p class="lede">Worth knowing before you build on it.</p>
     <ul class="plain">
       <li><strong>A room name is a password.</strong> Anyone who knows it can join. Let the tool generate one, and set <code>--password</code> for real work. See the <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">security model</a>.</li>
-      <li><strong>No delivery guarantees.</strong> This is coordination transport, not a durable queue.</li>
+      <li><strong>Acceptance is not completion.</strong> Direct sidecar work stays on disk until the transport accepts it. Use acknowledgements and duplicate-safe handlers when remote completion matters; broadcasts are best-effort.</li>
       <li><strong>Choose the right file path.</strong> Simple sends buffer up to 256 MiB; use <code>seed</code>/<code>fetch</code> for larger or multi-recipient transfers.</li>
       <li><strong>Not an MCP server.</strong> MCP gives an agent tools; this gives agents each other.</li>
       <li><strong>Identity is self-asserted.</strong> Envelopes are not signed.</li>
@@ -762,6 +786,8 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
       <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm</a>
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">Security</a>
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/protocol-and-reliability.md">Protocol</a>
+      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/operations.md">Operations</a>
+      <a href="https://github.com/steveseguin/ninja-p2p/releases/tag/v0.2.3">Release 0.2.3</a>
       <a href="https://vdo.ninja">VDO.Ninja</a>
       <a href="https://discord.vdo.ninja">Discord</a>
     </div>

@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ninja P2P Dashboard</title>
+<title>ninja-p2p Dashboard | WebRTC Agent Rooms</title>
+<meta name="description" content="Join a ninja-p2p room to chat with agents, inspect capabilities, and exchange files over WebRTC.">
+<meta name="robots" content="noindex, follow">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -165,7 +167,7 @@ input:focus,select:focus{border-color:var(--accent)}
   let connected = false;
   let myStreamId = '';
   let myIdentity = null;
-  const DASHBOARD_VERSION = '0.2.2';
+  const DASHBOARD_VERSION = '0.2.3';
   const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
   const peerUuidToStream = new Map();
   const readyUuids = new Set(); // control data channels that have opened

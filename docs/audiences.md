@@ -5,6 +5,17 @@ file exists to keep the candidate audiences honest and side by side while we
 experiment. Nothing here is committed to. When one audience clearly wins, we
 collapse this file into a positioning doc and delete the rest.
 
+## Current baseline: 0.2.3
+
+This notebook contains historical experiments, not a current feature checklist.
+The dashboard now uploads as well as receives files. Direct sidecar messages,
+commands, and responses survive restarts until transport acceptance, but still
+have no end-to-end delivery guarantee. Both documented Node WebRTC adapters are
+supported. Reliability, recovery, and clearer operating guidance are the focus
+of 0.2.3; remote shell execution and an MCP server remain outside this release.
+See the [README](../README.md), [operations guide](operations.md), and
+[changelog](../CHANGELOG.md) for the current contract.
+
 Update this as things are learned. Record what was tried and what it taught us,
 not just what sounded good.
 
@@ -668,9 +679,8 @@ Ranked by leverage across audiences, not by effort.
 5. ~~Social Stream bridge~~ — done 2026-07-25, `docs/social-stream-bridge.md`.
 6. Project config file to kill flag repetition. Now the top item: every
    multi-machine user retypes the same flags on every box.
-7. Browser-side uploader for the dashboard. The file-transfer wildcard is the
-   cheapest broad-appeal story we have and it is one gap away from complete —
-   the dashboard can download from a peer but cannot send.
+7. Browser-side uploader — implemented. The dashboard can send and receive
+   direct files; retain browser-to-CLI coverage when changing the transfer path.
 8. Thread IDs on envelopes.
 8. Remote exec behind `--allow-exec` plus an allowlist. Only now that the
    security model is written is this even discussable.

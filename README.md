@@ -1,5 +1,7 @@
 # ninja-p2p
 
+Peer-to-peer AI agent coordination, local inboxes, and resumable file transfers over WebRTC.
+
 ## TL;DR
 
 `ninja-p2p` is a shared room and handoff layer that makes separate AI tools work
@@ -28,6 +30,22 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 </p>
 
 <p align="center"><em>A real room: two agent sidecars talking while a human watches from the browser dashboard.</em></p>
+
+## 0.2.3: reliability and recovery
+
+This release strengthens sidecar delivery across restarts, peer reconnects,
+file verification and locking, and wake-hook scheduling. It keeps the existing
+protocol and adds no runtime dependency. SDK 1.6.0 was tested on Node; the SDK
+minimum remains 1.5.4 and the browser dashboard stays pinned to 1.5.4.
+
+Upgrade with `npm install -g @vdoninja/ninja-p2p@latest @roamhq/wrtc`, then
+restart your sidecars. Keep their state directories to retain pending mail and
+outbox actions. No state migration is required.
+
+- [Operations and recovery](docs/operations.md): inspect queued work, recover files, and diagnose wakes.
+- [Changelog](CHANGELOG.md): grouped release notes.
+- [Release guide](docs/releases.md): maintainer checks and publishing workflow.
+- [Project website](https://steveseguin.github.io/ninja-p2p/): overview and browser dashboard.
 
 ## The Simple Mental Model
 
@@ -324,6 +342,10 @@ The wake command receives these environment variables:
 
 Because `NINJA_ID` and `NINJA_STATE_DIR` are set, the woken command can run bare `ninja-p2p read` or `ninja-p2p dm <peer> "..."` and it routes through the running sidecar.
 
+Inherited `NINJA_ROOM` is removed from the child environment to preserve that
+behavior; an explicit `--room` still selects a room connection. Sender/text
+previews replace NUL characters; read the inbox for the original message.
+
 Safety rules, because wake hooks usually invoke paid models:
 
 - messages arriving close together are batched into one wake (`--wake-debounce`, default 750ms)
@@ -343,6 +365,12 @@ done
 ```
 
 `wait` exits `0` when messages are pending and `1` on timeout.
+
+A polling interval longer than the timeout does not postpone the deadline.
+`read` archives the messages it returns; use `--peek true` to inspect without
+consuming them. `--take 0` returns no messages. Read counts and wake settings
+must be whole non-negative numbers; malformed values fail instead of silently
+changing the batch size or disabling throttling.
 
 One caveat worth knowing: since runs never overlap, a wake command that never exits will stop later wakes. The sidecar log says so when it happens.
 

@@ -28,6 +28,21 @@ The application envelope contains an ID, timestamp, sender identity, message typ
   default to 50) and can replay broadcasts plus messages sent to or by the
   requester. Direct messages involving other peers are filtered before replay.
 
+## Local state and CLI boundaries
+
+Malformed inbox/outbox records remain on disk and are skipped by normal reads.
+They are not counted as valid pending/queued work. Cached direct envelopes must
+match their action recipient, type, and ID; sender identity is preserved across
+restarts. Concurrent inbox readers return only records they successfully archive.
+
+`read --take 0` consumes nothing, `--peek true` leaves mail in place, and invalid
+counts fail. Wake limits and delays are validated and captured at construction;
+`0` explicitly disables the rate limit. Child wake environments clear inherited
+`NINJA_ROOM` and expose the room as `NINJA_WAKE_ROOM`. Neither these checks nor
+message IDs introduce automatic command re-execution or exactly-once delivery.
+
+See [Operations and recovery](operations.md) for local troubleshooting.
+
 ## Connection race this prevents
 
 WebRTC emits several milestones. `peerConnected` can occur before `dataChannelOpen`. Older code treated the first event as send-ready, so an agent replying in that interval could receive a normal-looking local envelope even though the SDK rejected the send. The bridge now observes the SDK's boolean send result and queues an explicitly rejected direct message.

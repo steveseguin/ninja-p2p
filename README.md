@@ -282,6 +282,9 @@ This is the honest version of "MCP-like" for a CLI:
 - `notify` says whether messages are waiting, from whom, and which peers are available with their `can`, `ask`, and `share` summaries
 - `read` pulls pending messages from the local inbox
 - `chat`, `dm`, and `command` queue outbound work into the local outbox when you call them with `--id` or `--state-dir` and no `--room`
+- Direct messages, commands, and responses remain queued on disk across sidecar
+  restarts until the transport accepts them; `notify` reports the pending count.
+  Acceptance does not confirm remote receipt. Broadcasts remain best-effort.
 - `send-file` and `send-image` queue transfers through the running sidecar and save incoming downloads under the local state folder
 - `--share name=path` exposes one explicit folder root that other peers can inspect with `shares`, `list-files`, and `get-file`
 - `respond` sends a structured `command_response` back to the original requester

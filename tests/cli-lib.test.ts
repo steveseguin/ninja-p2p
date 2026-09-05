@@ -169,6 +169,20 @@ test("parseCliArgs parses read command", () => {
   assert.equal(parsed.peek, true);
 });
 
+test("read preserves an explicit zero count instead of consuming the default batch", () => {
+  const parsed = parseCliArgs(["read", "--id", "codex", "--take", "0"]);
+  assert.equal(parsed.kind, "read");
+  if (parsed.kind === "read") assert.equal(parsed.take, 0);
+  const defaults = parseCliArgs(["read", "--id", "codex"]);
+  if (defaults.kind === "read") assert.equal(defaults.take, 20);
+});
+
+test("read rejects malformed counts instead of silently choosing a different batch", () => {
+  for (const value of ["-1", "1.5", "10oops", "1e3", "NaN", "Infinity", "9007199254740992"]) {
+    assert.throws(() => parseCliArgs(["read", "--id", "codex", "--take", value]), /--take/);
+  }
+});
+
 test("parseCliArgs parses chat command", () => {
   const parsed = parseCliArgs(["chat", "--room", "demo", "--name", "Steve", "hello", "world"]);
   assert.equal(parsed.kind, "chat");
@@ -446,6 +460,19 @@ test("parseCliArgs parses wait timeout and interval overrides", () => {
   if (parsed.kind !== "wait") return;
   assert.equal(parsed.timeoutMs, 5000);
   assert.equal(parsed.intervalMs, 100);
+});
+
+test("wake options reject malformed values instead of silently disabling limits", () => {
+  for (const [option, envKey] of [["wake-limit", "NINJA_WAKE_LIMIT"], ["wake-debounce", "NINJA_WAKE_DEBOUNCE"]]) {
+    for (const value of ["0.5", "0oops", "-1", "1e3", "9007199254740992"]) {
+      const args = ["start", "--room", "demo", "--id", "codex", "--on-message", "echo wake"];
+      assert.throws(() => parseCliArgs([...args, `--${option}`, value], { HOME: "/home/steve" }), new RegExp(option));
+      assert.throws(() => parseCliArgs(args, { HOME: "/home/steve", [envKey]: value }), new RegExp(option));
+    }
+  }
+  assert.throws(() => parseCliArgs([
+    "start", "--room", "demo", "--on-message", "echo wake", "--wake-debounce", String(2 ** 31),
+  ], { HOME: "/home/steve" }), /wake-debounce/);
 });
 
 test("parseCliArgs leaves wake unset without --on-message", () => {

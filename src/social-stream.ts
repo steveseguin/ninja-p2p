@@ -61,7 +61,7 @@ export type SocialStreamBridgeOptions = {
   onMessage: (message: SocialMessage) => void;
   log?: (message: string) => void;
   socketFactory?: SocialSocketFactory;
-  /** Reconnect backoff steps in ms; the last value repeats. */
+  /** Nonempty reconnect steps in ms (0 through 2^31-1); the last value repeats. */
   backoffMs?: number[];
 };
 
@@ -137,7 +137,12 @@ export class SocialStreamBridge {
     this.options = options;
     this.socketFactory = options.socketFactory ?? defaultSocketFactory;
     this.log = options.log ?? (() => {});
-    this.backoffMs = options.backoffMs ?? [1000, 2000, 5000, 10_000, 30_000];
+    const backoffMs = options.backoffMs ?? [1000, 2000, 5000, 10_000, 30_000];
+    if (backoffMs.length === 0 || !Array.from(backoffMs).every(value =>
+      Number.isFinite(value) && value >= 0 && value <= 2 ** 31 - 1)) {
+      throw new RangeError("backoffMs must contain finite delays between 0 and 2147483647 ms");
+    }
+    this.backoffMs = [...backoffMs];
   }
 
   get url(): string {
@@ -155,6 +160,10 @@ export class SocialStreamBridge {
 
   connect(): void {
     if (this.closed || this.socket) return;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
 
     let socket: SocialSocket;
     try {
@@ -168,12 +177,14 @@ export class SocialStreamBridge {
     this.socket = socket;
 
     socket.onopen = () => {
+      if (this.closed || this.socket !== socket) return;
       this.connected = true;
       this.attempt = 0;
       this.log(`[ssn] connected to session ${this.options.session}`);
     };
 
     socket.onmessage = (event) => {
+      if (this.closed || this.socket !== socket) return;
       const payload = parseJson(event?.data);
       if (payload === undefined) return;
       const message = normalizeSocialMessage(payload);
@@ -186,10 +197,12 @@ export class SocialStreamBridge {
     };
 
     socket.onerror = () => {
+      if (this.closed || this.socket !== socket) return;
       this.log("[ssn] socket error");
     };
 
     socket.onclose = () => {
+      if (this.closed || this.socket !== socket) return;
       this.connected = false;
       this.socket = null;
       if (this.closed) return;
@@ -297,15 +310,14 @@ function parseJson(data: unknown): unknown {
 }
 
 function stripHtml(value: string): string {
+  const entities: Record<string, string> = {
+    "&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'",
+  };
   return value
     .replace(/<br\s*\/?>/gi, " ")
     .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
+    // Decode once: &amp;lt; represents literal &lt;, not a less-than sign.
+    .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/gi, entity => entities[entity.toLowerCase()])
     .replace(/\s+/g, " ")
     .trim();
 }

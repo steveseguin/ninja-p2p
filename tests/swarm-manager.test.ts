@@ -119,6 +119,125 @@ function makeFile(dir: string, name: string, size = 40_000, seed = 3): string {
 }
 
 describe("seeding", () => {
+  it("base64 chunk validation still rejects malformed padding and characters", () => {
+    withManager(({ manager, bridge }) => {
+      const manifest = buildManifest(new Uint8Array([1]), "padding.bin", "application/octet-stream", 1024);
+      bridge.deliver("seed", "swarm_offer", manifest);
+      manager.fetch(manifest.fileId);
+      for (const data of ["AQ", "AQ=", "AQ===", "AQ==\n", "AQ=!", "AQ==AAAA"]) {
+        bridge.deliver("seed", "swarm_chunk", { fileId: manifest.fileId, index: 0, data });
+        assert.equal(manager.sessionFor(manifest.fileId)!.chunkMap().count(), 0, data);
+      }
+      bridge.deliver("seed", "swarm_chunk", { fileId: manifest.fileId, index: 0, data: "AQ==" });
+      assert.equal(manager.sessionFor(manifest.fileId)!.isComplete(), true);
+    });
+  });
+
+  it("accepts a valid maximum-size base64 chunk without overflowing the validator", () => {
+    withManager(({ manager, bridge, dir }) => {
+      const data = Buffer.alloc(16 * 1024 * 1024, 1);
+      const manifest = buildManifest(data, "large-chunk.bin", "application/octet-stream", data.length);
+      bridge.deliver("seed", "swarm_offer", manifest);
+      manager.fetch(manifest.fileId);
+      bridge.deliver("seed", "swarm_chunk", { fileId: manifest.fileId, index: 0, data: data.toString("base64") });
+      assert.equal(manager.sessionFor(manifest.fileId)!.isComplete(), true);
+      assert.equal(sha256Hex(readFileSync(path.join(dir, "dl", "large-chunk.bin"))), manifest.fileId);
+    });
+  });
+
+  it("rejects timer intervals that Node would turn into a rapid loop", () => {
+    for (const key of ["pumpIntervalMs", "announceIntervalMs"] as const) {
+      for (const value of [NaN, Infinity, -1, 2 ** 31]) {
+        assert.throws(() => new SwarmManager({
+          bridge: new FakeBridge() as unknown as import("../src/vdo-bridge.js").VDOBridge,
+          downloadDir: "unused", workDir: "unused", [key]: value,
+        }), new RegExp(key));
+      }
+    }
+  });
+
+  it("rejects invalid request limits at construction rather than from a running timer", () => {
+    const bridge = new FakeBridge();
+    for (const key of ["maxInFlightTotal", "maxInFlightPerPeer"] as const) {
+      assert.throws(() => new SwarmManager({
+        bridge: bridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+        downloadDir: "unused", workDir: "unused", [key]: 0.5,
+      }), /maxInFlight/);
+    }
+  });
+
+  for (const [label, name] of [
+    ["long Unicode names", "📄".repeat(100) + ".txt"],
+    ["names truncated at a trailing dot", "a".repeat(179) + ".tail.txt"],
+  ]) {
+    it(`finishes downloads with portable filenames for ${label}`, () => {
+      withManager(({ manager, bridge }) => {
+        const manifest = buildManifest(new Uint8Array(0), name, "text/plain", 1024);
+        bridge.deliver("seed", "swarm_offer", manifest);
+        assert.equal(manager.fetch(manifest.fileId), true);
+        const completed = manager.sessionFor(manifest.fileId)!;
+        assert.ok(completed.isComplete());
+        const savedName = path.basename(completed.savedPath);
+        assert.ok(Buffer.byteLength(savedName, "utf8") <= 180);
+        assert.equal(/[. ]$/.test(savedName), false);
+        assert.equal(readFileSync(completed.savedPath).length, 0);
+      });
+    });
+  }
+
+  it("startup can be retried after either storage directory is repaired", () => {
+    for (const blocked of ["dl", "work"]) {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-start-"));
+      const bridge = new FakeBridge();
+      const manager = new SwarmManager({
+        bridge: bridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+        downloadDir: path.join(dir, "dl"), workDir: path.join(dir, "work"),
+      });
+      const obstruction = path.join(dir, blocked);
+      writeFileSync(obstruction, "not a directory");
+      try {
+        assert.throws(() => manager.start());
+        assert.equal(bridge.bus.listenerCount("message:swarm_offer"), 0);
+        rmSync(obstruction);
+        manager.start();
+        manager.start(); // A successful start remains idempotent.
+        assert.equal(bridge.bus.listenerCount("message:swarm_offer"), 1);
+        const manifest = buildManifest(new Uint8Array(1024), "test.bin", "application/octet-stream", 1024);
+        bridge.deliver("seed", "swarm_offer", manifest);
+        assert.equal(manager.knownOffers().length, 1);
+      } finally {
+        manager.stop();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("releases the previous session when reseeding the same content", () => {
+    withManager(({ manager, dir }) => {
+      const file = makeFile(dir, "a.bin");
+      const manifest = manager.seed(file);
+      const previous = manager.sessionFor(manifest.fileId)!;
+      let closed = 0;
+      const close = previous.close.bind(previous);
+      previous.close = () => { closed++; close(); };
+      previous.onChunkRequest("peer", 0); // Open the source file handle.
+      manager.seed(file);
+      assert.equal(closed, 1);
+      assert.notEqual(manager.sessionFor(manifest.fileId), previous);
+    });
+  });
+
+  it("refuses to change an advertised file's chunk layout while reseeding", () => {
+    withManager(({ manager, bridge, dir }) => {
+      const file = makeFile(dir, "a.bin");
+      const manifest = manager.seed(file, 1024);
+      const previous = manager.sessionFor(manifest.fileId);
+      assert.throws(() => manager.seed(file, 2048), /conflicting/);
+      assert.equal(manager.sessionFor(manifest.fileId), previous);
+      assert.equal(bridge.ofType("swarm_offer").length, 1);
+    });
+  });
+
   it("publishes an offer the room can act on", () => {
     withManager(({ manager, bridge, dir }) => {
       const manifest = manager.seed(makeFile(dir, "a.bin"));
@@ -189,6 +308,36 @@ describe("offers arriving from peers", () => {
     });
   });
 
+  it("ignores unsolicited manifest pages until the file is wanted", () => {
+    withManager(({ manager, bridge }) => {
+      const manifest = buildManifest(new Uint8Array(257 * 1024), "passive.bin", "application/octet-stream", 1024);
+      bridge.deliver("seed", "swarm_offer", {
+        ...toManifestSummary(manifest), manifestPageSize: 256, manifestPages: 2,
+      });
+      const deliverPage = (page: number): void => bridge.deliver("seed", "swarm_manifest_page", {
+        fileId: manifest.fileId,
+        page,
+        totalPages: 2,
+        pageSize: 256,
+        chunkHashesHash: manifest.chunkHashesHash,
+        hashes: manifest.chunkHashes.slice(page * 256, (page + 1) * 256),
+      });
+
+      deliverPage(0);
+      assert.equal(bridge.ofType("swarm_manifest_request").length, 0);
+      deliverPage(1);
+      assert.equal(manager.resolveOffer(manifest.fileId)?.manifestReady, false);
+      assert.equal(manager.sessionFor(manifest.fileId), undefined);
+
+      assert.equal(manager.fetch(manifest.fileId), true);
+      assert.deepEqual(bridge.ofType("swarm_manifest_request").at(-1)?.payload.pages, [0, 1]);
+      deliverPage(0);
+      deliverPage(1);
+      assert.equal(manager.resolveOffer(manifest.fileId)?.manifestReady, true);
+      assert.ok(manager.sessionFor(manifest.fileId));
+    });
+  });
+
   it("requests and verifies large manifests in bounded pages", () => {
     withManager(({ manager, bridge }) => {
       const data = new Uint8Array((SWARM_MANIFEST_PAGE_HASHES + 9) * 1_024);
@@ -241,6 +390,86 @@ describe("offers arriving from peers", () => {
 });
 
 describe("greeting and answering peers", () => {
+  it("restart can retry manifest pages without waiting for stopped requests to time out", () => {
+    withManager(({ manager, bridge }) => {
+      const manifest = buildManifest(new Uint8Array(257 * 1024), "paged.bin", "application/octet-stream", 1024);
+      bridge.deliver("seed", "swarm_offer", {
+        ...toManifestSummary(manifest), manifestPageSize: 256, manifestPages: 2,
+      });
+      manager.fetch(manifest.fileId);
+      assert.equal(bridge.ofType("swarm_manifest_request").length, 1);
+      manager.stop();
+      manager.start();
+      bridge.sent.length = 0;
+      manager.fetch(manifest.fileId);
+      assert.equal(bridge.ofType("swarm_manifest_request").length, 1);
+    });
+  });
+
+  it("restart can request missing chunks immediately after replies were missed while stopped", () => {
+    withManager(({ manager, bridge }) => {
+      const data = new Uint8Array(2048);
+      const manifest = buildManifest(data, "restart.bin", "application/octet-stream", 1024);
+      manager.fetch(manifest.fileId);
+      bridge.deliver("seed", "swarm_offer", manifest);
+      const session = manager.sessionFor(manifest.fileId)!;
+      session.setPeerChunks("seed", ChunkMap.full(manifest.totalChunks));
+      assert.equal(session.pump(), 2);
+      manager.stop();
+      // These replies are intentionally ignored while the manager is stopped.
+      for (let index = 0; index < 2; index++) {
+        bridge.deliver("seed", "swarm_chunk", { fileId: manifest.fileId, index, data: Buffer.from(data.subarray(index * 1024, (index + 1) * 1024)).toString("base64") });
+      }
+      manager.start();
+      bridge.sent.length = 0;
+      assert.equal(session.pump(), 2);
+      assert.equal(bridge.ofType("swarm_request").length, 2);
+    });
+  });
+
+  it("advertises empty files to peers that join after seeding", () => {
+    withManager(({ manager, bridge, dir }) => {
+      const manifest = manager.seed(makeFile(dir, "empty.bin", 0));
+      bridge.sent.length = 0;
+      bridge.emit("peer:announce", { streamId: "late-peer" });
+      const offers = bridge.ofType("swarm_offer");
+      assert.equal(offers.length, 1);
+      assert.equal(offers[0].payload.fileId, manifest.fileId);
+      assert.equal(offers[0].to, "late-peer");
+    });
+  });
+
+  it("stopping detaches swarm handlers while preserving other consumers", () => {
+    withManager(({ manager, bridge, dir }) => {
+      const manifest = manager.seed(makeFile(dir, "a.bin"));
+      let observed = 0;
+      const consumer = () => { observed++; };
+      bridge.bus.on("message:swarm_request", consumer);
+      manager.stop();
+      bridge.sent.length = 0;
+      bridge.emit("peer:announce", { streamId: "late-peer" });
+      bridge.deliver("late-peer", "swarm_request", { fileId: manifest.fileId, index: 0 });
+      assert.equal(observed, 1);
+      assert.equal(bridge.sent.length, 0);
+      assert.equal(bridge.bus.listenerCount("message:swarm_request"), 1);
+      bridge.bus.off("message:swarm_request", consumer);
+    });
+  });
+
+  it("restarting a manager installs one set of listeners", () => {
+    withManager(({ manager, bridge, dir }) => {
+      manager.seed(makeFile(dir, "a.bin"));
+      for (let i = 0; i < 3; i++) {
+        manager.stop();
+        manager.start();
+      }
+      bridge.sent.length = 0;
+      bridge.emit("peer:announce", { streamId: "late-peer" });
+      assert.equal(bridge.ofType("swarm_offer").length, 1);
+      assert.equal(bridge.bus.listenerCount("message:swarm_request"), 1);
+    });
+  });
+
   it("sends a new peer the catalogue directly, not to the whole room", () => {
     withManager(({ manager, bridge, dir }) => {
       manager.seed(makeFile(dir, "a.bin"));

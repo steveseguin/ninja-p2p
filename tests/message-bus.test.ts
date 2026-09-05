@@ -28,6 +28,106 @@ function makeBus(opts?: { historySize?: number; offlineQueueSize?: number }): { 
   return { bus, peers, sent };
 }
 
+test("keyword handles remain stable when another trigger is removed", () => {
+  const { bus } = makeBus();
+  const fired: string[] = [];
+  const first = bus.onKeyword("hello", () => fired.push("first"));
+  const second = bus.onKeyword("hello", () => fired.push("second"));
+  bus.removeTrigger(first);
+  bus.removeTrigger(second);
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", "hello"));
+  assert.deepEqual(fired, []);
+});
+
+test("a keyword handler that re-registers itself runs once per message", () => {
+  const { bus } = makeBus();
+  let calls = 0;
+  let handle: number;
+  const handler = () => {
+    calls++;
+    bus.removeTrigger(handle);
+    // Bound the old live-iterator behavior so a regression fails instead of hanging.
+    if (calls < 4) handle = bus.onKeyword("hello", handler);
+  };
+  handle = bus.onKeyword("hello", handler);
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", "hello"));
+  assert.equal(calls, 1);
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", "hello"));
+  assert.equal(calls, 2);
+});
+
+test("trigger dispatch honors removals and defers new handlers until the next message", () => {
+  const { bus } = makeBus();
+  const fired: string[] = [];
+  let later: number;
+  bus.onKeyword("hello", () => {
+    fired.push("first");
+    bus.removeTrigger(later);
+    bus.onKeyword("hello", () => fired.push("new"));
+  });
+  later = bus.onKeyword("hello", () => fired.push("removed"));
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", "hello"));
+  assert.deepEqual(fired, ["first"]);
+  fired.length = 0;
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", "hello"));
+  assert.deepEqual(fired, ["first", "new"]);
+});
+
+test("requesting zero history entries returns no messages", () => {
+  const { bus } = makeBus();
+  bus.send(otherIdentity.streamId, "chat", { text: "private history" });
+  assert.equal(bus.historyCount, 1);
+  assert.deepEqual(bus.getHistory(0), []);
+  assert.deepEqual(bus.getHistoryForPeer(otherIdentity.streamId, 0), []);
+  assert.equal(bus.getHistory(1).length, 1);
+});
+
+test("history protocol traffic is delivered without evicting or nesting conversation history", () => {
+  const { bus } = makeBus({ historySize: 2 });
+  const chat = createEnvelope(otherIdentity, "chat", { text: "keep this conversation" });
+  bus.handleIncoming(chat);
+  const delivered: MessageEnvelope[] = [];
+  bus.on("message", envelope => delivered.push(envelope));
+  const request = createEnvelope(otherIdentity, "history_request", { count: 2 });
+  const replay = createEnvelope(otherIdentity, "history_replay", chat);
+  bus.handleIncoming(request);
+  bus.handleIncoming(replay);
+  assert.deepEqual(delivered, [request, replay]);
+  assert.deepEqual(bus.getHistory(), [chat]);
+});
+
+test("stale keyword handles cannot remove triggers registered after clear", () => {
+  const { bus } = makeBus();
+  const old = bus.onKeyword("hello", () => {});
+  bus.clear();
+  let fired = false;
+  bus.onKeyword("hello", () => { fired = true; });
+  bus.removeTrigger(old);
+  bus.handleIncoming(createEnvelope(otherIdentity, "chat", "hello"));
+  assert.equal(fired, true);
+});
+
+test("non-string chat fields cannot throw during keyword matching", () => {
+  const { bus } = makeBus();
+  let fired = false;
+  bus.onKeyword("hello", () => { fired = true; });
+  assert.doesNotThrow(() => bus.handleIncoming(createEnvelope(otherIdentity, "chat", {
+    text: { toString: null, valueOf: null },
+  })));
+  assert.equal(fired, false);
+});
+
+test("invalid queue limits are rejected before they can cause an endless trim loop", () => {
+  for (const value of [-1, NaN, Infinity, 1.5]) {
+    assert.throws(() => makeBus({ historySize: value }), /historySize/);
+    assert.throws(() => makeBus({ offlineQueueSize: value }), /offlineQueueSize/);
+  }
+  const { bus } = makeBus({ historySize: 0, offlineQueueSize: 0 });
+  bus.send("absent", "chat", "hello");
+  assert.equal(bus.historyCount, 0);
+  assert.equal(bus.getOfflineQueueSize("absent"), 0);
+});
+
 // ── Subscriptions ────────────────────────────────────────────────────────
 
 test("subscribe and unsubscribe manage topics", () => {
@@ -100,6 +200,41 @@ test("send queues when a connected peer data channel is not ready", () => {
   bus.send("other", "chat", { text: "race-safe" });
 
   assert.equal(bus.getOfflineQueueSize("other"), 1);
+});
+
+test("new direct commands do not overtake queued commands after transport recovery", () => {
+  const { bus, peers, sent } = makeBus();
+  peers.addPeer("other", "uuid_other");
+  bus.setSendDataFn(() => false);
+  const first = bus.send("other", "command", { command: "create" });
+  bus.setSendDataFn((data, target) => { sent.push({ data, target }); return true; });
+  const second = bus.send("other", "command", { command: "use" });
+  bus.flushOfflineQueue("other");
+  assert.deepEqual(sent.map(item => (item.data as MessageEnvelope).id), [first.id, second.id]);
+  assert.equal(bus.getOfflineQueueSize("other"), 0);
+});
+
+test("a refused queue head blocks later commands but not transient traffic or other peers", () => {
+  const { bus, peers } = makeBus();
+  peers.addPeer("other", "uuid_other");
+  peers.addPeer("third", "uuid_third");
+  bus.setSendDataFn(() => false);
+  const first = bus.send("other", "command", { command: "create" });
+  const accepted: MessageEnvelope[] = [];
+  bus.setSendDataFn(data => {
+    const message = data as MessageEnvelope;
+    if (message.id === first.id) return false;
+    accepted.push(message);
+    return true;
+  });
+  const second = bus.send("other", "command", { command: "use" });
+  assert.deepEqual(accepted, []);
+  assert.equal(bus.getOfflineQueueSize("other"), 2);
+  const transient = bus.send("other", "swarm_request", { fileId: "a".repeat(64), index: 0 });
+  const unrelated = bus.send("third", "chat", "hello");
+  assert.deepEqual(accepted.map(message => message.id), [transient.id, unrelated.id]);
+  bus.setSendDataFn(data => { accepted.push(data as MessageEnvelope); return true; });
+  assert.deepEqual(bus.flushOfflineQueue("other"), [first, second]);
 });
 
 test("publish sends with topic", () => {
@@ -300,6 +435,34 @@ test("flushOfflineQueue sends queued messages and clears queue", () => {
   assert.equal((sent[0].data as MessageEnvelope).type, "chat");
   assert.equal((sent[0].data as MessageEnvelope).id, queued.id);
   assert.equal(bus.getOfflineQueueSize("other"), 0);
+});
+
+test("a throwing transport does not replay messages accepted earlier in the flush", () => {
+  for (const failureIndex of [0, 1]) {
+    const { bus, peers } = makeBus();
+    const queued = [
+      bus.send("other", "command", { command: "first" }),
+      bus.send("other", "command", { command: "second" }),
+    ];
+    peers.addPeer("other", "uuid_other");
+    const accepted: string[] = [];
+    const failure = new Error("transport failed");
+    bus.setSendDataFn(data => {
+      if (accepted.length === failureIndex) throw failure;
+      accepted.push((data as MessageEnvelope).id);
+      return true;
+    });
+
+    assert.throws(() => bus.flushOfflineQueue("other"), error => error === failure);
+    assert.equal(bus.getOfflineQueueSize("other"), queued.length - failureIndex);
+    bus.setSendDataFn(data => {
+      accepted.push((data as MessageEnvelope).id);
+      return true;
+    });
+    assert.deepEqual(bus.flushOfflineQueue("other"), queued.slice(failureIndex));
+    assert.deepEqual(accepted, queued.map(message => message.id));
+    assert.equal(bus.getOfflineQueueSize("other"), 0);
+  }
 });
 
 test("flushOfflineQueue returns empty for peer with no queue", () => {

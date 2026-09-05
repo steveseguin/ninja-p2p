@@ -72,6 +72,20 @@ test("normalizeSocialMessage strips emote markup but keeps textonly intact", () 
   assert.equal(plain?.text, "keep <this> exact");
 });
 
+test("normalization decodes HTML entities once without changing literal entity text", () => {
+  const message = normalizeSocialMessage({
+    chatname: "Viewer",
+    chatmessage: "<b>Use &amp;lt;tag&amp;gt; and &amp;quot;quotes&amp;quot;</b>",
+  });
+  assert.equal(message?.text, "Use &lt;tag&gt; and &quot;quotes&quot;");
+  const ordinary = normalizeSocialMessage({
+    chatname: "Viewer", chatmessage: "&lt;tag&gt;&nbsp;&amp;&nbsp;&quot;yes&quot; &#39;ok&#39;",
+  });
+  assert.equal(ordinary?.text, '<tag> & "yes" \'ok\'');
+  const plain = normalizeSocialMessage({ chatname: "Viewer", chatmessage: "&amp;lt;", textonly: true });
+  assert.equal(plain?.text, "&amp;lt;");
+});
+
 test("normalizeSocialMessage carries donations, events, and membership", () => {
   const message = normalizeSocialMessage({
     chatname: "Fan",
@@ -153,6 +167,39 @@ function makeFakeSocketFactory() {
   return { sockets, factory };
 }
 
+test("late Social Stream callbacks cannot revive a closed bridge or forward chat", () => {
+  const { sockets, factory } = makeFakeSocketFactory();
+  const received: SocialMessage[] = [];
+  const bridge = new SocialStreamBridge({ session: "test", socketFactory: factory, onMessage: msg => received.push(msg) });
+  bridge.connect();
+  bridge.close();
+  sockets[0].fireOpen();
+  sockets[0].fireMessage({ chatname: "Viewer", chatmessage: "late" });
+  assert.equal(bridge.isConnected(), false);
+  assert.equal(received.length, 0);
+});
+
+test("callbacks from an old Social Stream socket cannot retire its replacement", () => {
+  const { sockets, factory } = makeFakeSocketFactory();
+  const received: SocialMessage[] = [];
+  const bridge = new SocialStreamBridge({ session: "test", socketFactory: factory, backoffMs: [10000], onMessage: msg => received.push(msg) });
+  try {
+    bridge.connect();
+    sockets[0].fireOpen();
+    sockets[0].fireClose();
+    bridge.connect();
+    sockets[1].fireOpen();
+    sockets[0].fireClose();
+    sockets[0].fireMessage({ chatname: "Viewer", chatmessage: "old socket" });
+    assert.equal(bridge.isConnected(), true);
+    assert.equal(received.length, 0);
+    assert.equal(bridge.sendChat("current socket"), true);
+    assert.equal(sockets[1].sent.length, 1);
+  } finally {
+    bridge.close();
+  }
+});
+
 test("SocialStreamBridge forwards chat and ignores control traffic", () => {
   const { sockets, factory } = makeFakeSocketFactory();
   const received: SocialMessage[] = [];
@@ -230,6 +277,28 @@ test("SocialStreamBridge reconnects after an unexpected close", async () => {
   bridge.close();
 });
 
+test("manual reconnect replaces the previous connection's pending retry", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { sockets, factory } = makeFakeSocketFactory();
+  const bridge = new SocialStreamBridge({ session: "test", socketFactory: factory, onMessage() {}, backoffMs: [100] });
+  try {
+    bridge.connect();
+    sockets[0].fireOpen();
+    sockets[0].fireClose();
+    t.mock.timers.tick(90);
+    bridge.connect();
+    sockets[1].fireOpen();
+    sockets[1].fireClose();
+    t.mock.timers.tick(10);
+    assert.equal(sockets.length, 2, "the old retry must not accelerate a new disconnect's backoff");
+    t.mock.timers.tick(90);
+    assert.equal(sockets.length, 3);
+  } finally {
+    bridge.close();
+    t.mock.timers.reset();
+  }
+});
+
 test("SocialStreamBridge stops reconnecting once closed", async () => {
   const { sockets, factory } = makeFakeSocketFactory();
   const bridge = new SocialStreamBridge({
@@ -253,4 +322,31 @@ test("SocialStreamBridge requires a session id", () => {
     () => new SocialStreamBridge({ session: "  ", onMessage: () => {} }),
     /requires a session id/,
   );
+});
+
+test("SocialStreamBridge rejects backoff schedules that collapse into immediate retries", () => {
+  for (const backoffMs of [[], [NaN], [Infinity], [-1], [2 ** 31]]) {
+    assert.throws(() => new SocialStreamBridge({ session: "test", onMessage() {}, backoffMs }), /backoffMs/);
+  }
+  for (const backoffMs of [[0], [0.5, 1000], [2 ** 31 - 1]]) {
+    const bridge = new SocialStreamBridge({ session: "test", onMessage() {}, backoffMs });
+    bridge.close();
+  }
+});
+
+test("SocialStreamBridge keeps its validated backoff independent of caller array mutations", () => {
+  const { sockets, factory } = makeFakeSocketFactory();
+  const backoffMs = [1000];
+  const logs: string[] = [];
+  const bridge = new SocialStreamBridge({
+    session: "test", onMessage() {}, socketFactory: factory, backoffMs, log: message => logs.push(message),
+  });
+  try {
+    backoffMs.length = 0;
+    bridge.connect();
+    sockets[0].fireClose();
+    assert.ok(logs.some(message => message.includes("reconnecting in 1000ms")));
+  } finally {
+    bridge.close();
+  }
 });

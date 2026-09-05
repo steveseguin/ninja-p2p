@@ -16,7 +16,12 @@ The application envelope contains an ID, timestamp, sender identity, message typ
 - Direct messages are sent when the SDK accepts them for an open data channel.
 - If a known peer is offline, or the channel exists but is not ready yet, the message is queued in memory.
 - A queue flush retries the original envelope, including its message ID and type, and removes only messages the SDK accepted. A failed flush leaves the remaining messages in order for the next channel-open or announce event.
-- The persistent CLI sidecar additionally stores actions on disk before its live process sends them.
+- New ordinary direct sends also retry that peer's backlog first and queue behind it if still blocked. Transient traffic bypasses the backlog; other peers are independent.
+- The persistent CLI sidecar keeps direct messages, commands, and responses on
+  disk until the transport accepts them. Their envelope IDs and sender identity
+  survive a sidecar restart. Rejected sends stay visible in `notify`'s queued
+  count and do not enter the library's bounded in-memory queue. A blocked peer
+  does not hold up another peer's direct messages.
 - There is no durable remote broker and no exactly-once guarantee. Applications that require confirmation should use message IDs with `ack` or `command_response` and make handlers idempotent.
 - Room broadcasts are best-effort. They are not retained independently for every absent peer.
 - A history request is capped at 200 entries (invalid or non-positive counts
@@ -225,7 +230,37 @@ TypeScript types:
 - Existing send callbacks that return `void` remain accepted; only an explicit `false` means the transport rejected a send.
 - SDK targets use the SDK's documented `{ uuid }` or `{ streamID }` forms.
 - Existing VDO.Ninja room and signaling behavior remains authoritative.
+- Initial announcements are targeted by transport UUID without a stream route,
+  because the remote stream ID may not be known yet. Older announcements
+  addressed to the receiving SDK's own UUID remain accepted.
+- Inbox filenames hash sender identity and message ID. Wire IDs remain opaque;
+  existing inbox and archive records remain readable without migration.
+
+## Remaining reliability priorities
+
+The product's job is to let an agent discover collaborators, hand off work and
+files, and read incoming work between turns. Strengthen those steps before adding
+new transports or production integrations.
+
+1. **Make remote completion explicit where needed.** Direct outbox actions now
+   survive restarts until transport acceptance, with stable message IDs. That
+   still does not prove remote receipt or completion. A process crash between
+   acceptance and removal of the disk record can resend the same ID. Use the
+   existing acknowledgements and command responses for work requiring confirmation,
+   and make handlers idempotent before adding any automatic acknowledgement retry.
+2. **Bound long-running local storage.** Read messages move to an archive, with
+   no automatic retention limit. Add explicit archive pruning with clear age or
+   count controls before considering automatic deletion of unread work.
+3. **Measure recovery on real impaired links.** Existing unit tests cover request
+   retries and resume, and live validators cover successful room/file workflows.
+   Repeat interrupted transfers on lossy and relayed links before changing swarm
+   timeouts or adding adaptive scheduling. The earlier local measurements above
+   are not evidence that the newer SDK fixes recovery latency.
 
 ## Security boundary
+
+Shared-folder listings apply the same real-path containment rule as file pulls.
+Links that stay inside a share remain usable, including directory links; broken,
+inaccessible, or escaping entries are omitted without failing the whole listing.
 
 WebRTC encrypts data in transit. Room names and optional VDO.Ninja passwords control discovery/connection behavior, but they are not an application authorization system. Validate commands at the receiving agent, expose only intentional shared folders, and do not treat peer-supplied names or capabilities as trusted identity claims.

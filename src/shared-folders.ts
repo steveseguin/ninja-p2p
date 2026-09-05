@@ -84,6 +84,8 @@ export function listSharedFolderEntries(
   relativePath = "",
   maxEntries = 200,
 ): SharedFolderListing {
+  if (!Number.isFinite(maxEntries)) throw new RangeError("maxEntries must be finite");
+  const limit = Math.max(1, Math.floor(maxEntries));
   const share = requireSharedFolder(sharedFolders, shareName);
   const resolved = resolveSharedPath(share, relativePath);
   const stats = statSync(resolved.filePath);
@@ -92,31 +94,32 @@ export function listSharedFolderEntries(
   }
 
   const entries = readdirSync(resolved.filePath, { withFileTypes: true })
-    .map((entry) => {
+    .flatMap((entry): SharedFolderEntry[] => {
       const childPath = resolved.path ? `${resolved.path}/${entry.name}` : entry.name;
-      const absolutePath = path.join(resolved.filePath, entry.name);
-      if (entry.isDirectory()) {
-        return {
+      try {
+        // Apply the same containment rule as a file request before following
+        // links for metadata. Broken or inaccessible children must not hide
+        // the rest of an otherwise readable shared directory.
+        const child = resolveSharedPath(share, childPath);
+        const stats = statSync(child.filePath);
+        if (!stats.isDirectory() && !stats.isFile()) return [];
+        return [{
           name: entry.name,
           path: childPath,
-          type: "dir" as const,
-          size: null,
-        };
+          type: stats.isDirectory() ? "dir" : "file",
+          size: stats.isDirectory() ? null : stats.size,
+        }];
+      } catch {
+        return [];
       }
-      return {
-        name: entry.name,
-        path: childPath,
-        type: "file" as const,
-        size: statSync(absolutePath).size,
-      };
     })
     .sort((a, b) => Number(a.type === "file") - Number(b.type === "file") || a.name.localeCompare(b.name));
 
   return {
     share: share.name,
     path: resolved.path,
-    entries: entries.slice(0, Math.max(1, maxEntries)),
-    truncated: entries.length > maxEntries,
+    entries: entries.slice(0, limit),
+    truncated: entries.length > limit,
   };
 }
 
@@ -161,7 +164,7 @@ function requireSharedFolder(sharedFolders: SharedFolderConfig[], shareName: str
 function resolveSharedPath(share: SharedFolderConfig, relativePath: string): { filePath: string; path: string } {
   const normalized = normalizeRelativeSharePath(relativePath);
   const target = path.resolve(share.path, normalized || ".");
-  if (target !== share.path && !target.startsWith(`${share.path}${path.sep}`)) {
+  if (!isPathContained(share.path, target)) {
     throw new Error("shared path escapes the declared folder");
   }
   if (!existsSync(target)) {
@@ -190,13 +193,18 @@ function assertRealPathContained(shareRoot: string, target: string): void {
     throw new Error("shared path escapes the declared folder");
   }
 
-  if (realTarget !== realRoot && !realTarget.startsWith(`${realRoot}${path.sep}`)) {
+  if (!isPathContained(realRoot, realTarget)) {
     throw new Error("shared path escapes the declared folder");
   }
 }
 
+function isPathContained(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
 function normalizeRelativeSharePath(relativePath: string): string {
-  const raw = relativePath.replace(/\\/g, "/").trim();
+  const raw = relativePath.replace(/\\/g, "/");
   if (!raw) return "";
   if (raw.startsWith("/")) {
     throw new Error("shared path must be relative");

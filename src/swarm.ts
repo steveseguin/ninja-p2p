@@ -131,7 +131,8 @@ export class ChunkMap {
       throw new Error(`invalid totalChunks: ${totalChunks}`);
     }
     this.totalChunks = totalChunks;
-    this.bits = bits ?? new Uint8Array(byteLengthFor(totalChunks));
+    // Own the bytes: external mutations would invalidate the cached count.
+    this.bits = bits ? Uint8Array.from(bits) : new Uint8Array(byteLengthFor(totalChunks));
     if (this.bits.length < byteLengthFor(totalChunks)) {
       throw new Error("bitfield too short for totalChunks");
     }
@@ -145,7 +146,7 @@ export class ChunkMap {
   }
 
   static fromBase64(value: string, totalChunks: number): ChunkMap {
-    const bits = new Uint8Array(Buffer.from(value, "base64"));
+    const bits = Buffer.from(value, "base64");
     const needed = byteLengthFor(totalChunks);
     if (bits.length < needed) {
       const padded = new Uint8Array(needed);
@@ -160,12 +161,12 @@ export class ChunkMap {
   }
 
   has(index: number): boolean {
-    if (index < 0 || index >= this.totalChunks) return false;
+    if (!Number.isInteger(index) || index < 0 || index >= this.totalChunks) return false;
     return (this.bits[index >> 3] & (1 << (index & 7))) !== 0;
   }
 
   set(index: number): boolean {
-    if (index < 0 || index >= this.totalChunks) return false;
+    if (!Number.isInteger(index) || index < 0 || index >= this.totalChunks) return false;
     if (this.has(index)) return false;
     this.bits[index >> 3] |= 1 << (index & 7);
     this.present += 1;
@@ -189,7 +190,7 @@ export class ChunkMap {
   }
 
   clone(): ChunkMap {
-    return new ChunkMap(this.totalChunks, Uint8Array.from(this.bits));
+    return new ChunkMap(this.totalChunks, this.bits);
   }
 
   private recount(): number {
@@ -301,6 +302,7 @@ export function planChunkRequests(
   inFlightIndices: ReadonlySet<number>,
   options: PlanOptions = {},
 ): ChunkRequestPlan[] {
+  validateRequestLimits(options);
   const maxPerPeer = options.maxInFlightPerPeer ?? DEFAULT_MAX_IN_FLIGHT_PER_PEER;
   const maxTotal = options.maxInFlightTotal ?? DEFAULT_MAX_IN_FLIGHT_TOTAL;
 
@@ -364,6 +366,16 @@ export function planChunkRequests(
   return plans;
 }
 
+/** Request counts must stay discrete and bounded; zero disables new requests. */
+export function validateRequestLimits(options: PlanOptions): void {
+  for (const name of ["maxInFlightPerPeer", "maxInFlightTotal"] as const) {
+    const value = options[name];
+    if (value != null && (!Number.isSafeInteger(value) || value < 0)) {
+      throw new RangeError(`${name} must be a non-negative safe integer`);
+    }
+  }
+}
+
 // ── Chunk storage ────────────────────────────────────────────────────────────
 
 export function chunkOffset(index: number, chunkSize: number): number {
@@ -387,20 +399,30 @@ export class ChunkFile {
   private fd: number | null = null;
   private lockPath: string | null = null;
   private lockToken: string | null = null;
+  private readonly readOnly: boolean;
 
   /**
    * @param exclusive Refuse to open if another live process holds this file.
    * Only a download needs it — a seed session opens the user's own file
-   * read-mostly and several of those coexisting is fine.
+   * read-only and several of those coexisting is fine.
+   * @param readOnly Open an existing source without creating or modifying it.
    */
-  constructor(filePath: string, manifest: SwarmManifest, exclusive = false) {
+  constructor(filePath: string, manifest: SwarmManifest, exclusive = false, readOnly = false) {
     this.filePath = filePath;
     this.manifest = manifest;
+    this.readOnly = readOnly;
     if (exclusive) this.lockPath = `${filePath}.lock`;
   }
 
   open(): void {
-    if (this.fd !== null) return;
+    if (this.fd !== null) {
+      this.assertExclusiveLock();
+      return;
+    }
+    if (this.readOnly) {
+      this.fd = openSync(this.filePath, "r");
+      return;
+    }
     mkdirSync(path.dirname(this.filePath), { recursive: true });
     this.acquireLock();
     try {
@@ -468,7 +490,16 @@ export class ChunkFile {
     }
   }
 
-  /** Release a download lock after its part file has been finalized or abandoned. */
+  /** Refuse I/O or finalization after a stale-lock takeover. */
+  assertExclusiveLock(): void {
+    if (!this.lockPath) return;
+    try {
+      if (this.lockToken && readFileSync(this.lockPath, "utf8").trim() === this.lockToken) return;
+    } catch { /* Missing or unreadable ownership must not authorize writes. */ }
+    throw new Error(`download lock is no longer owned: ${this.lockPath}`);
+  }
+
+  /** Release only our own lock; a stale takeover may have replaced it. */
   releaseExclusiveLock(): void {
     if (!this.lockPath || !this.lockToken) return;
     try {
@@ -492,16 +523,27 @@ export class ChunkFile {
    * blocking that destination forever.
    */
   private acquireLock(): void {
-    if (!this.lockPath || this.lockToken) return;
+    if (!this.lockPath) return;
+    if (this.lockToken) {
+      this.assertExclusiveLock();
+      return;
+    }
 
     const token = `${process.pid}:${randomBytes(12).toString("hex")}`;
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         const lockFd = openSync(this.lockPath, "wx");
         try {
-          writeSync(lockFd, `${token}\n`, undefined, "utf8");
-        } finally {
-          closeSync(lockFd);
+          try {
+            writeFullySync(lockFd, Buffer.from(`${token}\n`, "utf8"), 0);
+          } finally {
+            closeSync(lockFd);
+          }
+        } catch (error) {
+          // Exclusive creation succeeded, but no usable lock was established.
+          // Do not leave our failed attempt blocking retries until it goes stale.
+          try { rmSync(this.lockPath, { force: true }); } catch { /* preserve the setup error */ }
+          throw error;
         }
         this.lockToken = token;
         return;
@@ -550,6 +592,7 @@ export class ChunkFile {
    * the chunk is dropped and can be re-fetched from someone else.
    */
   writeChunk(index: number, bytes: Uint8Array): boolean {
+    if (this.readOnly) throw new Error("cannot write chunks to a read-only seed source");
     if (index < 0 || index >= this.manifest.totalChunks) return false;
     if (bytes.byteLength !== chunkLength(index, this.manifest)) return false;
     if (sha256Hex(bytes) !== this.manifest.chunkHashes[index]) return false;
@@ -560,7 +603,7 @@ export class ChunkFile {
   }
 
   readChunk(index: number): Uint8Array | null {
-    if (index < 0 || index >= this.manifest.totalChunks) return null;
+    if (!Number.isInteger(index) || index < 0 || index >= this.manifest.totalChunks) return null;
     const length = chunkLength(index, this.manifest);
     const buffer = new Uint8Array(length);
     if (length === 0) return buffer;

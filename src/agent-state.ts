@@ -8,13 +8,17 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import {
   createMessageId,
+  createEnvelope,
+  isValidEnvelope,
   type AgentAsk,
   type AgentProfile,
   type FileTransferKind,
   type MessageEnvelope,
   type MessageType,
+  type PeerIdentity,
   type SharedFolderSummary,
 } from "./protocol.js";
 import type { SharedFolderConfig } from "./shared-folders.js";
@@ -35,14 +39,14 @@ export type AgentSessionState = {
   updatedAt: number;
 };
 
-export type QueuedAgentAction =
+export type QueuedAgentAction = { envelope?: MessageEnvelope } & (
   | { id: string; createdAt: number; kind: "chat"; text: string }
   | { id: string; createdAt: number; kind: "dm"; target: string; text: string }
   | { id: string; createdAt: number; kind: "send_file"; target: string; filePath: string; transferKind: FileTransferKind }
   | { id: string; createdAt: number; kind: "command"; target: string; command: string; args?: unknown }
   | { id: string; createdAt: number; kind: "response"; target: string; requestId: string; result?: unknown; error?: string }
   | { id: string; createdAt: number; kind: "event"; topic: string; eventKind: string; data?: unknown }
-  | { id: string; createdAt: number; kind: "status"; status: string; detail?: string };
+  | { id: string; createdAt: number; kind: "status"; status: string; detail?: string });
 
 export type QueuedAgentActionInput =
   | { kind: "chat"; text: string }
@@ -162,7 +166,7 @@ export function listQueuedAgentActions(stateDir: string): Array<{ action: Queued
   return entries
     .map((file) => {
       const action = readJsonFile<QueuedAgentAction>(file);
-      return action ? { action, path: file } : null;
+      return isQueuedAgentAction(action) ? { action, path: file } : null;
     })
     .filter((item): item is { action: QueuedAgentAction; path: string } => item !== null)
     .sort((a, b) => a.action.createdAt - b.action.createdAt);
@@ -174,9 +178,64 @@ export function removeQueuedAgentAction(filePath: string): void {
   }
 }
 
+function isQueuedAgentAction(value: unknown): value is QueuedAgentAction {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const action = value as Record<string, unknown>;
+  const text = (key: string): boolean => typeof action[key] === "string";
+  const requiredText = (key: string): boolean => text(key) && (action[key] as string).length > 0;
+  if (!requiredText("id") || typeof action.createdAt !== "number" || !Number.isFinite(action.createdAt)) return false;
+  if (action.envelope != null) {
+    if (!isValidEnvelope(action.envelope)) return false;
+    const type = action.kind === "dm" ? "chat" : action.kind === "command" ? "command"
+      : action.kind === "response" ? "command_response" : null;
+    if (type && (action.envelope.to !== action.target || action.envelope.type !== type || action.envelope.id !== action.id)) {
+      return false;
+    }
+  }
+  switch (action.kind) {
+    case "chat": return text("text");
+    case "dm": return requiredText("target") && text("text");
+    case "command": return requiredText("target") && requiredText("command");
+    case "response": return requiredText("target") && requiredText("requestId") &&
+      (action.error == null || text("error"));
+    case "send_file": return requiredText("target") && requiredText("filePath") &&
+      (action.transferKind === "file" || action.transferKind === "image");
+    case "event": return requiredText("topic") && requiredText("eventKind");
+    case "status": return text("status") && (action.detail == null || text("detail"));
+    default: return false;
+  }
+}
+
+/** Persist a direct action's wire identity before its first send attempt. */
+export function prepareQueuedAgentEnvelope(
+  filePath: string,
+  action: QueuedAgentAction,
+  identity: PeerIdentity,
+): MessageEnvelope | null {
+  if (action.kind !== "dm" && action.kind !== "command" && action.kind !== "response") return null;
+  if (action.envelope) return action.envelope;
+  const type = action.kind === "dm" ? "chat" : action.kind === "command" ? "command" : "command_response";
+  const payload = action.kind === "dm" ? { text: action.text }
+    : action.kind === "command" ? { command: action.command, args: action.args }
+    : action.error ? { requestId: action.requestId, ok: false, error: action.error }
+    : { requestId: action.requestId, ok: true, result: action.result ?? null };
+  const envelope = {
+    ...createEnvelope(identity, type, payload, { to: action.target }),
+    id: action.id,
+    ts: action.createdAt,
+  };
+  writeJsonAtomic(filePath, { ...action, envelope });
+  return envelope;
+}
+
 export function storeInboxMessage(stateDir: string, envelope: MessageEnvelope): InboxMessage {
   const paths = ensureAgentState(stateDir);
-  const filename = `${envelope.ts}_${envelope.id}.json`;
+  // Wire IDs are opaque strings, not safe filesystem components. Include the
+  // sender so two peers using the same ID cannot suppress each other's mail.
+  const key = createHash("sha256")
+    .update(JSON.stringify([envelope.from.streamId, envelope.from.instanceId, envelope.id]))
+    .digest("hex");
+  const filename = `${envelope.ts}_${key}.json`;
   const filePath = path.join(paths.inboxDir, filename);
   const record = {
     envelope,
@@ -197,23 +256,36 @@ export function listInboxMessages(stateDir: string): InboxMessage[] {
   return listJsonFiles(paths.inboxDir)
     .map((file) => {
       const item = readJsonFile<{ envelope: MessageEnvelope; receivedAt: number }>(file);
-      return item ? { ...item, path: file } : null;
+      return item && isValidEnvelope(item.envelope) ? { ...item, path: file } : null;
     })
     .filter((item): item is InboxMessage => item !== null)
     .sort((a, b) => a.envelope.ts - b.envelope.ts);
 }
 
 export function takeInboxMessages(stateDir: string, count = 20, peek = false): InboxMessage[] {
-  const paths = ensureAgentState(stateDir);
-  const items = listInboxMessages(stateDir).slice(0, count);
-  if (!peek) {
-    for (const item of items) {
-      const target = path.join(paths.archiveDir, path.basename(item.path));
-      renameSync(item.path, target);
-      item.path = target;
-    }
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new RangeError("inbox count must be a non-negative safe integer");
   }
-  return items;
+  const paths = ensureAgentState(stateDir);
+  const items = listInboxMessages(stateDir);
+  const selected = items.slice(0, count);
+  if (peek) return selected;
+  const taken: InboxMessage[] = [];
+  for (const item of items) {
+    if (taken.length >= selected.length) break;
+    const target = path.join(paths.archiveDir, path.basename(item.path));
+    try {
+      renameSync(item.path, target);
+    } catch (error) {
+      // Listing is a snapshot. Another reader may already have claimed this
+      // message; keep looking for unclaimed mail instead of failing the batch.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT" && !existsSync(item.path)) continue;
+      throw error;
+    }
+    item.path = target;
+    taken.push(item);
+  }
+  return taken;
 }
 
 export function getInboxSummary(stateDir: string): InboxSummary {
@@ -221,7 +293,7 @@ export function getInboxSummary(stateDir: string): InboxSummary {
   const session = readJsonFile<AgentSessionState>(paths.sessionFile);
   const messages = listInboxMessages(stateDir);
   const queued = listQueuedAgentActions(stateDir).length;
-  const peers = normalizePeers(readJsonFile<unknown[]>(paths.peersFile) ?? []);
+  const peers = normalizePeers(readJsonFile<unknown>(paths.peersFile));
   const senders = new Map<string, { streamId: string; name: string; count: number }>();
   const types = new Map<string, number>();
   const commands = new Map<string, number>();
@@ -321,8 +393,24 @@ function readJsonFile<T>(filePath: string): T | null {
 
 function writeJsonAtomic(filePath: string, data: unknown): void {
   const tmp = `${filePath}.${createMessageId()}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-  renameSync(tmp, filePath);
+  try {
+    writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+    for (let attempt = 0; ; attempt++) {
+      try {
+        renameSync(tmp, filePath);
+        return;
+      } catch (error) {
+        // Windows readers/scanners can briefly deny replacement. Keep the old
+        // file intact and retry for at most 100 ms; permanent errors still fail.
+        const code = (error as NodeJS.ErrnoException).code;
+        if (process.platform !== "win32" || attempt >= 5 ||
+            !["EPERM", "EACCES", "EBUSY"].includes(code ?? "")) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+      }
+    }
+  } finally {
+    try { rmSync(tmp, { force: true }); } catch { /* preserve the original error */ }
+  }
 }
 
 function getStringField(payload: unknown, key: string): string | null {
@@ -349,7 +437,8 @@ function sortEventCounts(map: Map<string, number>): Array<{ kind: string; count:
     .map(([kind, count]) => ({ kind, count }));
 }
 
-function normalizePeers(peers: unknown[]): PeerInboxSummary[] {
+function normalizePeers(peers: unknown): PeerInboxSummary[] {
+  if (!Array.isArray(peers)) return [];
   return peers
     .map((peer) => normalizePeer(peer))
     .filter((peer): peer is PeerInboxSummary => peer !== null)

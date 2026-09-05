@@ -19,6 +19,21 @@ constructable under ESM + Node16 TypeScript resolution. Runtime feature
 detection also remains so a room containing an older already-installed peer
 automatically uses the verified base64 swarm fallback for that peer.
 
+### September 2026 compatibility review
+
+Published SDK **1.6.0** was tested on Windows with Node 22.14.0 and
+`@roamhq/wrtc` 0.8.0: the four-peer messaging/file/image/shared-folder validator
+and the 2 MiB, 2,048-chunk binary swarm validator passed. The existing `^1.5.4`
+dependency range already permits this update. The browser remains pinned to its
+previously reviewed 1.5.4 build; these Node checks do not validate a browser SDK
+upgrade or re-measure network recovery.
+
+SDK 1.6.0 adds OBS browser-source state events. Those can support a future
+optional production bridge, but do not change this package's room/inbox/file
+contract. The adjacent SDK checkout also contains peer-metadata corrections in
+commit `b7410be`; those corrections are **not in the npm 1.6.0 package tested**.
+Keep published-version compatibility separate from results against that checkout.
+
 | # | Item | Status | API |
 |---|------|--------|-----|
 | 1 | Binary send path | **landed** | `sendBinary()` / `binaryReceived` |

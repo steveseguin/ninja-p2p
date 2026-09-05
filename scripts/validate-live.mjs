@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { listQueuedAgentActions } from "../dist/agent-state.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(repoRoot, "dist", "cli.js");
@@ -274,7 +275,24 @@ async function main() {
     assert.equal(operatorFileAck.payload.savedPath, workerFile.payload.savedPath);
     assert.equal(reviewerImageAck.payload.savedPath, plannerImage.payload.savedPath);
 
+    // Prove that a failed send stays durable across a real sidecar restart.
+    runCli(["stop", "--state-dir", agents.worker.stateDir]);
+    await waitFor("planner to observe worker offline", () =>
+      notifyFor("planner").peers.some(peer => peer.streamId === "worker" && !peer.connected));
+    sendFrom("planner", "dm", "--state-dir", agents.planner.stateDir, "worker", "restart-proof handoff");
+    const pending = await waitFor("direct action to be prepared on disk", () =>
+      listQueuedAgentActions(agents.planner.stateDir).find(item => item.action.envelope)?.action);
+    runCli(["stop", "--state-dir", agents.planner.stateDir]);
+    runCli(agents.planner.args);
+    assert.equal(notifyFor("planner").queued, 1);
+    runCli(agents.worker.args);
+    const recovered = await waitFor("worker to receive the persisted handoff", () =>
+      readFor("worker", 200).messages.find(message => message.id === pending.id));
+    assert.equal(recovered.payload.text, "restart-proof handoff");
+    await waitFor("accepted handoff to leave disk outbox", () => notifyFor("planner").queued === 0);
+
     const report = {
+      restartDelivery: { messageId: recovered.id, preserved: true },
       room,
       baseDir,
       converged: Object.fromEntries(Object.entries(converged).map(([name, status]) => [name, {

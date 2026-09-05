@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import {
   buildMenuText,
@@ -12,12 +14,32 @@ import {
   createFileTransferEventEnvelope,
   createPeerNoticeEnvelope,
   getAgentStatus,
+  flushAgentOutbox,
   maybeHandleSidecarCommand,
   recordPeerNotice,
 } from "../src/cli.js";
-import { getInboxSummary, storeInboxMessage, writeAgentSession, writePeersSnapshot } from "../src/agent-state.js";
+import { getInboxSummary, listQueuedAgentActions, queueAgentAction, storeInboxMessage, writeAgentSession, writePeersSnapshot } from "../src/agent-state.js";
 import { createEnvelope, type PeerIdentity } from "../src/protocol.js";
 import { VDOBridge } from "../src/vdo-bridge.js";
+
+test("wait honors its timeout even when the polling interval is much longer", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-wait-timeout-"));
+  try {
+    const result = spawnSync(process.execPath, [
+      "--import", "tsx", fileURLToPath(new URL("../src/cli.ts", import.meta.url)),
+      "wait", "--state-dir", dir, "--timeout", "50", "--interval", "60000",
+    ], { encoding: "utf8", timeout: 5000, windowsHide: true });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 1, result.stderr);
+    const summary = JSON.parse(result.stdout);
+    assert.equal(summary.timedOut, true);
+    assert.equal(summary.pending, 0);
+    assert.ok(summary.waitedMs >= 50);
+    assert.ok(summary.waitedMs < 2000, `waited ${summary.waitedMs}ms despite a 50ms timeout`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 const me: PeerIdentity = {
   streamId: "codex",
@@ -56,6 +78,125 @@ function makeBridge() {
   (bridge as unknown as { connected: boolean }).connected = true;
   return bridge;
 }
+
+test("get-file preserves whitespace in a listed path instead of selecting another file", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-share-path-"));
+  try {
+    writeFileSync(path.join(dir, "notes.txt"), "wrong file");
+    const wanted = path.join(dir, " notes.txt");
+    writeFileSync(wanted, "requested file");
+    const response = buildSidecarCommandResponse(makeBridge(), dir, "get-file", {
+      share: " docs ", path: " notes.txt",
+    }, [{ name: "docs", path: dir }], other.streamId);
+    assert.equal(response.error, undefined);
+    assert.equal(response.transfer?.filePath, wanted);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("direct outbox actions survive offline flushes and sidecar restart", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-outbox-"));
+  try {
+    const first = makeBridge();
+    for (let i = 0; i < 55; i++) queueAgentAction(dir, { kind: "dm", target: other.streamId, text: `mail ${i}` });
+    queueAgentAction(dir, { kind: "command", target: other.streamId, command: "review", args: { file: "notes" } });
+    queueAgentAction(dir, { kind: "response", target: other.streamId, requestId: "request-1", result: { ok: true } });
+    flushAgentOutbox(first, dir);
+    assert.equal(listQueuedAgentActions(dir).length, 57);
+    assert.equal(first.bus.getOfflineQueueSize(other.streamId), 0);
+
+    const restarted = makeBridge();
+    restarted.peers.addPeer(other.streamId, "uuid_new");
+    const sent: MessageEnvelope[] = [];
+    restarted.bus.setSendDataFn(data => { sent.push(data as MessageEnvelope); return true; });
+    flushAgentOutbox(restarted, dir);
+    assert.equal(listQueuedAgentActions(dir).length, 0);
+    assert.equal(sent.length, 57);
+    assert.deepEqual(sent.slice(0, 55).map(m => m.payload), Array.from({ length: 55 }, (_, i) => ({ text: `mail ${i}` })));
+    assert.equal(sent[55].type, "command");
+    assert.deepEqual(sent[56].payload, { requestId: "request-1", ok: true, result: { ok: true } });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("malformed and unknown outbox records neither block valid work nor get deleted", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-outbox-invalid-"));
+  try {
+    const bridge = makeBridge();
+    bridge.peers.addPeer(other.streamId, "uuid_other");
+    const sent: unknown[] = [];
+    bridge.bus.setSendDataFn(data => { sent.push(data); return true; });
+    const valid = queueAgentAction(dir, { kind: "dm", target: other.streamId, text: "valid" });
+    const invalid = [42, "text", [], {},
+      { ...valid, kind: "future_action" }, { ...valid, text: {} },
+      { ...valid, target: null }, { ...valid, envelope: {} },
+    ];
+    invalid.forEach((record, i) => writeFileSync(path.join(dir, "outbox", `invalid-${i}.json`), JSON.stringify(record)));
+    assert.doesNotThrow(() => flushAgentOutbox(bridge, dir));
+    assert.equal(sent.length, 1);
+    assert.equal(listQueuedAgentActions(dir).length, 0);
+    assert.equal(readdirSync(path.join(dir, "outbox")).length, invalid.length);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("outbox retries preserve wire identity and order without blocking other peers", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-outbox-"));
+  try {
+    const first = makeBridge();
+    first.peers.addPeer(other.streamId, "uuid_other");
+    first.peers.addPeer("reviewer", "uuid_reviewer");
+    queueAgentAction(dir, { kind: "dm", target: other.streamId, text: "first" });
+    const retry = queueAgentAction(dir, { kind: "command", target: other.streamId, command: "review" });
+    queueAgentAction(dir, { kind: "response", target: other.streamId, requestId: "r1", error: "unavailable" });
+    queueAgentAction(dir, { kind: "dm", target: "reviewer", text: "independent" });
+    const attempts: MessageEnvelope[] = [];
+    first.bus.setSendDataFn(data => {
+      const envelope = data as MessageEnvelope;
+      attempts.push(envelope);
+      return envelope.id !== retry.id;
+    });
+    flushAgentOutbox(first, dir);
+    assert.equal(attempts.length, 3);
+    assert.equal(first.bus.historyCount, 2);
+    assert.equal(first.bus.getOfflineQueueSize(other.streamId), 0);
+    const queued = listQueuedAgentActions(dir);
+    assert.equal(queued.length, 2);
+    assert.equal(queued[0].action.envelope?.id, retry.id);
+    assert.equal(getInboxSummary(dir).queued, 2);
+
+    const restarted = makeBridge();
+    restarted.peers.addPeer(other.streamId, "replacement_uuid");
+    const sent: MessageEnvelope[] = [];
+    restarted.bus.setSendDataFn(data => { sent.push(data as MessageEnvelope); return true; });
+    flushAgentOutbox(restarted, dir);
+    assert.deepEqual(sent[0], JSON.parse(JSON.stringify(attempts[1])));
+    assert.deepEqual(sent[1].payload, { requestId: "r1", ok: false, error: "unavailable" });
+    assert.equal(listQueuedAgentActions(dir).length, 0);
+    flushAgentOutbox(restarted, dir);
+    assert.equal(sent.length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a throwing outbox transport leaves the direct action on disk", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-outbox-"));
+  try {
+    const bridge = makeBridge();
+    bridge.peers.addPeer(other.streamId, "uuid_other");
+    queueAgentAction(dir, { kind: "dm", target: other.streamId, text: "retry me" });
+    bridge.bus.setSendDataFn(() => { throw new Error("channel closed"); });
+    flushAgentOutbox(bridge, dir);
+    assert.equal(listQueuedAgentActions(dir).length, 1);
+    assert.equal(bridge.bus.historyCount, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 function seedState(stateDir: string): void {
   writeAgentSession(stateDir, {

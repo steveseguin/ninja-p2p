@@ -325,6 +325,15 @@ export function completeIncomingTransfer(
       throw new Error("transfer sha256 mismatch");
     }
 
+    // Offers do not reserve a destination. Another transfer may have completed
+    // under the same name while these chunks were arriving.
+    if (existsSync(manifest.savedPath)) {
+      manifest.savedPath = chooseSavedPath(
+        getTransferPaths(stateDir, payload.transferId).downloadsDir,
+        manifest.safeName,
+        manifest.transferId,
+      );
+    }
     moveFileExclusive(manifest.tempPath, manifest.savedPath);
     manifest.completedAt = Date.now();
     manifest.updatedAt = manifest.completedAt;
@@ -380,8 +389,10 @@ export function discardIncomingTransfer(
 ): boolean {
   try {
     validateTransferId(transferId);
-    const manifest = readTransferManifest(stateDir, transferId);
-    if (expectedSender && manifest?.from.streamId !== expectedSender) return false;
+    if (expectedSender) {
+      const manifest = readTransferManifest(stateDir, transferId);
+      if (manifest?.from?.streamId !== expectedSender) return false;
+    }
     const paths = getTransferPaths(stateDir, transferId);
     rmSync(paths.tempPath, { force: true });
     rmSync(paths.manifestPath, { force: true });
@@ -423,20 +434,33 @@ function chooseSavedPath(downloadsDir: string, safeName: string, transferId: str
   if (!existsSync(direct)) {
     return direct;
   }
-  const tagged = path.join(downloadsDir, `${base}_${transferId}${ext}`);
+  // IDs may contain 128 characters. Keep the suffix bounded; the numeric
+  // fallback below still separates IDs that share this prefix.
+  const tag = transferId.slice(0, 32);
+  const tagged = path.join(downloadsDir, `${base}_${tag}${ext}`);
   if (!existsSync(tagged)) return tagged;
   for (let suffix = 2; suffix < 100_000; suffix += 1) {
-    const candidate = path.join(downloadsDir, `${base}_${transferId}_${suffix}${ext}`);
+    const candidate = path.join(downloadsDir, `${base}_${tag}_${suffix}${ext}`);
     if (!existsSync(candidate)) return candidate;
   }
   throw new Error(`could not choose a free destination for ${safeName}`);
 }
 
-function sanitizeFileName(name: string): string {
-  let safe = path.basename(name || "download")
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-    .replace(/[. ]+$/g, "")
-    .slice(0, 180) || "download";
+/** Shared destination-name rules for direct and swarm transfers. */
+export function sanitizeFileName(name: string): string {
+  const cleaned = path.basename(name || "download")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+  let safe = "";
+  let byteLength = 0;
+  // UTF-8 filesystems limit bytes, while slicing UTF-16 can split an emoji.
+  // Leave room for the collision suffix and strip trailing dots after cutting.
+  for (const character of cleaned) {
+    const length = Buffer.byteLength(character, "utf8");
+    if (byteLength + length > 180) break;
+    safe += character;
+    byteLength += length;
+  }
+  safe = safe.replace(/[. ]+$/g, "") || "download";
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(safe)) safe = `_${safe}`;
   return safe;
 }
@@ -551,24 +575,28 @@ function enforceIncomingTransferQuota(stateDir: string, incomingSize: number): v
   let promisedBytes = 0;
   const now = Date.now();
   for (const name of readdirSync(transfersDir)) {
-    if (!name.endsWith(".json")) continue;
+    // A failed manifest write can leave only the part; account for it too.
+    if (!name.endsWith(".part")) continue;
     const transferId = name.slice(0, -5);
     if (!TRANSFER_ID_PATTERN.test(transferId)) continue;
 
-    let manifest: IncomingTransferManifest;
+    if (!existsSync(path.join(transfersDir, `${transferId}.part`))) continue;
+    let manifest: Partial<IncomingTransferManifest> = {};
     try {
-      manifest = JSON.parse(readFileSync(path.join(transfersDir, name), "utf8")) as IncomingTransferManifest;
+      const parsed = JSON.parse(readFileSync(path.join(transfersDir, `${transferId}.json`), "utf8"));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) manifest = parsed;
     } catch {
-      continue;
+      // The part still occupies disk. Unknown metadata must count against the
+      // quota rather than either crashing new offers or making that usage vanish.
     }
-    if (manifest.completedAt || !existsSync(path.join(transfersDir, `${transferId}.part`))) continue;
-    if (Number.isFinite(manifest.updatedAt) && now - manifest.updatedAt >= INCOMPLETE_TRANSFER_STALE_MS) {
-      discardIncomingTransfer(stateDir, transferId);
-      continue;
+    if (manifest.completedAt) continue;
+    if (typeof manifest.updatedAt === "number" && Number.isFinite(manifest.updatedAt) && now - manifest.updatedAt >= INCOMPLETE_TRANSFER_STALE_MS) {
+      // Expiry only frees quota after cleanup succeeds; busy files still count.
+      if (discardIncomingTransfer(stateDir, transferId)) continue;
     }
 
     activeCount += 1;
-    promisedBytes += Number.isSafeInteger(manifest.size) && manifest.size >= 0
+    promisedBytes += typeof manifest.size === "number" && Number.isSafeInteger(manifest.size) && manifest.size >= 0
       ? manifest.size
       : MAX_BASIC_TRANSFER_SIZE;
   }

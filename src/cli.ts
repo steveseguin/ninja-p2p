@@ -38,6 +38,7 @@ import {
   getInboxSummary,
   isInboxWorthy,
   listQueuedAgentActions,
+  prepareQueuedAgentEnvelope,
   queueAgentAction,
   readAgentSession,
   readPeersSnapshot,
@@ -647,45 +648,7 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
     writePeersSnapshot(options.stateDir!, bridge.peers.toJSON());
   };
 
-  const flushOutbox = (): void => {
-    for (const item of listQueuedAgentActions(options.stateDir!)) {
-      try {
-        switch (item.action.kind) {
-          case "chat":
-            bridge.chat(item.action.text);
-            break;
-          case "dm":
-            bridge.chat(item.action.text, item.action.target);
-            break;
-          case "send_file":
-            sendFileFromPath(bridge, item.action.target, item.action.filePath, item.action.transferKind);
-            break;
-          case "command":
-            bridge.command(item.action.target, item.action.command, item.action.args);
-            break;
-          case "response":
-            sendCommandResponse(bridge, item.action.target, item.action.requestId, item.action.result, item.action.error);
-            break;
-          case "event":
-            bridge.publishEvent(item.action.topic, item.action.eventKind, item.action.data);
-            break;
-          case "status":
-            bridge.updateStatus(item.action.status, item.action.detail);
-            break;
-        }
-      } catch (error) {
-        if (item.action.kind === "send_file" && error instanceof Error && /peer is not connected/i.test(error.message)) {
-          continue;
-        }
-        storeInboxMessage(options.stateDir!, createFileTransferEventEnvelope(bridge.identity, "file_send_failed", {
-          target: "target" in item.action ? item.action.target : null,
-          filePath: "filePath" in item.action ? item.action.filePath : null,
-          error: error instanceof Error ? error.message : String(error),
-        }));
-      }
-      removeQueuedAgentAction(item.path);
-    }
-  };
+  const flushOutbox = (): void => flushAgentOutbox(bridge, options.stateDir!);
 
   writeAgentSession(options.stateDir, {
     room: options.room,
@@ -1014,7 +977,57 @@ function payloadText(envelope: MessageEnvelope): string {
 function getCommandArgString(args: unknown, key: string): string | null {
   if (typeof args !== "object" || args === null) return null;
   const value = (args as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  // Paths may begin or end with spaces; share names are normalized by the resolver.
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** Flush the sidecar disk outbox through its live bridge. */
+export function flushAgentOutbox(bridge: VDOBridge, stateDir: string): void {
+  const blockedTargets = new Set<string>();
+  for (const item of listQueuedAgentActions(stateDir)) {
+    const direct = item.action.kind === "dm" || item.action.kind === "command" || item.action.kind === "response";
+    if ("target" in item.action && blockedTargets.has(item.action.target)) continue;
+    try {
+      const envelope = prepareQueuedAgentEnvelope(item.path, item.action, bridge.identity);
+      if (envelope) {
+        if (!bridge.bus.trySendEnvelope(envelope)) {
+          blockedTargets.add(envelope.to!);
+          continue;
+        }
+        removeQueuedAgentAction(item.path);
+        continue;
+      }
+      switch (item.action.kind) {
+        case "chat":
+          bridge.chat(item.action.text);
+          break;
+        case "send_file":
+          sendFileFromPath(bridge, item.action.target, item.action.filePath, item.action.transferKind);
+          break;
+        case "event":
+          bridge.publishEvent(item.action.topic, item.action.eventKind, item.action.data);
+          break;
+        case "status":
+          bridge.updateStatus(item.action.status, item.action.detail);
+          break;
+      }
+    } catch (error) {
+      if (direct && "target" in item.action) {
+        blockedTargets.add(item.action.target);
+        console.error(`[P2P] Outbox action ${item.action.id} remains queued:`, error);
+        continue;
+      }
+      if (item.action.kind === "send_file" && error instanceof Error && /peer is not connected/i.test(error.message)) {
+        continue;
+      }
+      storeInboxMessage(stateDir, createFileTransferEventEnvelope(bridge.identity, "file_send_failed", {
+        target: "target" in item.action ? item.action.target : null,
+        filePath: "filePath" in item.action ? item.action.filePath : null,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+    removeQueuedAgentAction(item.path);
+  }
 }
 
 function sendCommandResponse(
@@ -1989,7 +2002,10 @@ async function waitForInbox(stateDir: string, timeoutMs: number, intervalMs: num
       return;
     }
 
-    await delay(intervalMs);
+    const remainingMs = timeoutMs > 0
+      ? Math.max(0, timeoutMs - (Date.now() - startedAt))
+      : intervalMs;
+    await delay(Math.min(intervalMs, remainingMs));
   }
 }
 

@@ -58,6 +58,21 @@ describe("swarm wire format", () => {
     assert.equal(decoded.data[0], 1);
   });
 
+  it("owns decoded payload bytes when the received frame is a Node Buffer", () => {
+    const encoded = encodeChunkFrame(FILE_ID, 42, new Uint8Array([7, 8]));
+    const backing = Buffer.alloc(encoded.length + 16);
+    backing.set(encoded, 16);
+    const frame = backing.subarray(16);
+    const decoded = decodeChunkFrame(frame)!;
+    assert.equal(decoded.index, 42);
+    assert.deepEqual([...decoded.data], [7, 8]);
+
+    frame[SWARM_WIRE_HEADER_BYTES] = 99;
+    assert.equal(decoded.data[0], 7, "reusing the receive buffer must not change decoded data");
+    decoded.data[1] = 55;
+    assert.equal(frame[SWARM_WIRE_HEADER_BYTES + 1], 8, "decoded data must not modify the receive buffer");
+  });
+
   it("decodes correctly when the frame sits at a non-zero byte offset", () => {
     const frame = encodeChunkFrame(FILE_ID, 42, new Uint8Array([7, 8]));
     const padded = new Uint8Array(frame.length + 16);

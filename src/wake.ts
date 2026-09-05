@@ -87,7 +87,14 @@ export class WakeRunner {
   private disposed = false;
 
   constructor(options: WakeRunnerOptions) {
-    this.config = options.config;
+    const config = { ...options.config };
+    if (!Number.isFinite(config.debounceMs) || config.debounceMs < 0 || config.debounceMs > 2 ** 31 - 1) {
+      throw new RangeError("debounceMs must be between 0 and 2147483647 ms");
+    }
+    if (!Number.isSafeInteger(config.limitPerMinute) || config.limitPerMinute < 0) {
+      throw new RangeError("limitPerMinute must be a non-negative safe integer");
+    }
+    this.config = config;
     this.context = options.context;
     this.spawnFn = options.spawnFn ?? defaultWakeSpawn;
     this.now = options.now ?? (() => Date.now());
@@ -170,9 +177,13 @@ export class WakeRunner {
     const batch = this.pending;
     this.pending = [];
     this.running = true;
-    this.recentRuns.push(this.now());
+    // Unlimited mode never consults or prunes this history.
+    if (this.config.limitPerMinute > 0) this.recentRuns.push(this.now());
 
     const env = { ...process.env, ...buildWakeEnv(batch, this.context) };
+    // The sidecar itself may have been configured through NINJA_ROOM. Inheriting
+    // it would switch child CLI calls from the local outbox to a new connection.
+    delete env.NINJA_ROOM;
     this.log(`[wake] ${batch.length} message(s) from ${env.NINJA_WAKE_FROM || "unknown"} -> ${this.config.command}`);
 
     let child: WakeChild;
@@ -227,7 +238,9 @@ function unique(values: string[]): string[] {
 function joinBounded(values: string[]): string {
   let joined = "";
   for (const value of values) {
-    const next = joined ? `${joined},${value}` : value;
+    // JSON strings can contain NUL; process environment values cannot.
+    const safeValue = value.replace(/\0/g, "\uFFFD");
+    const next = joined ? `${joined},${safeValue}` : safeValue;
     if (next.length > MAX_WAKE_CONTEXT_LENGTH) break;
     joined = next;
   }
@@ -240,9 +253,10 @@ function firstText(batch: MessageEnvelope[]): string {
     if (typeof payload !== "object" || payload === null) continue;
     const text = (payload as Record<string, unknown>).text;
     if (typeof text === "string" && text.trim()) {
-      return text.length <= MAX_WAKE_TEXT_LENGTH
-        ? text
-        : `${text.slice(0, MAX_WAKE_TEXT_LENGTH - 1)}…`;
+      const safeText = text.replace(/\0/g, "\uFFFD");
+      return safeText.length <= MAX_WAKE_TEXT_LENGTH
+        ? safeText
+        : `${safeText.slice(0, MAX_WAKE_TEXT_LENGTH - 1)}…`;
     }
   }
   return "";

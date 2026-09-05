@@ -21,6 +21,8 @@ import {
   planChunkRequests,
   recordPeerRtt,
   sha256FileHex,
+  sha256Hex,
+  validateRequestLimits,
   type SwarmManifest,
   type SwarmPeerState,
   type SwarmPeerStats,
@@ -110,6 +112,7 @@ export class SwarmSession {
   readonly savedPath: string;
 
   private readonly file: ChunkFile;
+  private readonly ownsPartFile: boolean;
   private readonly send: SwarmSend;
   private readonly now: () => number;
   private readonly requestTimeoutMs: number;
@@ -130,20 +133,32 @@ export class SwarmSession {
   private completed = false;
 
   constructor(options: SwarmSessionOptions) {
+    validateRequestLimits(options);
     this.manifest = options.manifest;
     this.savedPath = options.savedPath;
     this.send = options.send;
     this.now = options.now ?? (() => Date.now());
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    if (!Number.isFinite(this.requestTimeoutMs) || this.requestTimeoutMs < 0) {
+      throw new RangeError("requestTimeoutMs must be finite and non-negative");
+    }
     this.maxInFlightPerPeer = options.maxInFlightPerPeer;
     this.maxInFlightTotal = options.maxInFlightTotal;
     this.random = options.random;
     this.log = options.log ?? (() => {});
     // A seed session is handed a pre-filled bitfield and points at the user's
     // own file; a download owns its part file and must not share it.
-    this.file = new ChunkFile(options.partPath, options.manifest, options.have === undefined);
+    this.ownsPartFile = options.have === undefined;
+    this.file = new ChunkFile(options.partPath, options.manifest, this.ownsPartFile, !this.ownsPartFile);
     // A download credits whatever a previous, interrupted run already verified.
-    this.have = options.have ?? this.file.scanVerified();
+    try {
+      this.have = options.have ?? this.file.scanVerified();
+    } catch (error) {
+      // A failed constructor cannot hand ownership back to its caller. Release
+      // the handle and lock so the next fetch can retry this existing part file.
+      this.file.close();
+      throw error;
+    }
   }
 
   // ── Peer tracking ──────────────────────────────────────────────────────────
@@ -191,7 +206,8 @@ export class SwarmSession {
     if (!this.have.has(index)) return false;
     try {
       const bytes = this.file.readChunk(index);
-      if (!bytes) return false;
+      // Seed sources and resumed parts can be edited after initial verification.
+      if (!bytes || sha256Hex(bytes) !== this.manifest.chunkHashes[index]) return false;
       this.send.chunk(peerId, index, bytes, binary);
       return true;
     } catch (error) {
@@ -481,8 +497,9 @@ export class SwarmSession {
     // Close the data handle but keep the destination lock until verification
     // and the final move both finish. Releasing it first lets a second process
     // claim and mutate the same part file during a long final hash.
-    this.file.closeHandle();
     try {
+      this.file.open();
+      this.file.closeHandle();
       const assembled = sha256FileHex(this.file.filePath);
       if (assembled.size !== this.manifest.size) {
         return {
@@ -495,6 +512,7 @@ export class SwarmSession {
         return { ok: false, error: "sha256 mismatch on the assembled file", integrityFailure: true };
       }
 
+      this.file.assertExclusiveLock();
       moveFileExclusive(this.file.filePath, this.savedPath);
       this.completed = true;
       return { ok: true, savedPath: this.savedPath };
@@ -511,8 +529,22 @@ export class SwarmSession {
 
   /** Drop the partial file. Used when a transfer is abandoned. */
   discard(): void {
-    this.file.close();
-    if (existsSync(this.file.filePath)) rmSync(this.file.filePath, { force: true });
+    try {
+      if (!this.ownsPartFile) return;
+      // A failed finish may have released the lock. Reclaim it before deleting,
+      // and leave a replacement downloader's part file alone if it now owns it.
+      try {
+        this.file.open();
+      } catch (error) {
+        this.log(`[swarm] could not claim part file for discard: ${errorMessage(error)}`);
+        return;
+      }
+      this.file.closeHandle();
+      this.file.assertExclusiveLock();
+      if (existsSync(this.file.filePath)) rmSync(this.file.filePath, { force: true });
+    } finally {
+      this.file.close();
+    }
   }
 
   private inFlightForPeer(peerId: string): number {

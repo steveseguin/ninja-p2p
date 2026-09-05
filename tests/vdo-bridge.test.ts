@@ -5,6 +5,8 @@ import { VDOBridge } from "../src/vdo-bridge.js";
 import { createEnvelope, parseEnvelope, type MessageEnvelope, type PeerIdentity } from "../src/protocol.js";
 
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 
 const packageVersion = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -37,9 +39,320 @@ function makeBridge(): VDOBridge {
   });
 }
 
+test("invalid heartbeat intervals fail before connection startup", () => {
+  for (const heartbeatMs of [NaN, Infinity, -1, 2 ** 31]) {
+    assert.throws(() => new VDOBridge({
+      room: "test", streamId: me.streamId, identity: me, heartbeatMs,
+    }), /heartbeatMs/);
+  }
+});
+
+test("heartbeat timing cannot be changed by mutating the constructor options", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const options = { room: "test", streamId: me.streamId, identity: me, heartbeatMs: 1000 };
+  const bridge = new VDOBridge(options);
+  let sent = 0;
+  setFakeSDK(bridge, () => { sent++; });
+  Object.assign(bridge, { connected: true });
+  const internal = bridge as unknown as { startHeartbeat(): void; stopHeartbeat(): void };
+  try {
+    options.heartbeatMs = 1;
+    internal.startHeartbeat();
+    t.mock.timers.tick(1);
+    assert.equal(sent, 0);
+    t.mock.timers.tick(999);
+    assert.equal(sent, 1);
+  } finally {
+    internal.stopHeartbeat();
+    t.mock.timers.reset();
+  }
+});
+
 function setFakeSDK(bridge: VDOBridge, sendData: (data: unknown, target?: unknown) => boolean | void): void {
   (bridge as unknown as { sdk: { sendData: (data: unknown, target?: unknown) => boolean | void } }).sdk = { sendData };
 }
+
+function wireTestSDK(bridge: VDOBridge) {
+  const handlers = new Map<string, (event: any) => void>();
+  const sent: unknown[] = [];
+  Object.assign(bridge, { sdk: {
+    addEventListener(name: string, handler: (event: any) => void) { handlers.set(name, handler); },
+    sendData(data: unknown) { sent.push(data); return true; },
+  } });
+  (bridge as unknown as { wireSDKEvents(): void }).wireSDKEvents();
+  return { handlers, sent };
+}
+
+test("disconnect cleans up a partially initialized SDK", async () => {
+  const bridge = makeBridge();
+  let closed = 0;
+  Object.assign(bridge, { sdk: {
+    sendData() {}, leaveRoom() {},
+    async disconnect() { closed++; },
+  } });
+  await bridge.disconnect();
+  assert.equal(closed, 1);
+  assert.equal(bridge.getSDK(), null);
+});
+
+test("late stream metadata lets data-channel opening flush the stream's queued messages", () => {
+  const bridge = makeBridge();
+  const { handlers, sent } = wireTestSDK(bridge);
+  bridge.bus.setSendDataFn(data => { sent.push(data); return true; });
+  const queued = bridge.bus.send(other.streamId, "chat", { text: "queued before discovery" });
+  handlers.get("peerConnected")!({ detail: { uuid: "remote_uuid" } });
+  handlers.get("peerConnected")!({ detail: { uuid: "remote_uuid", streamID: other.streamId } });
+  handlers.get("dataChannelOpen")!({ detail: { uuid: "remote_uuid", streamID: other.streamId } });
+  assert.equal(bridge.bus.getOfflineQueueSize(other.streamId), 0);
+  assert.ok(sent.some(wire => parseEnvelope(wire)?.id === queued.id));
+  assert.equal(bridge.peers.streamIdForUuid("remote_uuid"), other.streamId);
+});
+
+test("callbacks from a replaced SDK cannot change peers or send through its replacement", () => {
+  const bridge = makeBridge();
+  const old = wireTestSDK(bridge);
+  const current = wireTestSDK(bridge);
+  current.handlers.get("peerConnected")!({ detail: { uuid: "new_uuid", streamID: other.streamId } });
+
+  old.handlers.get("peerConnected")!({ detail: { uuid: "old_uuid", streamID: other.streamId } });
+  old.handlers.get("dataChannelOpen")!({ detail: { uuid: "old_uuid", streamID: other.streamId } });
+  old.handlers.get("reconnecting")!({});
+
+  assert.equal(bridge.peers.getPeer(other.streamId)!.uuid, "new_uuid");
+  assert.equal(current.sent.length, 0);
+  assert.equal(bridge.isRestoring(), false);
+  current.handlers.get("dataChannelOpen")!({ detail: { uuid: "new_uuid", streamID: other.streamId } });
+  assert.equal(current.sent.length, 1);
+});
+
+test("callbacks after SDK teardown cannot resurrect peers", async () => {
+  const bridge = makeBridge();
+  const old = wireTestSDK(bridge);
+  Object.assign(bridge.getSDK()!, { leaveRoom() {}, async disconnect() {} });
+  await bridge.disconnect();
+  old.handlers.get("peerConnected")!({ detail: { uuid: "old_uuid", streamID: other.streamId } });
+  old.handlers.get("reconnecting")!({});
+  assert.equal(bridge.peers.connectedCount, 0);
+  assert.equal(bridge.isRestoring(), false);
+});
+
+test("overlapping connect calls share one SDK and one room announcement", async () => {
+  const require = createRequire(import.meta.url);
+  const sdkPath = require.resolve("@vdoninja/sdk");
+  const previous = require.cache[sdkPath];
+  let instances = 0;
+  let announcements = 0;
+  class FakeSDK {
+    constructor() { instances++; }
+    addEventListener() {}
+    async connect() {}
+    async joinRoom() {}
+    async announce() { announcements++; }
+    sendData() {}
+    leaveRoom() {}
+    async disconnect() {}
+  }
+  require.cache[sdkPath] = { exports: FakeSDK } as NodeJS.Module;
+  const bridge = makeBridge();
+  try {
+    await Promise.all([bridge.connect(), bridge.connect()]);
+    assert.equal(instances, 1);
+    assert.equal(announcements, 1);
+  } finally {
+    await bridge.disconnect();
+    if (previous) require.cache[sdkPath] = previous;
+    else delete require.cache[sdkPath];
+  }
+});
+
+test("disconnect during announcement cannot resurrect a connected bridge", async () => {
+  const require = createRequire(import.meta.url);
+  const sdkPath = require.resolve("@vdoninja/sdk");
+  const previous = require.cache[sdkPath];
+  let finish!: () => void;
+  let entered!: () => void;
+  const announced = new Promise<void>(resolve => { entered = resolve; });
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  class FakeSDK {
+    addEventListener() {}
+    async connect() {}
+    async joinRoom() {}
+    announce() { entered(); return pending; }
+    sendData() {}
+    leaveRoom() {}
+    async disconnect() {}
+  }
+  require.cache[sdkPath] = { exports: FakeSDK } as NodeJS.Module;
+  const bridge = makeBridge();
+  try {
+    const connecting = bridge.connect();
+    const rejected = assert.rejects(connecting, /cancelled/);
+    await announced;
+    await bridge.disconnect();
+    finish();
+    await rejected;
+    assert.equal(bridge.isConnected(), false);
+    assert.equal(bridge.getSDK(), null);
+    await bridge.connect();
+    assert.equal(bridge.isConnected(), true, "a cancelled startup must allow a later retry");
+  } finally {
+    finish();
+    await bridge.disconnect();
+    if (previous) require.cache[sdkPath] = previous;
+    else delete require.cache[sdkPath];
+  }
+});
+
+test("failed room startup awaits SDK cleanup and preserves the original error", async () => {
+  const require = createRequire(import.meta.url);
+  const sdkPath = require.resolve("@vdoninja/sdk");
+  const previous = require.cache[sdkPath];
+  let closed = 0;
+  const failure = new Error("room join failed");
+  class FakeSDK {
+    addEventListener() {}
+    async connect() {}
+    async joinRoom() { throw failure; }
+    sendData() {}
+    leaveRoom() {}
+    async disconnect() { closed++; }
+  }
+  require.cache[sdkPath] = { exports: FakeSDK } as NodeJS.Module;
+  try {
+    const bridge = makeBridge();
+    await assert.rejects(bridge.connect(), error => error === failure);
+    assert.equal(closed, 1);
+    assert.equal(bridge.getSDK(), null);
+    assert.equal(bridge.isConnected(), false);
+  } finally {
+    if (previous) require.cache[sdkPath] = previous;
+    else delete require.cache[sdkPath];
+  }
+});
+
+test("concurrent disconnect callers share teardown and one completion event", async () => {
+  const bridge = makeBridge();
+  let closed = 0;
+  let completed = 0;
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  Object.assign(bridge, { connected: true, restoring: true, sdk: {
+    sendData() {}, leaveRoom() {},
+    disconnect() { closed++; return pending; },
+  } });
+  bridge.on("disconnected", () => { completed++; });
+  const first = bridge.disconnect();
+  const second = bridge.disconnect();
+  await Promise.resolve();
+  finish();
+  await Promise.all([first, second]);
+  assert.equal(closed, 1);
+  assert.equal(completed, 1);
+  assert.equal(bridge.isRestoring(), false);
+});
+
+test("successful teardown does not leave a five-second timer holding Node open", () => {
+  const source = new URL("../src/vdo-bridge.ts", import.meta.url).href;
+  const result = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
+    import { VDOBridge } from ${JSON.stringify(source)};
+    const bridge = new VDOBridge({ room: 'test', streamId: 'test', identity: { streamId: 'test', role: 'test', name: 'test' } });
+    Object.assign(bridge, { connected: true, sdk: {
+      sendData() {}, leaveRoom() {}, async disconnect() {}
+    } });
+    await bridge.disconnect();
+  `], { encoding: "utf8", timeout: 3500 });
+  assert.equal(result.error, undefined, result.error?.message);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("late disconnect from an old UUID cannot disconnect a replacement peer", () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  bridge.peers.addPeer(other.streamId, "old_uuid");
+  bridge.peers.addPeer(other.streamId, "new_uuid");
+  handlers.get("dataChannelOpen")!({ detail: { uuid: "new_uuid", streamID: other.streamId } });
+  handlers.get("peerDisconnected")!({ detail: { uuid: "old_uuid", streamID: other.streamId } });
+  assert.equal(bridge.peers.isConnected(other.streamId), true);
+  assert.equal((bridge as unknown as { canAttemptSDKSend(target: unknown): boolean })
+    .canAttemptSDKSend({ uuid: "new_uuid" }), true);
+});
+
+test("bridge ignores protocol messages addressed to another peer before handling them", () => {
+  const bridge = makeBridge();
+  const { handlers, sent } = wireTestSDK(bridge);
+  bridge.peers.addPeer(other.streamId, "uuid_worker");
+  for (const type of ["ping", "history_request", "announce"] as const) {
+    handlers.get("dataReceived")!({ detail: {
+      uuid: "uuid_worker",
+      data: createEnvelope(other, type, {}, { to: "someone_else" }),
+    } });
+  }
+  assert.equal(sent.length, 0);
+  assert.equal(bridge.peers.getPeer(other.streamId)?.identity, null);
+});
+
+test("malformed presence payloads do not throw or change peer state", () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  bridge.peers.addPeer(other.streamId, "uuid_worker");
+  for (const type of ["announce", "skill_update"] as const) {
+    for (const payload of [null, undefined, [], "invalid"]) {
+      assert.doesNotThrow(() => handlers.get("dataReceived")!({ detail: {
+        uuid: "uuid_worker", data: createEnvelope(other, type, payload),
+      } }));
+    }
+  }
+  assert.equal(bridge.peers.getPeer(other.streamId)?.identity, null);
+});
+
+test("malformed presence fields cannot poison the registry or reach discovery listeners", () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  bridge.peers.addPeer(other.streamId, "remote_uuid");
+  bridge.peers.updateFromAnnounce(other.streamId, other, { skills: ["review"], status: "idle", topics: [], version: "1" });
+  let delivered = 0;
+  bridge.on("peer:announce", () => { delivered++; });
+  bridge.bus.on("message:skill_update", () => { delivered++; });
+  for (const type of ["announce", "skill_update"] as const) {
+    for (const payload of [
+      { skills: "review" }, { skills: [null] }, { status: {} },
+      { topics: "events" }, { agent: [] }, { agent: { asks: "review" } },
+      { agent: { asks: [null] } }, { agent: { can: [1] } },
+      { agent: { shares: [null] } },
+    ]) {
+      handlers.get("dataReceived")!({ detail: { uuid: "remote_uuid", data: createEnvelope(other, type, payload) } });
+    }
+  }
+  assert.equal(delivered, 0);
+  assert.deepEqual(bridge.peers.getPeer(other.streamId)!.skills, ["review"]);
+  assert.equal(bridge.peers.getPeer(other.streamId)!.status, "idle");
+});
+
+test("presence validation allows partial updates and unknown extension fields", () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  const payload = { skills: ["review"], agent: { asks: [{ name: "review", description: "Review", extra: true }], extra: true }, extra: true };
+  let delivered: unknown;
+  bridge.on("peer:announce", event => { delivered = event.announce; });
+  handlers.get("dataReceived")!({ detail: { uuid: "remote_uuid", data: createEnvelope(other, "announce", payload) } });
+  assert.deepEqual(delivered, payload);
+  handlers.get("dataReceived")!({ detail: { uuid: "remote_uuid", data: createEnvelope(other, "skill_update", { status: "busy" }) } });
+  assert.deepEqual(bridge.peers.getPeer(other.streamId)!.skills, ["review"]);
+  assert.equal(bridge.peers.getPeer(other.streamId)!.status, "busy");
+});
+
+test("initial announces work before stream discovery and accept older UUID routes", () => {
+  const bridge = makeBridge();
+  const { handlers, sent } = wireTestSDK(bridge);
+  Object.assign(bridge.getSDK()!, { state: { uuid: "our_uuid" } });
+  handlers.get("dataChannelOpen")!({ detail: { uuid: "uuid_worker" } });
+  assert.equal(parseEnvelope(sent[0])?.to, null);
+  handlers.get("dataReceived")!({ detail: {
+    uuid: "uuid_worker",
+    data: createEnvelope(other, "announce", { skills: ["review"] }, { to: "our_uuid" }),
+  } });
+  assert.deepEqual(bridge.peers.getPeer(other.streamId)?.skills, ["review"]);
+});
 
 test("wireSDKEvents views existing and newly added peers without duplicating view calls", () => {
   const bridge = makeBridge();

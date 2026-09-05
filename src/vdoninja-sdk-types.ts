@@ -18,6 +18,7 @@ export type VDONinjaOptions = {
 };
 
 export interface VDONinja {
+  readonly state?: { uuid: string | null };
   connect(): Promise<void>;
   disconnect(): void | Promise<void>;
   joinRoom(options?: { room?: string; password?: string | false }): Promise<void>;

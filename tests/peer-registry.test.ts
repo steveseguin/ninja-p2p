@@ -21,6 +21,31 @@ test("addPeer creates and returns a peer record", () => {
   assert.deepEqual(peer.skills, []);
 });
 
+test("adding a UUID that matches another peer's stream ID does not merge identities", () => {
+  const reg = new PeerRegistry();
+  const first = reg.addPeer("uuid_second", "uuid_first");
+  const second = reg.addPeer("second", "uuid_second");
+  assert.notEqual(first, second);
+  assert.equal(second.streamId, "second");
+  assert.equal(second.uuid, "uuid_second");
+  assert.equal(reg.streamIdForUuid("uuid_first"), "uuid_second");
+  assert.equal(reg.streamIdForUuid("uuid_second"), "second");
+  assert.equal(reg.getAllPeers().length, 2);
+});
+
+test("reconnecting a peer does not delete a different peer named after its new UUID", () => {
+  const reg = new PeerRegistry();
+  const unrelated = reg.addPeer("uuid_new", "uuid_unrelated");
+  const original = reg.addPeer("bot", "uuid_old");
+  reg.markDisconnected("bot");
+  assert.equal(reg.addPeer("bot", "uuid_new"), original);
+  assert.equal(reg.getPeer("uuid_new"), unrelated);
+  assert.equal(reg.streamIdForUuid("uuid_unrelated"), "uuid_new");
+  assert.equal(reg.streamIdForUuid("uuid_new"), "bot");
+  assert.equal(reg.streamIdForUuid("uuid_old"), undefined);
+  assert.equal(reg.getAllPeers().length, 2);
+});
+
 test("addPeer re-activates existing disconnected peer", () => {
   const reg = new PeerRegistry();
   reg.addPeer("bot_1", "uuid_1");
@@ -83,6 +108,35 @@ test("rekeyPeer renames a temporary uuid-keyed record to the real streamId", () 
   assert.equal(reg.getAllPeers().length, 1);
 });
 
+test("rekeyPeer refuses an occupied stream ID without merging unrelated connections", () => {
+  for (const connected of [true, false]) {
+    const reg = new PeerRegistry();
+    const original = reg.addPeer("bot_1", "uuid_old");
+    if (!connected) reg.markDisconnected("bot_1");
+    const temporary = reg.addPeer("uuid_new", "uuid_new");
+    assert.equal(reg.rekeyPeer("uuid_new", "bot_1"), undefined);
+    assert.equal(reg.getPeer("bot_1"), original);
+    assert.equal(reg.getPeer("uuid_new"), temporary);
+    assert.equal(reg.streamIdForUuid("uuid_old"), "bot_1");
+    assert.equal(reg.streamIdForUuid("uuid_new"), "uuid_new");
+    assert.equal(original.connected, connected);
+    assert.equal(reg.getAllPeers().length, 2);
+  }
+});
+
+test("a conflicting rekey cannot leave an alias that attaches to a later peer", () => {
+  const reg = new PeerRegistry();
+  reg.addPeer("bot_1", "uuid_old");
+  reg.addPeer("uuid_new", "uuid_new");
+  reg.rekeyPeer("uuid_new", "bot_1");
+  reg.removePeer("bot_1");
+  const replacement = reg.addPeer("bot_1", "uuid_replacement");
+  assert.notEqual(reg.getPeer("uuid_new"), replacement);
+  reg.removePeer("uuid_new");
+  assert.equal(reg.getPeer("bot_1"), replacement);
+  assert.equal(reg.streamIdForUuid("uuid_new"), undefined);
+});
+
 test("addPeer merges late uuid-only connection events into the existing streamId peer", () => {
   const reg = new PeerRegistry();
   reg.addPeer("bot_1", "uuid_1");
@@ -90,6 +144,26 @@ test("addPeer merges late uuid-only connection events into the existing streamId
   assert.ok(peer);
   assert.equal(peer!.streamId, "bot_1");
   assert.equal(reg.getAllPeers().length, 1);
+});
+
+test("addPeer promotes a temporary UUID record when connection metadata supplies the stream ID", () => {
+  const reg = new PeerRegistry();
+  const temporary = reg.addPeer("uuid_1", "uuid_1");
+  const resolved = reg.addPeer("bot_1", "uuid_1");
+  assert.equal(resolved, temporary);
+  assert.equal(resolved.streamId, "bot_1");
+  assert.equal(reg.getPeer("bot_1"), resolved);
+  assert.equal(reg.streamIdForUuid("uuid_1"), "bot_1");
+  assert.equal(reg.getAllPeers().length, 1);
+});
+
+test("late connection metadata cannot rename an already resolved peer", () => {
+  const reg = new PeerRegistry();
+  const peer = reg.addPeer("bot_1", "uuid_1");
+  reg.addPeer("different_bot", "uuid_1");
+  assert.equal(peer.streamId, "bot_1");
+  assert.equal(reg.getPeer("different_bot"), undefined);
+  assert.equal(reg.streamIdForUuid("uuid_1"), "bot_1");
 });
 
 test("updateFromAnnounce fills identity and skills", () => {
@@ -133,6 +207,29 @@ test("updateFromSkillUpdate changes skills and status", () => {
   assert.equal(peer!.status, "busy");
   assert.equal(peer!.statusDetail, "working");
   assert.deepEqual(peer!.agentProfile, update.agent);
+});
+
+test("a replacement peer announcement clears capabilities no longer advertised", () => {
+  const reg = new PeerRegistry();
+  reg.addPeer("bot_1", "uuid_1");
+  reg.updateFromAnnounce("bot_1", makeIdentity("bot_1"), {
+    ...makeAnnounce(), agent: { can: ["review"], runtime: "codex-cli" },
+  });
+  reg.markDisconnected("bot_1");
+  reg.addPeer("bot_1", "uuid_2");
+  reg.updateFromAnnounce("bot_1", {
+    ...makeIdentity("bot_1"), instanceId: "inst_2",
+  }, makeAnnounce());
+  assert.equal(reg.getPeer("bot_1")!.agentProfile, null);
+});
+
+test("a skill update without a profile preserves the advertised profile", () => {
+  const reg = new PeerRegistry();
+  reg.addPeer("bot_1", "uuid_1");
+  const agent = { can: ["review"], runtime: "codex-cli" };
+  reg.updateFromAnnounce("bot_1", makeIdentity("bot_1"), { ...makeAnnounce(), agent });
+  reg.updateFromSkillUpdate("bot_1", { skills: [], status: "busy" });
+  assert.deepEqual(reg.getPeer("bot_1")!.agentProfile, agent);
 });
 
 test("getConnectedPeers filters by connected status", () => {

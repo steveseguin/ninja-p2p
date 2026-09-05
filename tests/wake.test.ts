@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
+import { spawnSync } from "node:child_process";
 
 import {
   buildWakeEnv,
@@ -85,6 +86,44 @@ test("buildWakeEnv bounds peer text before putting it in the process environment
   const env = buildWakeEnv([chat("x".repeat(MAX_WAKE_TEXT_LENGTH * 2))], context);
   assert.equal(env.NINJA_WAKE_TEXT.length, MAX_WAKE_TEXT_LENGTH);
   assert.match(env.NINJA_WAKE_TEXT, /…$/);
+});
+
+test("peer NUL characters cannot prevent a wake process from starting", () => {
+  const message = createEnvelope({ ...sender, streamId: "peer\0name" }, "chat", { text: "hello\0world" });
+  const env = buildWakeEnv([message], context);
+  const result = spawnSync(process.execPath, ["-e",
+    "process.stdout.write(JSON.stringify([process.env.NINJA_WAKE_FROM, process.env.NINJA_WAKE_TEXT]))",
+  ], { env: { ...process.env, ...env }, encoding: "utf8", windowsHide: true });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), ["peer\uFFFDname", "hello\uFFFDworld"]);
+  assert.equal(message.from.streamId, "peer\0name");
+  assert.deepEqual(message.payload, { text: "hello\0world" });
+});
+
+test("WakeRunner removes an inherited room so child commands use the sidecar outbox", async () => {
+  const previousRoom = process.env.NINJA_ROOM;
+  const { runs, spawnFn } = makeFakeSpawn();
+  const runner = new WakeRunner({
+    config: { command: "echo hi", debounceMs: 1, limitPerMinute: 0 },
+    context,
+    spawnFn,
+  });
+  try {
+    process.env.NINJA_ROOM = "parent-room";
+    runner.notify(chat("wake up"));
+    await delay(40);
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0].env.NINJA_ROOM, undefined);
+    assert.equal(runs[0].env.NINJA_WAKE_ROOM, context.room);
+    assert.equal(runs[0].env.NINJA_STATE_DIR, context.stateDir);
+    assert.equal(runs[0].env.NINJA_ID, context.streamId);
+    assert.equal(process.env.NINJA_ROOM, "parent-room", "the parent environment must remain intact");
+  } finally {
+    runner.dispose();
+    if (previousRoom === undefined) delete process.env.NINJA_ROOM;
+    else process.env.NINJA_ROOM = previousRoom;
+  }
 });
 
 test("WakeRunner coalesces a burst into a single run", async () => {
@@ -177,6 +216,64 @@ test("WakeRunner treats a zero limit as unlimited", async () => {
   }
   assert.equal(runs.length, 4);
   runner.dispose();
+});
+
+test("unlimited wake runs do not accumulate unused rate-limit history", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { runs, spawnFn } = makeFakeSpawn();
+  const runner = new WakeRunner({
+    config: { command: "echo hi", debounceMs: 1, limitPerMinute: 0 },
+    context,
+    spawnFn,
+  });
+  try {
+    for (let i = 0; i < 100; i++) {
+      runner.notify(chat("next"));
+      t.mock.timers.tick(1);
+      runs.at(-1)!.exit();
+    }
+    assert.equal(runs.length, 100);
+    assert.equal(runner.pendingCount(), 0);
+    // Inspect retained bookkeeping without adding a public diagnostic API.
+    assert.equal((runner as unknown as { recentRuns: number[] }).recentRuns.length, 0);
+  } finally {
+    runner.dispose();
+    t.mock.timers.reset();
+  }
+});
+
+test("WakeRunner rejects timer overflow and invalid rate limits before scheduling", () => {
+  for (const debounceMs of [-1, NaN, Infinity, 2 ** 31]) {
+    assert.throws(() => new WakeRunner({
+      config: { command: "echo hi", debounceMs, limitPerMinute: 1 }, context,
+    }), /debounceMs/);
+  }
+  for (const limitPerMinute of [-1, NaN, Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => new WakeRunner({
+      config: { command: "echo hi", debounceMs: 0, limitPerMinute }, context,
+    }), /limitPerMinute/);
+  }
+});
+
+test("mutating the caller's wake config cannot disable the active rate limit", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { runs, spawnFn } = makeFakeSpawn();
+  const config = { command: "echo hi", debounceMs: 1, limitPerMinute: 1 };
+  const runner = new WakeRunner({ config, context, spawnFn, now: () => 1000 });
+  try {
+    runner.notify(chat("first"));
+    t.mock.timers.tick(1);
+    assert.equal(runs.length, 1);
+    runs[0].exit();
+    config.limitPerMinute = 0;
+    runner.notify(chat("second"));
+    t.mock.timers.tick(1);
+    assert.equal(runs.length, 1);
+    assert.equal(runner.pendingCount(), 1);
+  } finally {
+    runner.dispose();
+    t.mock.timers.reset();
+  }
 });
 
 test("dispose cancels a scheduled wake", async () => {

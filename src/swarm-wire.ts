@@ -95,7 +95,8 @@ export function decodeChunkFrame(bytes: Uint8Array): SwarmChunkFrame | null {
   // Copy rather than subarray: the payload outlives the frame — it is hashed,
   // written to disk, and may be re-served — and holding a view would pin the
   // whole received buffer alive for as long as any chunk of it is referenced.
-  const data = bytes.slice(SWARM_WIRE_HEADER_BYTES);
+  // Buffer is a Uint8Array too, but its slice() returns a shared view.
+  const data = Uint8Array.from(bytes.subarray(SWARM_WIRE_HEADER_BYTES));
 
   return { fileId, index, data };
 }

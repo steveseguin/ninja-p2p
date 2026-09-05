@@ -12,6 +12,8 @@
 
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { sanitizeFileName } from "./file-transfer.js";
+import type { EventEmitter } from "node:events";
 import type { VDOBridge } from "./vdo-bridge.js";
 import {
   buildManifestFromFile,
@@ -29,6 +31,7 @@ import {
   toManifestSummary,
   validateManifestSummary,
   validateSwarmManifest,
+  validateRequestLimits,
   type SwarmManifest,
   type SwarmManifestSummary,
 } from "./swarm.js";
@@ -129,15 +132,22 @@ export class SwarmManager {
   private announceTimer: ReturnType<typeof setInterval> | null = null;
   private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
+  private readonly listenerCleanups: Array<() => void> = [];
   /** Invalidates asynchronous sends when stop() begins. */
   private lifecycleGeneration = 0;
 
   constructor(options: SwarmManagerOptions) {
+    validateRequestLimits(options);
     this.bridge = options.bridge;
     this.downloadDir = options.downloadDir;
     this.workDir = options.workDir;
     this.pumpIntervalMs = options.pumpIntervalMs ?? DEFAULT_PUMP_INTERVAL_MS;
     this.announceIntervalMs = options.announceIntervalMs ?? DEFAULT_ANNOUNCE_INTERVAL_MS;
+    for (const [name, value] of [["pumpIntervalMs", this.pumpIntervalMs], ["announceIntervalMs", this.announceIntervalMs]] as const) {
+      if (!Number.isFinite(value) || value < 0 || value > 2 ** 31 - 1) {
+        throw new RangeError(`${name} must be between 0 and 2147483647 ms`);
+      }
+    }
     this.maxInFlightPerPeer = options.maxInFlightPerPeer;
     this.maxInFlightTotal = options.maxInFlightTotal;
     this.log = options.log ?? (() => {});
@@ -150,34 +160,39 @@ export class SwarmManager {
 
   start(): void {
     if (this.started) return;
-    this.started = true;
-    this.lifecycleGeneration += 1;
 
     mkdirSync(this.downloadDir, { recursive: true });
     mkdirSync(this.workDir, { recursive: true });
+    this.started = true;
+    this.lifecycleGeneration += 1;
 
-    this.bridge.bus.on("message:swarm_offer", (envelope: MessageEnvelope) => {
+    const listen = <T>(emitter: EventEmitter, name: string, handler: (event: T) => void): void => {
+      emitter.on(name, handler);
+      this.listenerCleanups.push(() => { emitter.off(name, handler); });
+    };
+
+    listen(this.bridge.bus, "message:swarm_offer", (envelope: MessageEnvelope) => {
       this.guard("offer", envelope, () => this.handleOffer(envelope));
     });
-    this.bridge.bus.on("message:swarm_manifest_request", (envelope: MessageEnvelope) => {
+    listen(this.bridge.bus, "message:swarm_manifest_request", (envelope: MessageEnvelope) => {
       this.guard("manifest request", envelope, () => this.handleManifestRequest(envelope));
     });
-    this.bridge.bus.on("message:swarm_manifest_page", (envelope: MessageEnvelope) => {
+    listen(this.bridge.bus, "message:swarm_manifest_page", (envelope: MessageEnvelope) => {
       this.guard("manifest page", envelope, () => this.handleManifestPage(envelope));
     });
-    this.bridge.bus.on("message:swarm_announce", (envelope: MessageEnvelope) => {
+    listen(this.bridge.bus, "message:swarm_announce", (envelope: MessageEnvelope) => {
       this.guard("announce", envelope, () => this.handleAnnounce(envelope));
     });
-    this.bridge.bus.on("message:swarm_have", (envelope: MessageEnvelope) => {
+    listen(this.bridge.bus, "message:swarm_have", (envelope: MessageEnvelope) => {
       this.guard("have", envelope, () => this.handleHave(envelope));
     });
-    this.bridge.bus.on("message:swarm_request", (envelope: MessageEnvelope) => {
+    listen(this.bridge.bus, "message:swarm_request", (envelope: MessageEnvelope) => {
       this.guard("chunk request", envelope, () => this.handleRequest(envelope));
     });
-    this.bridge.bus.on("message:swarm_chunk", (envelope: MessageEnvelope) => {
+    listen(this.bridge.bus, "message:swarm_chunk", (envelope: MessageEnvelope) => {
       this.guard("chunk", envelope, () => this.handleChunk(envelope));
     });
-    this.bridge.on("binary", ({ streamId, bytes }: { streamId: string; bytes: Uint8Array }) => {
+    listen(this.bridge, "binary", ({ streamId, bytes }: { streamId: string; bytes: Uint8Array }) => {
       try {
         this.handleBinary(streamId, bytes);
       } catch (error) {
@@ -185,7 +200,7 @@ export class SwarmManager {
       }
     });
 
-    this.bridge.on("peer:disconnected", ({ streamId }: { streamId: string }) => {
+    listen(this.bridge, "peer:disconnected", ({ streamId }: { streamId: string }) => {
       for (const session of this.sessions.values()) session.removePeer(streamId);
       for (const offer of this.offers.values()) {
         offer.sources.delete(streamId);
@@ -200,13 +215,13 @@ export class SwarmManager {
     // has no way to learn a file exists. Send it our catalogue directly rather
     // than re-broadcasting: a manifest carries one hash per chunk, which is
     // megabytes for a large file and would hit every peer on every join.
-    this.bridge.on("peer:announce", ({ streamId }: { streamId: string }) => {
+    listen(this.bridge, "peer:announce", ({ streamId }: { streamId: string }) => {
       this.greetPeer(streamId);
     });
     // Our socket came back on new peer connections. Anything outstanding was
     // addressed to the old ones, so re-plan now rather than waiting out a
     // timeout per chunk, and re-state what we hold so peers can place us again.
-    this.bridge.on("ws:reconnected", () => {
+    listen(this.bridge, "ws:reconnected", () => {
       let abandoned = 0;
       for (const session of this.sessions.values()) abandoned += session.abandonInFlight();
       if (abandoned > 0) this.log(`[swarm] reconnected; re-planning ${abandoned} outstanding request(s)`);
@@ -225,13 +240,20 @@ export class SwarmManager {
     // sends first so that fallback never starts on a channel being torn down.
     this.started = false;
     this.lifecycleGeneration += 1;
+    for (const cleanup of this.listenerCleanups.splice(0)) cleanup();
     if (this.pumpTimer) clearInterval(this.pumpTimer);
     if (this.announceTimer) clearInterval(this.announceTimer);
     if (this.coalesceTimer) clearTimeout(this.coalesceTimer);
     this.pumpTimer = null;
     this.announceTimer = null;
     this.coalesceTimer = null;
-    for (const session of this.sessions.values()) session.close();
+    // Replies arriving while stopped are ignored. Do not carry their pending
+    // slots across restart or charge peers a timeout for our own pause.
+    for (const offer of this.offers.values()) offer.requestedAt.clear();
+    for (const session of this.sessions.values()) {
+      session.abandonInFlight();
+      session.close();
+    }
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -267,13 +289,20 @@ export class SwarmManager {
       chunkSize,
     );
 
-    this.offers.set(manifest.fileId, createOfferRecord(manifest));
-    this.seeding.add(manifest.fileId);
+    const known = this.offers.get(manifest.fileId);
+    if (known && !summariesAgree(known.summary, toManifestSummary(manifest))) {
+      throw new Error(`conflicting chunk layout for already advertised file ${manifest.fileId}`);
+    }
 
     const session = createSeedSession(manifest, resolved, this.sendFor(manifest), {
       log: this.log,
     });
+    // Reseeding replaces our local source, not the room's chunk contract. Close
+    // the previous source/part handle and lock before dropping that session.
+    this.sessions.get(manifest.fileId)?.close();
     this.sessions.set(manifest.fileId, session);
+    this.offers.set(manifest.fileId, createOfferRecord(manifest));
+    this.seeding.add(manifest.fileId);
 
     this.broadcastOffer(manifest);
     session.announce();
@@ -430,8 +459,8 @@ export class SwarmManager {
   /** Tell one peer everything we can offer, then what we currently hold. */
   private greetPeer(streamId: string): void {
     for (const session of this.sessions.values()) {
-      // Only advertise files we can actually serve some of.
-      if (session.chunkMap().count() === 0) continue;
+      // Empty files are complete with zero chunks and still need discovery.
+      if (session.manifest.totalChunks > 0 && session.chunkMap().count() === 0) continue;
       this.bridge.bus.trySend(streamId, "swarm_offer", toOfferPayload(session.manifest));
       session.announceTo(streamId);
     }
@@ -526,6 +555,8 @@ export class SwarmManager {
   private handleManifestPage(envelope: MessageEnvelope): void {
     const payload = parseManifestPage(envelope.payload);
     if (!payload) return;
+    // Discovery stays passive until fetch opts into collecting the manifest.
+    if (!this.wanted.has(payload.fileId)) return;
     const offer = this.offers.get(payload.fileId);
     if (!offer || offer.manifest) return;
     if (!offer.sources.has(envelope.from.streamId)) return;
@@ -669,7 +700,7 @@ export class SwarmManager {
 
     const expectedLength = chunkLength(payload.index, session.manifest);
     const maxBase64Length = Math.ceil(expectedLength / 3) * 4;
-    if (payload.data.length > maxBase64Length + 4 || !BASE64_PATTERN.test(payload.data)) return;
+    if (payload.data.length > maxBase64Length + 4 || payload.data.length % 4 !== 0 || !BASE64_PATTERN.test(payload.data)) return;
 
     const bytes = new Uint8Array(Buffer.from(payload.data, "base64"));
     session.onChunkData(envelope.from.streamId, payload.index, bytes);
@@ -882,7 +913,9 @@ type ParsedOffer =
   }
   | { ok: false; error: string };
 
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+// Callers also check length modulo four. Avoid a repeated group: V8 can
+// overflow its regexp stack on valid chunks near the supported size limit.
+const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 
 function parseOfferPayload(value: unknown): ParsedOffer {
   const data = asRecord(value);
@@ -1053,11 +1086,7 @@ function asRecord(value: unknown): Record<string, any> | null {
 }
 
 function chooseSavedPath(downloadDir: string, name: string, fileId: string): string {
-  let safe = path.basename(name || "download")
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-    .replace(/[. ]+$/g, "")
-    .slice(0, 180) || "download";
-  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(safe)) safe = `_${safe}`;
+  const safe = sanitizeFileName(name);
   const direct = path.join(downloadDir, safe);
   if (!existsSync(direct)) return direct;
 

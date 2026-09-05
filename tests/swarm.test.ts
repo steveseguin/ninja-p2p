@@ -60,6 +60,69 @@ test("ChunkMap ignores out-of-range indices", () => {
   assert.equal(map.count(), 0);
 });
 
+test("request planning rejects invalid limits rather than exceeding its memory bound", () => {
+  const have = new ChunkMap(10);
+  const peers = [peer("seed", ChunkMap.full(10))];
+  for (const key of ["maxInFlightTotal", "maxInFlightPerPeer"] as const) {
+    for (const value of [0.5, NaN, Infinity, -1, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.throws(() => planChunkRequests(have, peers, new Set(), { [key]: value }), /maxInFlight/);
+    }
+    assert.deepEqual(planChunkRequests(have, peers, new Set(), { [key]: 0 }), []);
+  }
+});
+
+test("ChunkMap rejects non-integer indices without claiming valid chunks", () => {
+  for (const index of [NaN, 0.5, 1.5, Infinity, -Infinity]) {
+    const map = new ChunkMap(2);
+    assert.equal(map.set(index), false, `set(${index})`);
+    assert.equal(map.count(), 0);
+    assert.deepEqual(map.missing(), [0, 1]);
+    assert.equal(map.isComplete(), false);
+    map.set(0);
+    map.set(1);
+    assert.equal(map.has(index), false, `has(${index})`);
+  }
+});
+
+test("ChunkFile rejects non-integer reads instead of serving a different byte range", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-swarm-"));
+  const data = bytes(3072, 3);
+  const file = new ChunkFile(path.join(dir, "indices.part"), buildManifest(data, "x.bin", "application/octet-stream", 1024));
+  try {
+    for (let i = 0; i < 3; i++) file.writeChunk(i, data.subarray(i * 1024, (i + 1) * 1024));
+    for (const index of [NaN, 0.5, 1.5, Infinity, -Infinity]) {
+      assert.equal(file.readChunk(index), null, `readChunk(${index})`);
+    }
+    assert.deepEqual(file.readChunk(1), data.subarray(1024, 2048));
+  } finally {
+    file.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("ChunkMap owns its input bytes so availability and completion stay consistent", () => {
+  for (const input of [new Uint8Array([1]), Buffer.from([1])]) {
+    const map = new ChunkMap(2, input);
+    input[0] = 3;
+    assert.equal(map.has(1), false);
+    assert.equal(map.count(), 1);
+    assert.deepEqual(map.missing(), [1]);
+    assert.equal(map.set(1), true);
+    assert.equal(map.isComplete(), true);
+    input[0] = 0;
+    assert.equal(map.has(0), true);
+    assert.equal(map.count(), 2);
+  }
+});
+
+test("ChunkMap updates do not mutate its caller's input buffer", () => {
+  const input = Buffer.from([0]);
+  const map = new ChunkMap(2, input);
+  map.set(1);
+  assert.equal(input[0], 0);
+  assert.equal(map.has(1), true);
+});
+
 test("ChunkMap survives a base64 round trip", () => {
   const map = new ChunkMap(20);
   for (const index of [0, 5, 9, 19]) map.set(index);

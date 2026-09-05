@@ -1,5 +1,194 @@
 # Changelog
 
+## Unreleased
+
+- Skip saved direct outbox records whose cached envelope disagrees with the
+  action's recipient, type, or message ID, retaining them for inspection.
+
+- Cap inbox wait sleeps at the remaining timeout, so a long polling interval
+  cannot postpone a short requested deadline by an entire interval.
+
+- Reject malformed CLI/environment wake limits and delays instead of truncating
+  them; in particular, a fractional limit can no longer turn into unlimited mode.
+
+- Validate and capture wake timing/rate settings at construction so timer overflow,
+  invalid limits, or later caller mutations cannot undermine scheduling limits.
+
+- Avoid accumulating unused run timestamps when wake rate limiting is disabled,
+  keeping unlimited mode's bookkeeping from growing with every invocation.
+
+- Replace NUL characters in wake sender/text previews so peer content cannot
+  prevent process startup; original inbox messages remain unchanged.
+
+- Remove inherited `NINJA_ROOM` from wake-hook environments so child CLI commands
+  use the sidecar outbox; retain the room as `NINJA_WAKE_ROOM` for context.
+
+- Honor `read --take 0` and reject malformed read counts instead of silently
+  consuming the default batch or a truncated count.
+
+- Validate inbox read counts before moving mail, preventing negative counts from
+  archiving an unintended batch through array slicing.
+
+- Count orphaned direct-transfer part files against quota even when their manifest
+  is missing, using the existing conservative accounting for unreadable metadata.
+
+- Keep stale direct transfers counted against quota when cleanup fails, so busy
+  or inaccessible part files cannot silently bypass the incomplete-transfer limit.
+
+- Look up transport UUIDs explicitly when adding peers, so a UUID matching an
+  unrelated stream ID cannot merge or delete that peer's record.
+
+- Preserve per-peer send order when a transport recovers: ordinary direct sends
+  retry older queued messages first, without blocking transient swarm traffic.
+
+- Remove already accepted offline messages even if a later transport send throws,
+  preventing those messages from being resent on the next queue flush.
+
+- Copy decoded swarm payloads even when frames arrive as Node Buffers, preventing
+  receive-buffer reuse from changing retained chunk data.
+
+- Ignore unsolicited swarm manifest pages until the file is requested, avoiding
+  unrequested page downloads and retained hash lists during passive discovery.
+
+- Give chunk maps ownership of their input bytes so external buffer mutations
+  cannot make availability disagree with the cached completion count.
+
+- Avoid regexp stack overflow when validating maximum-size base64 swarm chunks,
+  retaining alphabet, padding, length, and hash checks.
+
+- Validate and capture the heartbeat interval at bridge construction so invalid
+  values or later options mutations cannot unexpectedly accelerate heartbeat traffic.
+
+- Deliver history requests/replays without retaining their control envelopes,
+  preventing replay nesting and eviction of conversation history.
+
+- Keep inbox/outbox summaries available when a saved peer snapshot is not an
+  array, without rewriting the malformed snapshot.
+
+- Validate saved outbox action shapes before flushing. Malformed and unknown
+  records remain on disk instead of crashing delivery or being silently deleted.
+
+- Reject invalid swarm timer intervals and request timeouts before startup,
+  avoiding accidental rapid loops, immediate expiry, or permanently pending requests.
+
+- Validate swarm request limits before planning or creating managers/sessions;
+  fractional and non-finite counts cannot bypass request budgets. Zero remains supported.
+
+- Verify requested swarm chunks before serving so edited source bytes are not
+  sent under an obsolete manifest. Unchanged chunks remain available.
+
+- Apply the corrected shared filename sanitizer to swarm downloads as well as
+  direct transfers, bounding Unicode names and stripping dots after truncation.
+
+- Use one normalized shared-folder listing limit for entries and truncation;
+  preserve the one-entry minimum and reject non-finite limits.
+
+- Cancel a pending Social Stream retry when a new connection attempt starts,
+  preventing an old timer from shortening a later disconnect's backoff.
+
+- Preserve whitespace in shared-file paths so listings and get-file requests
+  select the named file rather than a different whitespace-trimmed filename.
+
+- Allow explicit local discard of direct transfers with unreadable manifests;
+  sender-scoped cleanup still requires verifiable ownership.
+
+- Handle damaged direct-transfer manifests during quota checks: records without
+  parts do not block offers, while existing parts with unknown metadata count conservatively.
+
+- Defer keyword triggers registered during dispatch until the next message,
+  preventing self-rearming callbacks from looping on one message. Removals still apply immediately.
+
+- Skip malformed saved inbox envelopes during reads and summaries without
+  deleting or archiving them. Valid legacy filenames remain supported.
+
+- Validate and copy Social Stream reconnect schedules so empty, overflowing,
+  or mutated delay arrays cannot accidentally become 1 ms retry loops.
+
+- Decode Social Stream HTML entities in one pass, preserving literal entity
+  text instead of decoding it twice. Text-only messages retain their existing path.
+
+- Refuse peer-registry rekeys onto occupied stream IDs, preventing unrelated
+  UUID aliases from surviving removal and resolving to replacement peers.
+
+- Clear pending chunk and manifest-page requests on swarm stop so restarting
+  can retry immediately, preserving verified chunks and received manifest pages.
+
+- Reject malformed presence field types before updating Node peer state or
+  notifying discovery consumers. Partial updates and unknown extensions remain supported.
+
+- Reject non-integer indices in chunk-map access and file reads so direct
+  library calls cannot claim unrelated chunks or read unintended byte ranges.
+
+- Promote temporary UUID peer records when later connection metadata supplies
+  the stream ID, allowing channel opening to flush the correct offline queue.
+  Already resolved peer identities remain unchanged.
+
+- Finish short writes when creating swarm lock tokens and remove locks from
+  failed setup attempts so an I/O error does not block an immediate retry.
+
+- Allow swarm startup to be retried after a storage-directory failure instead
+  of leaving the manager marked started without listeners or timers.
+
+- Detach manager-owned swarm listeners on stop so stopped managers stay quiet
+  and restart does not duplicate handlers. Preserve other bridge consumers.
+- Include empty seeded files in the catalogue sent to peers joining later.
+
+- Bound direct-transfer saved filenames by UTF-8 bytes and collision suffix
+  length, preserving Unicode characters and removing trailing dots/spaces after
+  truncation. Long accepted transfer IDs no longer break duplicate-name saves.
+
+- Refuse swarm part-file writes and finalization after lock takeover. Hold the
+  download lock through discard and preserve a replacement downloader's file.
+
+- Ignore callbacks from retired SDK connections so they cannot overwrite current
+  peer mappings, send through a replacement SDK, or restore disconnected state.
+- Clear stale agent capabilities when a full peer announcement omits a profile;
+  incremental skill updates continue to preserve an omitted profile.
+
+- Open swarm seed sources read-only, never recreate missing sources, and keep
+  seed originals intact when discarding a session. Download-owned parts retain
+  their existing cleanup behavior.
+- Release part-file handles and locks if resume scanning fails during construction.
+
+- Share overlapping connection attempts and reject cancelled startup before it
+  can announce a connected bridge after shutdown.
+- Close replaced swarm seed sessions and reject reseeding with a chunk layout
+  that conflicts with the file already advertised to peers.
+
+- Recheck simple-transfer destinations at completion so overlapping offers with
+  the same filename can both finish without overwriting each other.
+- Let concurrent inbox readers skip already-claimed records and return only
+  messages they successfully archived. Zero-count history reads now return no entries.
+
+- Retry transient Windows sharing violations during atomic sidecar state writes
+  for up to 100 ms. Preserve the previous record on failure and clean up temporary files.
+
+- Clean up failed room startup, share teardown across overlapping disconnect
+  calls, and cancel the shutdown timeout when SDK cleanup finishes early.
+- Clear reconnect state after teardown and ignore callbacks from closed or
+  superseded Social Stream sockets.
+
+- Shared-folder listings skip broken, inaccessible, and escaping links, identify
+  internal directory links correctly, and support explicitly shared filesystem roots.
+- Keep keyword trigger handles stable across removals and clear/re-registration;
+  ignore non-text chat fields during keyword matching.
+- Reject invalid message history and offline queue limits before trimming; zero
+  remains a supported way to disable retention.
+
+- Keep sidecar direct messages, commands, and responses in the disk outbox until
+  transport acceptance, preserving wire identity across restarts and avoiding
+  eviction by the library's 50-message memory queue. Rejected sends preserve
+  per-peer order while other peers continue. Add live restart-delivery validation.
+
+- Derive inbox filenames from a hash of sender identity and message ID so opaque
+  wire IDs cannot become filesystem paths or collide across different senders.
+- Ignore delayed disconnect events from superseded peer connections.
+- Apply stream routing before protocol replies and presence updates; initial
+  announcements use transport targeting and still accept older UUID routes.
+- Ignore null and non-object presence payloads before updating peer state.
+- Review compatibility with published NinjaSDK 1.6.0 while retaining the 1.5.4
+  minimum and existing browser SDK pin.
+
 ## 0.2.2
 
 - Add the package's explicit MIT license with Steve Seguin as the copyright

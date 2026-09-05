@@ -263,7 +263,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
       return {
         kind,
         stateDir: resolveStateDir(parsed.values, env),
-        take: parsePositiveInt(getSingleValue(parsed.values, "take"), 20),
+        take: parseWholeNumberOption(getSingleValue(parsed.values, "take"), 20, "take"),
         peek: getSingleValue(parsed.values, "peek") === "true",
       };
     case "wait":
@@ -740,6 +740,15 @@ function resolveStateDir(values: CliOptionValues, env: NodeJS.ProcessEnv, fallba
   return getDefaultStateDir(streamId, env);
 }
 
+function parseWholeNumberOption(raw: string | undefined, fallback: number, option: string, max = Number.MAX_SAFE_INTEGER): number {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value > max) {
+    throw new Error(`--${option} must be a non-negative integer no greater than ${max}`);
+  }
+  return value;
+}
+
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
   const value = Number.parseInt(raw, 10);
@@ -759,15 +768,18 @@ function buildWakeConfig(values: CliOptionValues, env: NodeJS.ProcessEnv): WakeC
   if (!command) return null;
   return {
     command,
-    debounceMs: parseNonNegativeInt(
+    debounceMs: parseWholeNumberOption(
       getSingleValue(values, "wake-debounce") ?? env.NINJA_WAKE_DEBOUNCE,
       DEFAULT_WAKE_DEBOUNCE_MS,
+      "wake-debounce",
+      2 ** 31 - 1,
     ),
     // 0 disables the rate limit. Keep a default ceiling so a pair of agents
     // that reply to each other cannot spin unattended forever.
-    limitPerMinute: parseNonNegativeInt(
+    limitPerMinute: parseWholeNumberOption(
       getSingleValue(values, "wake-limit") ?? env.NINJA_WAKE_LIMIT,
       DEFAULT_WAKE_LIMIT_PER_MINUTE,
+      "wake-limit",
     ),
   };
 }

@@ -44,9 +44,12 @@ export class PeerRegistry extends EventEmitter {
 
   /** Add or re-activate a peer when a WebRTC connection opens. */
   addPeer(streamId: string, uuid: string): PeerRecord {
+    // This argument is a transport UUID, not an interchangeable stream ID.
+    const mappedStreamId = this.uuidToStream.get(uuid);
+    const existingByUuid = mappedStreamId === undefined ? undefined : this.peers.get(mappedStreamId);
     const existing = this.peers.get(streamId);
     if (existing) {
-      const duplicateForUuid = this.resolve(uuid);
+      const duplicateForUuid = existingByUuid;
       if (duplicateForUuid && duplicateForUuid !== existing) {
         this.peers.delete(duplicateForUuid.streamId);
         this.uuidToStream.delete(duplicateForUuid.uuid);
@@ -61,8 +64,12 @@ export class PeerRegistry extends EventEmitter {
       return existing;
     }
 
-    const existingByUuid = this.resolve(uuid);
     if (existingByUuid) {
+      // SDK metadata can arrive after a UUID-only connection notification.
+      // Promote that placeholder without allowing a resolved identity to switch.
+      if (existingByUuid.streamId === uuid && streamId !== uuid) {
+        this.rekeyPeer(uuid, streamId);
+      }
       existingByUuid.connected = true;
       existingByUuid.connectedAt = Date.now();
       existingByUuid.lastSeenAt = Date.now();
@@ -114,7 +121,7 @@ export class PeerRegistry extends EventEmitter {
     return true;
   }
 
-  /** Rename a temporary uuid-keyed peer record once the real streamId is known. */
+  /** Rename a temporary UUID record; refuse an occupied stream ID without merging identities. */
   rekeyPeer(identifier: string, streamId: string): PeerRecord | undefined {
     const peer = this.resolve(identifier);
     if (!peer) return undefined;
@@ -122,9 +129,7 @@ export class PeerRegistry extends EventEmitter {
 
     const existing = this.peers.get(streamId);
     if (existing && existing !== peer) {
-      this.peers.delete(peer.streamId);
-      this.uuidToStream.set(peer.uuid, existing.streamId);
-      return existing;
+      return undefined;
     }
 
     this.peers.delete(peer.streamId);
@@ -145,7 +150,7 @@ export class PeerRegistry extends EventEmitter {
     peer.statusDetail = announce.statusDetail ?? "";
     peer.topics = announce.topics ?? [];
     peer.version = announce.version ?? "";
-    peer.agentProfile = announce.agent ?? peer.agentProfile;
+    peer.agentProfile = announce.agent ?? null;
     peer.lastSeenAt = Date.now();
     this.emit("peer:update", peer, "announce");
     return peer;

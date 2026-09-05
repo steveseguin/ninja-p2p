@@ -29,6 +29,30 @@ import {
 } from "./protocol.js";
 import type { VDONinja, VDONinjaConstructor } from "./vdoninja-sdk-types.js";
 
+/** Check the fields consumers use, while allowing partial and extended profiles. */
+function isValidPresencePayload(value: unknown): boolean {
+  const isRecord = (item: unknown): item is Record<string, unknown> =>
+    typeof item === "object" && item !== null && !Array.isArray(item);
+  const strings = (item: unknown): boolean =>
+    item == null || (Array.isArray(item) && item.every(entry => typeof entry === "string"));
+  const textFields = (item: Record<string, unknown>, fields: string[]): boolean =>
+    fields.every(field => item[field] == null || typeof item[field] === "string");
+  if (!isRecord(value) || !strings(value.skills) || !strings(value.topics) ||
+      !textFields(value, ["status", "statusDetail", "version"])) return false;
+  const agent = value.agent;
+  if (agent == null) return true;
+  if (!isRecord(agent) || !strings(agent.can) ||
+      !textFields(agent, ["runtime", "provider", "model", "summary", "workspace"])) return false;
+  for (const field of ["asks", "shares"]) {
+    const entries = agent[field];
+    if (entries == null) continue;
+    if (!Array.isArray(entries) || !entries.every(entry =>
+      isRecord(entry) && typeof entry.name === "string" &&
+      textFields(entry, field === "asks" ? ["description", "via", "example"] : ["description"]))) return false;
+  }
+  return true;
+}
+
 /**
  * The version advertised to peers.
  *
@@ -84,6 +108,7 @@ export class VDOBridge extends EventEmitter {
   private sdk: VDONinja | null = null;
   private readonly options: VDOBridgeOptions;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly heartbeatMs: number;
   private connected = false;
   private skills: string[];
   private status = "idle";
@@ -94,12 +119,18 @@ export class VDOBridge extends EventEmitter {
   /** UUIDs whose control data channel has actually opened. */
   private readonly dataChannelReadyUuids = new Set<string>();
   private disconnecting = false;
+  private disconnectTask: Promise<void> | null = null;
+  private connectTask: Promise<void> | null = null;
   /** Set while the SDK is re-establishing signalling and replaying its intent. */
   private restoring = false;
   private restoringUntil = 0;
 
   constructor(options: VDOBridgeOptions) {
     super();
+    this.heartbeatMs = options.heartbeatMs ?? 30_000;
+    if (!Number.isFinite(this.heartbeatMs) || this.heartbeatMs < 0 || this.heartbeatMs > 2 ** 31 - 1) {
+      throw new RangeError("heartbeatMs must be between 0 and 2147483647 ms");
+    }
     this.options = options;
     this.identity = {
       streamId: options.streamId,
@@ -120,11 +151,17 @@ export class VDOBridge extends EventEmitter {
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
+    if (this.connectTask) return this.connectTask;
+    this.connectTask = this.connectSDK().finally(() => { this.connectTask = null; });
+    return this.connectTask;
+  }
+
+  private async connectSDK(): Promise<void> {
+    if (this.disconnectTask) await this.disconnectTask;
     if (this.connected) return;
 
-    // Dynamic import for CJS SDK in ESM context
-    const { createRequire } = await import("node:module");
+    // Load the CJS SDK through the existing ESM-compatible require boundary.
     const require = createRequire(import.meta.url);
     const VDONinjaSDK = require("@vdoninja/sdk") as VDONinjaConstructor;
     this.sdk = new VDONinjaSDK({
@@ -132,6 +169,12 @@ export class VDOBridge extends EventEmitter {
       debug: this.options.debug ?? false,
       forceTURN: this.options.forceTurn ?? false,
     });
+    const sdk = this.sdk;
+    const assertActive = (): void => {
+      if (this.sdk !== sdk || this.disconnectTask || this.disconnecting) {
+        throw new Error("connection startup cancelled by disconnect");
+      }
+    };
 
     this.wireSDKEvents();
 
@@ -150,17 +193,25 @@ export class VDOBridge extends EventEmitter {
       }
     });
 
-    await this.sdk!.connect();
+    try {
+      await sdk.connect();
+      assertActive();
 
-    // Build joinRoom options
-    const joinOpts: { room: string; password?: string | false } = { room: this.options.room };
-    if (this.options.password !== undefined) {
-      joinOpts.password = this.options.password;
+      // Build joinRoom options
+      const joinOpts: { room: string; password?: string | false } = { room: this.options.room };
+      if (this.options.password !== undefined) {
+        joinOpts.password = this.options.password;
+      }
+      await sdk.joinRoom(joinOpts);
+      assertActive();
+
+      // Announce ourselves as a data-only publisher
+      await sdk.announce({ streamID: this.options.streamId });
+      assertActive();
+    } catch (error) {
+      await this.disconnect();
+      throw error;
     }
-    await this.sdk!.joinRoom(joinOpts);
-
-    // Announce ourselves as a data-only publisher
-    await this.sdk!.announce({ streamID: this.options.streamId });
 
     this.connected = true;
     this.startHeartbeat();
@@ -169,17 +220,24 @@ export class VDOBridge extends EventEmitter {
     this.emit("connected");
   }
 
-  async disconnect(): Promise<void> {
-    if (!this.connected || !this.sdk) return;
-
+  disconnect(): Promise<void> {
+    if (this.disconnectTask) return this.disconnectTask;
+    if (!this.sdk) return Promise.resolve();
     const sdk = this.sdk;
+    // Install the shared task before SDK callbacks can re-enter shutdown.
+    this.disconnectTask = Promise.resolve().then(() => this.disconnectSDK(sdk))
+      .finally(() => { this.disconnectTask = null; });
+    return this.disconnectTask;
+  }
+
+  private async disconnectSDK(sdk: VDONinja): Promise<void> {
     this.disconnecting = true;
     this.stopHeartbeat();
 
     // Send a leaving event to all peers
     try {
       const envelope = createEnvelope(this.identity, "event", { kind: "leaving" });
-      this.sdk.sendData(envelopeToWire(envelope));
+      sdk.sendData(envelopeToWire(envelope));
     } catch { /* best effort */ }
 
     // Every viewed peer holds an RTCPeerConnection. Under @roamhq/wrtc those
@@ -188,12 +246,12 @@ export class VDOBridge extends EventEmitter {
     // forever instead of exiting.
     for (const streamId of this.viewedStreamIds) {
       try {
-        this.sdk.stopViewing(streamId);
+        sdk.stopViewing(streamId);
       } catch { /* best effort */ }
     }
 
     try {
-      this.sdk.leaveRoom();
+      sdk.leaveRoom();
     } catch { /* best effort */ }
 
     // Tearing the process down before the SDK has finished closing peer
@@ -203,7 +261,15 @@ export class VDOBridge extends EventEmitter {
     try {
       const result = sdk.disconnect() as unknown;
       if (result && typeof (result as Promise<void>).then === "function") {
-        await Promise.race([result as Promise<void>, delay(TEARDOWN_TIMEOUT_MS)]);
+        const timeout = new AbortController();
+        try {
+          await Promise.race([
+            result as Promise<void>,
+            delay(TEARDOWN_TIMEOUT_MS, undefined, { signal: timeout.signal }),
+          ]);
+        } finally {
+          timeout.abort();
+        }
       } else {
         await this.waitForSdkTeardown(sdk);
       }
@@ -215,6 +281,8 @@ export class VDOBridge extends EventEmitter {
 
     this.connected = false;
     this.disconnecting = false;
+    this.restoring = false;
+    this.restoringUntil = 0;
     this.sdk = null;
     this.viewedStreamIds.clear();
     this.dataChannelReadyUuids.clear();
@@ -493,7 +561,9 @@ export class VDOBridge extends EventEmitter {
       );
 
       // Send announce to this specific peer
-      const announce = createEnvelope(this.identity, "announce", this.getAnnouncePayload(), { to: streamId });
+      // Discovery precedes knowledge of the remote stream ID. The transport
+      // UUID already targets this peer; don't put that UUID in the stream route.
+      const announce = createEnvelope(this.identity, "announce", this.getAnnouncePayload());
       try {
         this.sdk!.sendData(envelopeToWire(announce), { uuid });
       } catch { /* peer may have disconnected */ }
@@ -516,6 +586,16 @@ export class VDOBridge extends EventEmitter {
       if (!envelope) {
         // Not our protocol — emit as raw data for consumers who want it
         this.emit("rawData", { data: raw, uuid });
+        return;
+      }
+
+      // Apply routing before protocol handlers cause replies or state changes.
+      // MessageBus also filters targets, but runs after those handlers.
+      // Older bridges address initial announcements to our signaling UUID.
+      const legacyAnnounce = envelope.type === "announce" && envelope.to === this.sdk?.state?.uuid;
+      if (envelope.to && envelope.to !== this.identity.streamId && !legacyAnnounce) return;
+      if ((envelope.type === "announce" || envelope.type === "skill_update") &&
+          !isValidPresencePayload(envelope.payload)) {
         return;
       }
 
@@ -606,6 +686,12 @@ export class VDOBridge extends EventEmitter {
       const knownPeer = this.peers.getPeer(uuid) ?? (
         event.detail?.streamID ? this.peers.getPeer(event.detail.streamID) : undefined
       );
+      // A replacement connection may open before the old UUID's close arrives.
+      // The stream ID fallback must not retire the replacement's ready channel.
+      if (knownPeer && uuid !== "unknown" && knownPeer.uuid !== uuid) {
+        this.dataChannelReadyUuids.delete(uuid);
+        return;
+      }
       // The SDK can surface one disconnect through failure, bye, and hangup
       // notifications. Consumers need one logical transition.
       if (knownPeer && !knownPeer.connected) return;
@@ -702,7 +788,12 @@ export class VDOBridge extends EventEmitter {
     name: string,
     handler: (event: { detail?: T }) => void,
   ): void {
-    this.sdk?.addEventListener(name, handler as unknown as EventListener);
+    const sdk = this.sdk;
+    sdk?.addEventListener(name, ((event: { detail?: T }) => {
+      // Native callbacks can arrive after teardown or a new connection attempt.
+      if (this.sdk !== sdk) return;
+      handler(event);
+    }) as unknown as EventListener);
   }
 
   /**
@@ -736,7 +827,7 @@ export class VDOBridge extends EventEmitter {
   // ── Heartbeat ────────────────────────────────────────────────────────────
 
   private startHeartbeat(): void {
-    const interval = this.options.heartbeatMs ?? 30_000;
+    const interval = this.heartbeatMs;
     this.heartbeatTimer = setInterval(() => {
       if (!this.connected || !this.sdk) return;
       const ping = createEnvelope(this.identity, "ping", { ts: Date.now() });

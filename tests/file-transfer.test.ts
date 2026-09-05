@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 
 import {
   appendIncomingTransferChunk,
@@ -32,6 +35,31 @@ const other: PeerIdentity = {
   instanceId: "inst_receiver",
 };
 
+test("overlapping incoming files with the same name both finish without overwriting", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const offers = ["first contents", "second contents"].map(text => {
+      const data = Buffer.from(text);
+      const offer: FileOfferPayload = {
+        transferId: createMessageId(), name: "notes.txt", mimeType: "text/plain", kind: "file",
+        size: data.length, sha256: createHash("sha256").update(data).digest("hex"),
+        chunkSize: 1024, totalChunks: 1,
+      };
+      beginIncomingTransfer(dir, me, offer);
+      appendIncomingTransferChunk(dir, { transferId: offer.transferId, index: 0, totalChunks: 1, data: data.toString("base64") }, me.streamId);
+      return offer;
+    });
+    const first = completeIncomingTransfer(dir, offers[0], me.streamId);
+    const second = completeIncomingTransfer(dir, offers[1], me.streamId);
+    assert.notEqual(first.savedPath, second.savedPath);
+    assert.equal(readFileSync(first.savedPath, "utf8"), "first contents");
+    assert.equal(readFileSync(second.savedPath, "utf8"), "second contents");
+    assert.deepEqual(completeIncomingTransfer(dir, offers[1], me.streamId), second);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function makeBridge(): VDOBridge {
   return new VDOBridge({
     room: "transfer-room",
@@ -44,6 +72,66 @@ function makeBridge(): VDOBridge {
     password: false,
   });
 }
+
+test("long valid transfer IDs do not make duplicate filenames exceed filesystem limits", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const name = `${"a".repeat(170)}.txt`;
+    const base: FileOfferPayload = {
+      transferId: "a".repeat(128), name, mimeType: "text/plain", kind: "file",
+      size: 0, sha256: createHash("sha256").digest("hex"), chunkSize: 1024, totalChunks: 0,
+    };
+    beginIncomingTransfer(dir, me, base);
+    const first = completeIncomingTransfer(dir, base, me.streamId);
+    const next = { ...base, transferId: "b".repeat(128) };
+    beginIncomingTransfer(dir, me, next);
+    const second = completeIncomingTransfer(dir, next, me.streamId);
+    assert.notEqual(first.savedPath, second.savedPath);
+    assert.equal(readFileSync(first.savedPath).length, 0);
+    assert.equal(readFileSync(second.savedPath).length, 0);
+    const samePrefix = { ...base, transferId: "b".repeat(127) + "c" };
+    beginIncomingTransfer(dir, me, samePrefix);
+    const third = completeIncomingTransfer(dir, samePrefix, me.streamId);
+    assert.notEqual(third.savedPath, second.savedPath);
+    assert.equal(readFileSync(third.savedPath).length, 0);
+    assert.equal(readFileSync(second.savedPath).length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("download filenames are bounded in UTF-8 without splitting characters", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    const offer: FileOfferPayload = {
+      transferId: createMessageId(), name: "📄".repeat(100) + ".txt", mimeType: "text/plain", kind: "file",
+      size: 0, sha256: createHash("sha256").digest("hex"), chunkSize: 1024, totalChunks: 0,
+    };
+    const manifest = beginIncomingTransfer(dir, me, offer);
+    assert.ok(Buffer.byteLength(manifest.safeName, "utf8") <= 180);
+    assert.equal(Buffer.from(manifest.safeName).toString("utf8"), manifest.safeName);
+    const result = completeIncomingTransfer(dir, offer, me.streamId);
+    assert.equal(readFileSync(result.savedPath).length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("truncation cannot leave a Windows filename ending in a dot or space", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  try {
+    for (const ending of [".", " "]) {
+      const manifest = beginIncomingTransfer(dir, me, {
+        transferId: createMessageId(), name: "a".repeat(179) + ending + "tail.txt",
+        mimeType: "text/plain", kind: "file", size: 0,
+        sha256: createHash("sha256").digest("hex"), chunkSize: 1024, totalChunks: 0,
+      });
+      assert.equal(/[. ]$/.test(manifest.safeName), false);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("sendFile sends offer, chunk, and complete envelopes to a connected peer", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
@@ -223,6 +311,84 @@ test("incoming offers are bounded and internally consistent", () => {
   }
 });
 
+test("damaged manifests without part files do not block incoming transfers", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-transfer-quota-"));
+  try {
+    mkdirSync(path.join(dir, "transfers"));
+    writeFileSync(path.join(dir, "transfers", "damaged_record.json"), "null");
+    assert.doesNotThrow(() => beginIncomingTransfer(dir, me, {
+      transferId: createMessageId(), name: "empty.txt", mimeType: "text/plain", kind: "file",
+      size: 0, sha256: createHash("sha256").digest("hex"), chunkSize: 1024, totalChunks: 0,
+    }));
+    assert.equal(readFileSync(path.join(dir, "transfers", "damaged_record.json"), "utf8"), "null");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("damaged manifests with part files retain conservative quota accounting", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-transfer-quota-"));
+  try {
+    mkdirSync(path.join(dir, "transfers"));
+    for (const [id, content] of [["damaged_one", "null"], ["damaged_two", "{broken"]]) {
+      writeFileSync(path.join(dir, "transfers", `${id}.json`), content);
+      writeFileSync(path.join(dir, "transfers", `${id}.part`), "keep");
+    }
+    assert.throws(() => beginIncomingTransfer(dir, me, {
+      transferId: createMessageId(), name: "extra.txt", mimeType: "text/plain", kind: "file",
+      size: 1, sha256: "0".repeat(64), chunkSize: 1024, totalChunks: 1,
+    }), /quota/);
+    assert.equal(readFileSync(path.join(dir, "transfers", "damaged_one.part"), "utf8"), "keep");
+    assert.equal(readFileSync(path.join(dir, "transfers", "damaged_two.part"), "utf8"), "keep");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("part files left without manifests still count against transfer quota", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-transfer-quota-"));
+  try {
+    mkdirSync(path.join(dir, "transfers"));
+    for (const id of ["orphaned_one", "orphaned_two"]) {
+      writeFileSync(path.join(dir, "transfers", `${id}.part`), "unfinished data");
+    }
+    const offer: FileOfferPayload = {
+      transferId: createMessageId(), name: "extra.txt", mimeType: "text/plain", kind: "file",
+      size: 1, sha256: "0".repeat(64), chunkSize: 1024, totalChunks: 1,
+    };
+    assert.throws(() => beginIncomingTransfer(dir, me, offer), /quota/);
+    assert.equal(discardIncomingTransfer(dir, "orphaned_one", me.streamId), false);
+    assert.equal(readFileSync(path.join(dir, "transfers", "orphaned_one.part"), "utf8"), "unfinished data");
+    assert.equal(discardIncomingTransfer(dir, "orphaned_one"), true);
+    assert.doesNotThrow(() => beginIncomingTransfer(dir, me, offer));
+    assert.equal(readFileSync(path.join(dir, "transfers", "orphaned_two.part"), "utf8"), "unfinished data");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("explicit local discard can remove a transfer with unreadable metadata", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-transfer-discard-"));
+  try {
+    mkdirSync(path.join(dir, "transfers"));
+    const id = "damaged_transfer";
+    const metadata = path.join(dir, "transfers", `${id}.json`);
+    const part = path.join(dir, "transfers", `${id}.part`);
+    writeFileSync(metadata, "{broken");
+    writeFileSync(part, "unfinished data");
+    // A remote sender cannot establish ownership from unreadable metadata.
+    assert.equal(discardIncomingTransfer(dir, id, me.streamId), false);
+    assert.equal(readFileSync(part, "utf8"), "unfinished data");
+    assert.equal(readFileSync(metadata, "utf8"), "{broken");
+    // The local API's unscoped discard is an explicit cleanup request.
+    assert.equal(discardIncomingTransfer(dir, id), true);
+    assert.throws(() => readFileSync(part), { code: "ENOENT" });
+    assert.throws(() => readFileSync(metadata), { code: "ENOENT" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("incoming chunks must match the offered size and sender", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
   try {
@@ -257,6 +423,40 @@ test("incoming chunks must match the offered size and sender", () => {
       /unexpected chunk length/,
     );
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("stale transfers still count toward quota when their files cannot be removed", (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-transfer-"));
+  const offer: FileOfferPayload = {
+    transferId: createMessageId(), name: "next.txt", mimeType: "text/plain", kind: "file",
+    size: 0, sha256: "0".repeat(64), chunkSize: 1024, totalChunks: 0,
+  };
+  try {
+    const manifests = Array.from({ length: MAX_INCOMPLETE_TRANSFERS }, () =>
+      beginIncomingTransfer(dir, other, { ...offer, transferId: createMessageId() }));
+    for (const manifest of manifests) {
+      manifest.updatedAt = 0;
+      writeFileSync(path.join(dir, "transfers", `${manifest.transferId}.json`), JSON.stringify(manifest));
+    }
+    const protectedParts = new Set(manifests.map(manifest => manifest.tempPath));
+    const remove = fs.rmSync;
+    t.mock.method(fs, "rmSync", (target: fs.PathLike, options?: fs.RmOptions) => {
+      if (protectedParts.has(String(target))) throw Object.assign(new Error("file is busy"), { code: "EBUSY" });
+      return remove(target, options);
+    });
+    syncBuiltinESMExports();
+    assert.throws(() => beginIncomingTransfer(dir, other, offer), /too many incomplete/);
+    for (const part of protectedParts) assert.equal(fs.existsSync(part), true);
+
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    assert.doesNotThrow(() => beginIncomingTransfer(dir, other, offer));
+    for (const part of protectedParts) assert.equal(fs.existsSync(part), false);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
     rmSync(dir, { recursive: true, force: true });
   }
 });

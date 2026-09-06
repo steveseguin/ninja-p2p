@@ -30,6 +30,7 @@ const sourceWorkDir = path.join(baseDir, "source-work");
 const fetchWorkDir = path.join(baseDir, "fetch-work");
 const impaired = process.argv.includes("--impaired");
 const forceTurn = process.argv.includes("--relay");
+const large = process.argv.includes("--large");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,7 +67,7 @@ async function main() {
   mkdirSync(downloadDir, { recursive: true });
   // Both fixtures require paging. Keep controlled-loss runs smaller: each
   // unanswered request exercises the real production timeout, not a test override.
-  writeFileSync(sourcePath, randomBytes((impaired ? 512 : 2048) * 1024));
+  writeFileSync(sourcePath, randomBytes((impaired && !large ? 512 : 2048) * 1024));
 
   const seedBridge = bridge("live-swarm-seed", "seeder", "Live Swarm Seeder");
   const fetchBridge = bridge("live-swarm-fetch", "fetcher", "Live Swarm Fetcher");
@@ -82,6 +83,7 @@ async function main() {
   let droppedPages = 0;
   let delayedChunks = 0;
   let resumedChunks = 0;
+  let progressTimer;
   const attemptedChunks = new Set();
   const sendBinary = seedBridge.sendBinaryTo.bind(seedBridge);
   const trySend = seedBridge.bus.trySend.bind(seedBridge.bus);
@@ -171,6 +173,13 @@ async function main() {
     assert.ok(offerBytes > 0 && offerBytes < 4_096, `initial offer was unexpectedly large: ${offerBytes}`);
     const transferStartedAt = Date.now();
     assert.equal(fetchManager.fetch(manifest.fileId), true);
+    if (large) {
+      progressTimer = setInterval(() => console.log(JSON.stringify({
+        elapsedMs: Date.now() - transferStartedAt, droppedChunks, delayedChunks,
+        progress: fetchManager.progress(),
+      })), 10_000);
+      progressTimer.unref();
+    }
 
     if (impaired) {
       await waitFor("partial progress before restart", () => {
@@ -197,7 +206,7 @@ async function main() {
         if (transferError) throw new Error(transferError);
         return completion;
       },
-      120_000,
+      large ? 240_000 : 120_000,
     );
 
     const expectedPages = Math.ceil(manifest.totalChunks / SWARM_MANIFEST_PAGE_HASHES);
@@ -218,6 +227,7 @@ async function main() {
       room,
       impaired,
       forceTurn,
+      large,
       candidatePairType: quality?.candidatePairType ?? null,
       relayed: quality?.relayed ?? null,
       droppedChunks,
@@ -242,6 +252,7 @@ async function main() {
       seedLog: seedLog.slice(-12), fetchLog: fetchLog.slice(-12) }, null, 2));
     throw error;
   } finally {
+    clearInterval(progressTimer);
     seedManager.stop();
     fetchManager.stop();
     await Promise.allSettled([seedBridge.disconnect(), fetchBridge.disconnect()]);

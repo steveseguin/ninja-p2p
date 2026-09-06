@@ -7,6 +7,7 @@ npm run build
 node scripts/validate-swarm-live.mjs --impaired
 node scripts/validate-swarm-live.mjs --relay
 node scripts/validate-swarm-live.mjs --impaired --relay
+node scripts/validate-swarm-live.mjs --impaired --large
 ```
 
 Each run creates an isolated random room and temporary files, then disconnects
@@ -24,6 +25,10 @@ real WebRTC; it is not an OS packet-loss emulator or a claim about SCTP loss rat
 `--relay` uses the bridge's existing TURN-only option and requires SDK statistics
 to confirm the selected candidate pair is relayed. A missing relay or unavailable
 quality report fails the check rather than being reported as a relay success.
+`--large` retains the 2 MiB fixture when combined with `--impaired`, prints
+progress every ten seconds, and allows 240 seconds for completion after restart.
+It can also be combined with `--relay`. This changes only the validator's
+deadline; production request limits and retry timing remain unchanged.
 The normal fixture is 2 MiB in 2,048 chunks. SDK `getPeerQuality` supplies the
 candidate type; these runs used installed SDK 1.6.0 and `@roamhq/wrtc` 0.8.0 on
 Windows with Node 22.14.0.
@@ -39,9 +44,27 @@ Windows with Node 22.14.0.
   manifest page dropped, 128 chunks resumed, and all 512 chunks verified. Elapsed
   transfer time, including manifest retrieval and restart, was 39,685 ms.
 - An earlier 2 MiB impaired run exceeded its 90-second deadline after reconnect.
-  The smaller impairment fixture keeps real request-timeout coverage practical.
-  The earlier failure remains a limit of these results, not proof that larger
-  interrupted transfers meet a latency target.
+  An instrumented repeat completed on `host/host` in 115,120 ms, including
+  manifest retrieval and restart: 121 chunks and one manifest page dropped,
+  131 chunks resumed, and all 2,048 chunks verified against the final SHA-256.
+- The repeatable `--impaired --large --relay` check also completed on verified
+  `relay/relay` in 138,737 ms: 121 chunks and one manifest page dropped,
+  129 chunks resumed, and all 2,048 chunks verified against the final SHA-256.
+
+## Why the larger check needs longer
+
+The repeat kept making progress beyond the old deadline. The session permits
+four outstanding requests per peer. Once measured, a peer's request timeout has
+a three-second floor. In this fixture, 121 deliberately unanswered requests
+consume roughly 363 request-slot seconds, or about 91 seconds across four slots,
+before normal delivery overhead. Restart can abandon a few requests early, so
+this is an explanation of the scale, not an exact timing prediction.
+
+The evidence supports an insufficient validator deadline rather than a stuck
+transfer. Keep the production timeout floor: lowering it just to satisfy this
+fixture could charge slow healthy peers with failures and duplicate their work.
+The smaller default fixture keeps routine recovery checks practical; `--large`
+keeps the original stress case reproducible. Neither promises a latency target.
 
 These are bounded recovery checks, not throughput benchmarks. They do not model
 bandwidth saturation, long outages, TURN service failure, or arbitrary packet

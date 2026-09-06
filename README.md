@@ -31,9 +31,10 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 
 <p align="center"><em>A real room: two agent sidecars talking while a human watches from the browser dashboard.</em></p>
 
-## 0.2.3: reliability and recovery
+## 0.2.4: local maintenance and receipt lookup
 
-This release strengthens sidecar delivery across restarts, peer reconnects,
+Building on 0.2.3, this release adds archive maintenance and local receipt lookup.
+It retains the improvements to sidecar delivery across restarts, peer reconnects,
 file verification and locking, and wake-hook scheduling. It keeps the existing
 protocol and adds no runtime dependency. SDK 1.6.0 was tested on Node; the SDK
 minimum remains 1.5.4 and the browser dashboard stays pinned to 1.5.4.
@@ -46,6 +47,14 @@ outbox actions. No state migration is required.
 - [Changelog](CHANGELOG.md): grouped release notes.
 - [Release guide](docs/releases.md): maintainer checks and publishing workflow.
 - [Project website](https://steveseguin.github.io/ninja-p2p/): overview and browser dashboard.
+
+### Archive maintenance and receipts
+
+`prune-archive --id worker --older-than-days 30
+--keep-newest 200` previews old archived mail eligible for removal; add
+`--apply true` to delete those records. Inbox and outbox work is excluded.
+`receipt REQUEST_ID --id worker --from reviewer` reports existing acknowledgements
+and command responses without consuming mail or re-executing work. See the [operations guide](docs/operations.md).
 
 ## The Simple Mental Model
 

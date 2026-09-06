@@ -1,5 +1,6 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -286,6 +287,74 @@ export function takeInboxMessages(stateDir: string, count = 20, peek = false): I
     taken.push(item);
   }
   return taken;
+}
+
+/** Explicit archive maintenance. Age uses the local file's modification time. */
+export function pruneAgentArchive(stateDir: string, options: { olderThanDays: number; keep: number; apply?: boolean }) {
+  for (const [key, value] of [["olderThanDays", options.olderThanDays], ["keep", options.keep]] as const) {
+    if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${key} must be a non-negative safe integer`);
+  }
+  const archiveDir = path.join(path.resolve(stateDir), "archive");
+  const result = { dryRun: options.apply !== true, candidates: [] as string[], removed: [] as string[] };
+  if (!existsSync(archiveDir)) return result;
+  if (lstatSync(archiveDir).isSymbolicLink()) throw new Error("refusing to prune a linked archive directory");
+  const cutoff = Date.now() - options.olderThanDays * 86_400_000;
+  const records = listJsonFiles(archiveDir).flatMap(file => {
+    try {
+      const stats = lstatSync(file);
+      if (!stats.isFile() || stats.isSymbolicLink()) return [];
+      const item = readJsonFile<{ envelope: unknown }>(file);
+      return item && isValidEnvelope(item.envelope) ? [{ file, stats }] : [];
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }).sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs || a.file.localeCompare(b.file));
+  for (const { file, stats } of records.slice(options.keep)) {
+    if (stats.mtimeMs >= cutoff) continue;
+    result.candidates.push(file);
+    if (options.apply !== true) continue;
+    try {
+      // A record replaced since the preview within this call belongs to a later pass.
+      const current = lstatSync(file);
+      if (!current.isFile() || current.ino !== stats.ino || current.mtimeMs !== stats.mtimeMs || current.size !== stats.size) continue;
+      rmSync(file);
+      result.removed.push(file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  return result;
+}
+
+/** Correlate existing peer reports without consuming mail or retrying work. */
+export function getAgentReceipt(stateDir: string, requestId: string, peer: string) {
+  if (!requestId || !peer) throw new Error("receipt requires a request ID and peer");
+  const root = path.resolve(stateDir);
+  const receipts: MessageEnvelope[] = [];
+  const seen = new Set<string>();
+  for (const dir of ["inbox", "archive"]) {
+    for (const file of listJsonFiles(path.join(root, dir))) {
+      const item = readJsonFile<{ envelope: unknown }>(file);
+      if (!item || !isValidEnvelope(item.envelope)) continue;
+      const envelope = item.envelope;
+      if (envelope.from.streamId !== peer || !envelope.payload || typeof envelope.payload !== "object") continue;
+      const payload = envelope.payload as Record<string, unknown>;
+      const matches = envelope.type === "ack" ? payload.messageId === requestId
+        : envelope.type === "command_response" && payload.requestId === requestId && typeof payload.ok === "boolean";
+      const key = JSON.stringify([envelope.from.streamId, envelope.from.instanceId, envelope.id]);
+      if (!matches || seen.has(key)) continue;
+      seen.add(key);
+      receipts.push(envelope);
+    }
+  }
+  receipts.sort((a, b) => a.ts - b.ts);
+  const queued = listQueuedAgentActions(stateDir).some(({ action }) =>
+    action.id === requestId && "target" in action && action.target === peer);
+  // Return every response, including failures/conflicts; a peer report is not proof of execution.
+  const status = receipts.some(message => message.type === "command_response") ? "responded"
+    : receipts.length ? "acknowledged" : queued ? "queued" : "unknown";
+  return { requestId, peer, status, queued, receipts };
 }
 
 export function getInboxSummary(stateDir: string): InboxSummary {

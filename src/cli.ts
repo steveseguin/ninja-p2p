@@ -45,6 +45,8 @@ import {
   removeQueuedAgentAction,
   storeInboxMessage,
   takeInboxMessages,
+  getAgentReceipt,
+  pruneAgentArchive,
   writeAgentSession,
   writePeersSnapshot,
 } from "./agent-state.js";
@@ -144,6 +146,12 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "notify":
       console.log(JSON.stringify(getInboxSummary(parsed.stateDir), null, 2));
+      return;
+    case "prune-archive":
+      console.log(JSON.stringify(pruneAgentArchive(parsed.stateDir, parsed), null, 2));
+      return;
+    case "receipt":
+      console.log(JSON.stringify(getAgentReceipt(parsed.stateDir, parsed.requestId, parsed.peer), null, 2));
       return;
     case "read":
       console.log(JSON.stringify({

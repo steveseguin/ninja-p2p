@@ -1,5 +1,7 @@
 # Operations and recovery
 
+`prune-archive` and `receipt` are available starting with version 0.2.4.
+
 Use this guide for an existing sidecar. For installation and a first room, start
 with the [README](../README.md). For delivery guarantees, see
 [Protocol and reliability](protocol-and-reliability.md).
@@ -15,7 +17,7 @@ ninja-p2p status --id worker
 
 Reuse the original ID, room, password, and state directory. Reapply your original
 share/profile/wake flags; the example does not restore those flags for you.
-Keep `inbox`, `archive`, `outbox`, and transfer files in place. Version 0.2.3
+Keep `inbox`, `archive`, `outbox`, and transfer files in place. Version 0.2.4
 reads existing state without migration. Data-only installations can continue
 using `node-datachannel` instead of `@roamhq/wrtc`.
 
@@ -35,8 +37,20 @@ claim different messages, so one reader may receive fewer than requested.
 
 `wait` does not consume mail. It exits 0 when mail is pending and 1 on timeout;
 timeout 0 waits indefinitely. Its deadline takes precedence over a longer poll
-interval. Archives have no automatic retention limit: back up and prune them
-deliberately rather than deleting unread work.
+interval. Archives have no automatic retention limit. Preview explicit pruning:
+
+```bash
+ninja-p2p prune-archive --id worker --older-than-days 30 --keep-newest 200
+ninja-p2p prune-archive --id worker --older-than-days 30 --keep-newest 200 --apply true
+```
+
+Both retention controls are required. Only valid archived JSON records older
+than the age threshold and outside the newest retained count qualify. Age uses
+the local archive file modification time, not a peer's timestamp. The command
+lists candidates and, when applied, removals. It never traverses subdirectories,
+prunes a linked archive directory, or deletes unread inbox/outbox records.
+Malformed records remain for manual inspection. Back up important receipts:
+pruning them removes evidence from the receipt lookup below.
 
 ## When direct work stays queued
 
@@ -50,6 +64,23 @@ Transport acceptance is not remote receipt or execution. Look for an `ack` or
 and removal of a disk record can resend its existing ID; handlers should tolerate
 duplicates. Broadcasts and direct file sends do not gain this persistent-message
 retry guarantee.
+
+Use the action ID printed by a queued `command` or `dm` to inspect reports:
+
+```bash
+ninja-p2p receipt REQUEST_ID --id worker --from reviewer
+```
+
+This reads existing `ack` and `command_response` messages in the inbox and
+archive without consuming them or opening a connection. Results distinguish
+`queued`, `unknown`, `acknowledged`, and `responded`; `queued` is also a separate
+boolean because a crash can leave a queued action alongside a response.
+`responded` includes failed responses: inspect each receipt's `payload.ok`,
+`error`, and `result`. Conflicting responses remain visible rather than being
+silently overwritten. Only the specified peer and request ID are matched.
+Peer identity remains self-asserted, and an acknowledgement is not execution.
+`unknown` means no retained evidence, not proof of delivery or failure. This
+command does not add automatic acknowledgements, retries, or command execution.
 
 Malformed or inconsistent JSON records are skipped and left on disk. They do
 not appear in valid-message counts. Stop the sidecar and back up its state before

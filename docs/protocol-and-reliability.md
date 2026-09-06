@@ -263,14 +263,21 @@ new transports or production integrations.
    acceptance and removal of the disk record can resend the same ID. Use the
    existing acknowledgements and command responses for work requiring confirmation,
    and make handlers idempotent before adding any automatic acknowledgement retry.
+   The `receipt` command now correlates these reports by peer and
+   request ID across inbox/archive, including failures, without consuming mail.
 2. **Bound long-running local storage.** Read messages move to an archive, with
-   no automatic retention limit. Add explicit archive pruning with clear age or
-   count controls before considering automatic deletion of unread work.
+   no automatic retention limit. The `prune-archive` command now
+   provides a preview and explicit age/count controls. Unread work and malformed
+   records remain untouched; deleting archived receipts removes that evidence.
 3. **Measure recovery on real impaired links.** Existing unit tests cover request
    retries and resume, and live validators cover successful room/file workflows.
    Repeat interrupted transfers on lossy and relayed links before changing swarm
    timeouts or adding adaptive scheduling. The earlier local measurements above
    are not evidence that the newer SDK fixes recovery latency.
+
+See [Recovery validation](recovery-validation.md) for direct and verified TURN
+tests with controlled loss/delay and receiver restart. No production timeout or
+scheduler tuning was made on the basis of these limited runs.
 
 ## Security boundary
 

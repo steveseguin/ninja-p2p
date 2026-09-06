@@ -5,14 +5,14 @@ file exists to keep the candidate audiences honest and side by side while we
 experiment. Nothing here is committed to. When one audience clearly wins, we
 collapse this file into a positioning doc and delete the rest.
 
-## Current baseline: 0.2.3
+## Current baseline: 0.2.4
 
 This notebook contains historical experiments, not a current feature checklist.
 The dashboard now uploads as well as receives files. Direct sidecar messages,
 commands, and responses survive restarts until transport acceptance, but still
 have no end-to-end delivery guarantee. Both documented Node WebRTC adapters are
 supported. Reliability, recovery, and clearer operating guidance are the focus
-of 0.2.3; remote shell execution and an MCP server remain outside this release.
+of 0.2.4; remote shell execution and an MCP server remain outside this release.
 See the [README](../README.md), [operations guide](operations.md), and
 [changelog](../CHANGELOG.md) for the current contract.
 

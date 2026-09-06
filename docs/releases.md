@@ -18,6 +18,8 @@ GitHub release notes are created separately. No npm token belongs in the repo.
    `files` list and that secrets, scratch files, and local state are excluded.
 5. For transport changes, use the repository's live room/swarm validators in
    isolated test rooms. Never use a real streaming channel as a release test.
+   Use the [recovery validator](recovery-validation.md) for controlled message
+   loss/restart checks and verified TURN-only transfers.
 
 The CI matrix checks Node 20, 22, and 24 with `@roamhq/wrtc` and
 `node-datachannel`; separate Node 24 jobs check current-npm installs. Wait for

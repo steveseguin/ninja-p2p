@@ -33,6 +33,7 @@ const markdownGuides = [
   "docs/social-stream-bridge.md",
   "docs/operations.md",
   "docs/releases.md",
+  "docs/recovery-validation.md",
   ".codex/skills/ninja-p2p/SKILL.md",
   ".claude/skills/ninja-p2p/SKILL.md",
 ];

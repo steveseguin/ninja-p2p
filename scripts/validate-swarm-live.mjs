@@ -28,6 +28,8 @@ const sourcePath = path.join(baseDir, "source", "paged-swarm.bin");
 const downloadDir = path.join(baseDir, "downloads");
 const sourceWorkDir = path.join(baseDir, "source-work");
 const fetchWorkDir = path.join(baseDir, "fetch-work");
+const impaired = process.argv.includes("--impaired");
+const forceTurn = process.argv.includes("--relay");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,6 +55,7 @@ function bridge(streamId, role, name) {
     streamId,
     identity: { streamId, role, name },
     password: false,
+    forceTurn,
     skills: ["swarm", "file-transfer"],
     topics: [],
   });
@@ -61,9 +64,9 @@ function bridge(streamId, role, name) {
 async function main() {
   mkdirSync(path.dirname(sourcePath), { recursive: true });
   mkdirSync(downloadDir, { recursive: true });
-  // 2 MiB at 1 KiB per chunk is eight manifest pages. This is intentionally
-  // well above the inline threshold while remaining quick enough for CI.
-  writeFileSync(sourcePath, randomBytes(2 * 1024 * 1024));
+  // Both fixtures require paging. Keep controlled-loss runs smaller: each
+  // unanswered request exercises the real production timeout, not a test override.
+  writeFileSync(sourcePath, randomBytes((impaired ? 512 : 2048) * 1024));
 
   const seedBridge = bridge("live-swarm-seed", "seeder", "Live Swarm Seeder");
   const fetchBridge = bridge("live-swarm-fetch", "fetcher", "Live Swarm Fetcher");
@@ -75,6 +78,32 @@ async function main() {
   let manifestRequests = 0;
   let manifestPages = 0;
   let binaryFrames = 0;
+  let droppedChunks = 0;
+  let droppedPages = 0;
+  let delayedChunks = 0;
+  let resumedChunks = 0;
+  const attemptedChunks = new Set();
+  const sendBinary = seedBridge.sendBinaryTo.bind(seedBridge);
+  const trySend = seedBridge.bus.trySend.bind(seedBridge.bus);
+  if (impaired) {
+    // Application-message loss over real WebRTC, not an OS packet-loss emulator.
+    seedBridge.sendBinaryTo = async (to, bytes) => {
+      const index = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(36, false);
+      const first = !attemptedChunks.has(index);
+      attemptedChunks.add(index);
+      if (first && index % 17 === 0) { droppedChunks++; return true; }
+      delayedChunks++;
+      await sleep(index % 5 === 0 ? 80 : 20);
+      return sendBinary(to, bytes);
+    };
+    seedBridge.bus.trySend = (to, type, payload) => {
+      if (type === "swarm_manifest_page" && payload.page === 0 && droppedPages === 0) {
+        droppedPages++;
+        return true;
+      }
+      return trySend(to, type, payload);
+    };
+  }
 
   seedBridge.bus.on("message:swarm_manifest_request", () => {
     manifestRequests += 1;
@@ -100,7 +129,7 @@ async function main() {
       transferError = `seeder: ${message}`;
     },
   });
-  const fetchManager = new SwarmManager({
+  const createFetchManager = () => new SwarmManager({
     bridge: fetchBridge,
     downloadDir,
     workDir: fetchWorkDir,
@@ -114,6 +143,7 @@ async function main() {
       transferError = `fetcher: ${message}`;
     },
   });
+  let fetchManager = createFetchManager();
 
   seedManager.start();
   fetchManager.start();
@@ -139,7 +169,27 @@ async function main() {
     );
     assert.equal(offer.manifestReady, false, "large manifests must not ride in the initial offer");
     assert.ok(offerBytes > 0 && offerBytes < 4_096, `initial offer was unexpectedly large: ${offerBytes}`);
+    const transferStartedAt = Date.now();
     assert.equal(fetchManager.fetch(manifest.fileId), true);
+
+    if (impaired) {
+      await waitFor("partial progress before restart", () => {
+        if (transferError) throw new Error(transferError);
+        return (fetchManager.sessionFor(manifest.fileId)?.progress().haveChunks ?? 0) >= 128;
+      });
+      const before = fetchManager.sessionFor(manifest.fileId).progress();
+      assert.ok(!before.complete, "restart fixture must still be downloading");
+      fetchManager.stop();
+      await fetchBridge.disconnect();
+      fetchManager = createFetchManager();
+      fetchManager.start();
+      // Resume from disk, not the old session's memory.
+      fetchManager.fetch(manifest.fileId);
+      await fetchBridge.connect();
+      await waitFor("resumed session after reconnect", () => fetchManager.sessionFor(manifest.fileId));
+      resumedChunks = fetchManager.sessionFor(manifest.fileId).progress().haveChunks;
+      assert.ok(resumedChunks >= before.haveChunks, "verified chunks must survive a fresh manager and connection");
+    }
 
     const result = await waitFor(
       "the swarm download",
@@ -147,7 +197,7 @@ async function main() {
         if (transferError) throw new Error(transferError);
         return completion;
       },
-      90_000,
+      120_000,
     );
 
     const expectedPages = Math.ceil(manifest.totalChunks / SWARM_MANIFEST_PAGE_HASHES);
@@ -155,10 +205,26 @@ async function main() {
     assert.ok(manifestPages >= expectedPages, `received ${manifestPages}/${expectedPages} manifest pages`);
     assert.equal(result.manifest.fileId, manifest.fileId);
     assert.equal(sha256(result.savedPath), sha256(sourcePath), "downloaded bytes differ from the source");
+    const uuid = fetchBridge.peers.getPeer("live-swarm-seed")?.uuid;
+    const quality = uuid ? await fetchBridge.getSDK().getPeerQuality(uuid) : null;
+    if (forceTurn) assert.equal(quality?.relayed, true, "relay run must verify a selected relay candidate");
+    if (impaired) {
+      assert.ok(droppedChunks > 0 && delayedChunks > 0 && droppedPages === 1);
+      assert.ok(fetchLog.some(line => line.includes("timed out")), "dropped chunks must exercise timeout recovery");
+    }
 
     console.log(JSON.stringify({
       packageRoot,
       room,
+      impaired,
+      forceTurn,
+      candidatePairType: quality?.candidatePairType ?? null,
+      relayed: quality?.relayed ?? null,
+      droppedChunks,
+      droppedPages,
+      delayedChunks,
+      resumedChunks,
+      elapsedMs: Date.now() - transferStartedAt,
       bytes: manifest.size,
       chunks: manifest.totalChunks,
       manifestPages,
@@ -170,6 +236,11 @@ async function main() {
       seedLog: seedLog.slice(-5),
       fetchLog: fetchLog.slice(-5),
     }, null, 2));
+  } catch (error) {
+    console.error(JSON.stringify({ impaired, forceTurn, droppedChunks, droppedPages,
+      delayedChunks, resumedChunks, progress: fetchManager.progress(),
+      seedLog: seedLog.slice(-12), fetchLog: fetchLog.slice(-12) }, null, 2));
+    throw error;
   } finally {
     seedManager.stop();
     fetchManager.stop();

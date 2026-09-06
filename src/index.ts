@@ -3,6 +3,8 @@ export { PeerRegistry, type PeerRecord, type PeerRegistryEvents } from "./peer-r
 export {
   ensureAgentState,
   getInboxSummary,
+  getAgentReceipt,
+  pruneAgentArchive,
   isInboxWorthy,
   listInboxMessages,
   listQueuedAgentActions,

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4 ? 2026-09-05
+
+- Add explicit archive pruning with a default preview, combined age/count
+  retention, and protection for unread, malformed, and linked state.
+- Add local receipt lookup across inbox/archive using the existing request ID
+  and expected peer; show acknowledgements and success/failure responses without
+  consuming mail, retrying commands, or claiming exactly-once execution.
+- Extend live swarm validation with controlled message loss/delay, a fresh
+  receiver manager after disconnect, and optional verified TURN-only transport.
+
 ## 0.2.3 — 2026-09-05
 
 Reliability and documentation release. Existing wire formats and state files remain supported; no new runtime dependency or state migration is required. This release also includes the 0.2.2 license/SDK-floor changes, which were committed but not published to npm.

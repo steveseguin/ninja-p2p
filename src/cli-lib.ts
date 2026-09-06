@@ -39,6 +39,8 @@ export type CliCommand =
   | { kind: "room"; stateDir: string }
   | { kind: "agent"; options: CliCommonOptions }
   | { kind: "notify"; stateDir: string }
+  | { kind: "prune-archive"; stateDir: string; olderThanDays: number; keep: number; apply: boolean }
+  | { kind: "receipt"; stateDir: string; requestId: string; peer: string }
   | { kind: "read"; stateDir: string; take: number; peek: boolean }
   | { kind: "wait"; stateDir: string; timeoutMs: number; intervalMs: number }
   | { kind: "doctor"; stateRoot: string }
@@ -78,6 +80,8 @@ export function helpText(): string {
     "A shared room and handoff layer that lets separate AI tools work as a team.",
     "",
     "Start here:",
+    "  ninja-p2p prune-archive --id worker --older-than-days 30 --keep-newest 200 [--apply true]",
+    "  ninja-p2p receipt <requestId> --id worker --from <peer>",
     "  ninja-p2p menu",
     "  ninja-p2p demo",
     "  ninja-p2p start --id claude",
@@ -259,6 +263,21 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
       }
     case "notify":
       return { kind, stateDir: resolveStateDir(parsed.values, env) };
+    case "prune-archive": {
+      const age = getSingleValue(parsed.values, "older-than-days");
+      const keep = getSingleValue(parsed.values, "keep-newest");
+      const apply = getSingleValue(parsed.values, "apply");
+      if (age === undefined || keep === undefined) throw new Error("prune-archive requires --older-than-days and --keep-newest");
+      if (apply !== undefined && apply !== "true" && apply !== "false") throw new Error("--apply must be true or false");
+      return { kind, stateDir: resolveStateDir(parsed.values, env),
+        olderThanDays: parseWholeNumberOption(age, 30, "older-than-days"),
+        keep: parseWholeNumberOption(keep, 200, "keep-newest"), apply: apply === "true" };
+    }
+    case "receipt": {
+      const peer = getSingleValue(parsed.values, "from");
+      if (positional.length !== 1 || !peer) throw new Error("receipt requires a request ID and --from peer");
+      return { kind, stateDir: resolveStateDir(parsed.values, env), requestId: positional[0], peer };
+    }
     case "read":
       return {
         kind,

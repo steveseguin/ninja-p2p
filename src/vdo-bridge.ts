@@ -115,7 +115,8 @@ export class VDOBridge extends EventEmitter {
   private statusDetail = "";
   private version = readPackageVersion();
   private agentProfile: AgentProfile | undefined;
-  private readonly viewedStreamIds = new Set<string>();
+  // Track each view attempt so a late rejection cannot retire its replacement.
+  private readonly viewedStreamIds = new Map<string, symbol>();
   /** UUIDs whose control data channel has actually opened. */
   private readonly dataChannelReadyUuids = new Set<string>();
   private disconnecting = false;
@@ -244,7 +245,7 @@ export class VDOBridge extends EventEmitter {
     // are native handles that keep Node's event loop alive, so a CLI that only
     // dropped the bookkeeping set would connect, do its work, and then hang
     // forever instead of exiting.
-    for (const streamId of this.viewedStreamIds) {
+    for (const streamId of this.viewedStreamIds.keys()) {
       try {
         sdk.stopViewing(streamId);
       } catch { /* best effort */ }
@@ -902,12 +903,18 @@ export class VDOBridge extends EventEmitter {
       return;
     }
 
-    this.viewedStreamIds.add(streamId);
-    try {
-      this.sdk.view(streamId, { audio: false, video: false });
-    } catch (err) {
+    const sdk = this.sdk;
+    const attempt = Symbol(streamId);
+    this.viewedStreamIds.set(streamId, attempt);
+    const onFailure = (err: unknown): void => {
+      if (this.sdk !== sdk || this.viewedStreamIds.get(streamId) !== attempt) return;
       this.viewedStreamIds.delete(streamId);
       this.emitBridgeError(err);
+    };
+    try {
+      void Promise.resolve(sdk.view(streamId, { audio: false, video: false })).catch(onFailure);
+    } catch (err) {
+      onFailure(err);
     }
   }
 }

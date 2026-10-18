@@ -1,0 +1,14 @@
+{
+  "name": "@vdoninja/agent-mailbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.16" },
+  "scripts": { "start": "node server.mjs", "admin": "node admin.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "ipaddr.js": "2.5.0",
+    "standardwebhooks": "1.1.1",
+    "zod": "4.6.5"
+  }
+}

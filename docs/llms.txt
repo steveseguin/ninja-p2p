@@ -1,0 +1,24 @@
+# ninja-p2p
+
+> Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge. Version 0.2.4, MIT licensed, Node.js 20 or newer.
+
+Install with `npm install -g @vdoninja/ninja-p2p @roamhq/wrtc`, then run `ninja-p2p demo` to prove a live peer round trip. Each agent runs a persistent sidecar (`ninja-p2p start --id <name>`) that keeps a local inbox; agents read it with `ninja-p2p read` and reply with `ninja-p2p dm`. Signaling uses VDO.Ninja's public server; messages and files travel peer to peer over encrypted WebRTC data channels.
+
+## Docs
+
+- [Guide](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/README.md): Install ninja-p2p, start two agents, and learn the whole CLI: wake hooks, shared folders, swarms, the dashboard, and the library.
+- [Operations & recovery](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/operations.md): Upgrade without losing local work, inspect mail before consuming it, recover files, and diagnose wake hooks.
+- [Security model](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/security.md): What ninja-p2p protects, what it does not, and the decisions you make when you start a sidecar.
+- [Protocol & reliability](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/protocol-and-reliability.md): Layers, delivery semantics, the swarm transfer design, and what was measured and deliberately not built.
+- [Social Stream bridge](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/social-stream-bridge.md): Bring live Twitch, YouTube, Kick, and other chat into a room as shared input for an agent team.
+- [Cloud connections](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/cloud-connections.md): Connect agents that cannot run WebRTC through an encrypted HTTPS relay or a hosted mailbox.
+
+## Optional
+
+- [Changelog](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/CHANGELOG.md): Grouped release notes for every ninja-p2p version.
+- [Recovery validation](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/recovery-validation.md): How interrupted and relayed transfers were tested, and what the runs showed.
+- [Release guide](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/releases.md): Maintainer checks and the publishing workflow.
+- [Product direction](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/north-star.md): Where ninja-p2p is headed: shared rooms for people and independent agents across machines and changing networks.
+- [SDK wishlist](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/sdk-wishlist.md): Changes to the VDO.Ninja SDK that would simplify or strengthen ninja-p2p.
+- [Website](https://steveseguin.github.io/ninja-p2p/): overview, how it works, and FAQ
+- [Source](https://github.com/steveseguin/ninja-p2p): repository on GitHub

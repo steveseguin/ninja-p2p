@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { closeSync, cpSync, existsSync, mkdirSync, openSync } from "node:fs";
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -18,7 +18,8 @@ import {
   sendFileFromPath,
   type CompletedTransferResult,
 } from "./file-transfer.js";
-import { VDOBridge } from "./vdo-bridge.js";
+import { VDOBridge, type VDOBridgeOptions } from "./vdo-bridge.js";
+import { callMailbox, loadMailboxConfig } from "./mailbox.js";
 import {
   createEnvelope,
   envelopeToWire,
@@ -72,6 +73,10 @@ import {
   WakeRunner,
 } from "./wake.js";
 import { formatDemoResult, runDemo } from "./demo.js";
+import {
+  acceptHandoffReceipt, HANDOFF_SKILL, HANDOFF_TTL_MS, initialHandoffStatus, isHandoff,
+  isHandoffReceipt, readHandoffStatus, storeHandoff, writeHandoffStatus,
+} from "./handoff.js";
 import { describeSocialMessage, SocialStreamBridge } from "./social-stream.js";
 import { SwarmManager, type SwarmCompletion } from "./swarm-manager.js";
 import {
@@ -85,7 +90,7 @@ import {
   type DiagnosticCheck,
 } from "./doctor.js";
 
-const SIDECAR_SKILLS = ["cli", "chat", "command", "sidecar", "discovery"];
+const SIDECAR_SKILLS = ["cli", "chat", "command", "sidecar", "discovery", HANDOFF_SKILL];
 
 export const SIDECAR_DISCOVERY_ASKS: AgentAsk[] = [
   { name: "help", description: "Summarize this agent sidecar and its built-in commands.", via: "command", example: "ninja-p2p command --id <you> <peer> help" },
@@ -120,6 +125,9 @@ async function main(argv: string[]): Promise<void> {
   const parsed = parseCliArgs(argv);
 
   switch (parsed.kind) {
+    case "mailbox":
+      console.log(JSON.stringify(await callMailbox(loadMailboxConfig(parsed.configFile), parsed.tool, parsed.arguments), null, 2));
+      return;
     case "help":
       console.log(helpText());
       return;
@@ -151,8 +159,14 @@ async function main(argv: string[]): Promise<void> {
       console.log(JSON.stringify(pruneAgentArchive(parsed.stateDir, parsed), null, 2));
       return;
     case "receipt":
-      console.log(JSON.stringify(getAgentReceipt(parsed.stateDir, parsed.requestId, parsed.peer), null, 2));
+      await waitForReceipt(parsed.stateDir, parsed.requestId, parsed.peer, parsed.timeoutMs ?? 0);
       return;
+    case "handoff": {
+      const queued = queueAgentAction(parsed.stateDir, { kind: "handoff", target: parsed.target, request: parsed.request });
+      console.log(JSON.stringify({ requestId: queued.id, peer: parsed.target, status: "queued",
+        expiresAt: queued.createdAt + HANDOFF_TTL_MS }, null, 2));
+      return;
+    }
     case "read":
       console.log(JSON.stringify({
         stateDir: parsed.stateDir,
@@ -500,6 +514,7 @@ function createBridge(options: CliCommonOptions, mode: "sidecar" | "interactive"
     ? composeSidecarAgentProfile(options.agentProfile)
     : options.agentProfile;
   return new VDOBridge({
+    ...bridgeTransportOptions(options),
     room: options.room,
     streamId: options.streamId,
     identity: {
@@ -514,6 +529,24 @@ function createBridge(options: CliCommonOptions, mode: "sidecar" | "interactive"
   });
 }
 
+function bridgeTransportOptions(options: CliCommonOptions): Pick<VDOBridgeOptions, "transport" | "relay"> {
+  if (options.transport !== "http") return {};
+  let relay;
+  if (options.relayConfig) {
+    try { relay = JSON.parse(readFileSync(options.relayConfig, "utf8")); }
+    catch { throw new Error("Cannot read relay config; provide a private JSON file with url, token, and key"); }
+  } else {
+    relay = { url: process.env.NINJA_RELAY_URL, token: process.env.NINJA_RELAY_TOKEN, key: process.env.NINJA_RELAY_KEY };
+  }
+  if (!relay || typeof relay.url !== "string" || typeof relay.token !== "string" || typeof relay.key !== "string") {
+    throw new Error("HTTP requires --relay-config FILE or NINJA_RELAY_URL, NINJA_RELAY_TOKEN, and NINJA_RELAY_KEY");
+  }
+  if (!/^[a-fA-F0-9]{64}$/.test(relay.key)) {
+    throw new Error("relay key must be 32 random bytes encoded as 64 hexadecimal characters");
+  }
+  return { transport: "http", relay: { url: relay.url, token: relay.token, key: relay.key } };
+}
+
 function startAgent(options: CliCommonOptions): void {
   if (!options.stateDir) {
     throw new Error("missing state dir; use --state-dir or --id");
@@ -524,6 +557,12 @@ function startAgent(options: CliCommonOptions): void {
     console.log(`agent already running: pid=${current.pid} state=${options.stateDir}`);
     return;
   }
+
+  // Report relay mistakes here; the detached agent can only write them to agent.log.
+  if (options.relayConfig && !options.transport) {
+    throw new Error("--relay-config needs --transport http (or --transport webrtc to ignore it)");
+  }
+  bridgeTransportOptions(options);
 
   const paths = ensureAgentState(options.stateDir);
   const logFile = path.join(paths.stateDir, "agent.log");
@@ -595,6 +634,7 @@ export function getAgentStatus(stateDir: string): Record<string, unknown> {
     room: session?.room ?? inbox.room,
     streamId: session?.streamId ?? inbox.streamId,
     connected: running && inbox.connected,
+    transport: session?.transport ?? "webrtc",
     stale: inbox.stale,
     pending: inbox.pending,
     queued: inbox.queued,
@@ -645,7 +685,8 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
       role: options.role,
       stateDir: options.stateDir!,
       pid: process.pid,
-      connected,
+      connected: bridge.getTransport() === "http" ? bridge.isConnected() : connected,
+      transport: bridge.getTransport(),
       skills: SIDECAR_SKILLS,
       topics: ["events"],
       agentProfile: advertisedProfile,
@@ -657,6 +698,11 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
   };
 
   const flushOutbox = (): void => flushAgentOutbox(bridge, options.stateDir!);
+  bridge.on("transport:connection", () => syncSession());
+  bridge.on("relayGap", () => console.error("[P2P] Relay history lost; confirmed handoffs will retry. Reconcile ordinary messages and transfers."));
+  bridge.on("relayReceipt", (receipt) => {
+    if (receipt?.stage === "delivery_unknown") console.error(`[P2P] Relay delivery unknown: ${receipt.message_id}`);
+  });
 
   writeAgentSession(options.stateDir, {
     room: options.room,
@@ -666,6 +712,7 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
     stateDir: options.stateDir,
     pid: process.pid,
     connected: false,
+    transport: bridge.getTransport(),
     skills: SIDECAR_SKILLS,
     topics: ["events"],
     agentProfile: advertisedProfile,
@@ -742,6 +789,21 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
   });
 
   bridge.bus.on("message", (envelope: MessageEnvelope) => {
+    let handoff: ReturnType<typeof handleSidecarHandoff>;
+    try {
+      handoff = handleSidecarHandoff(bridge, options.stateDir!, envelope);
+    } catch (error) {
+      console.error("[P2P] Could not persist handoff state:", error);
+      return;
+    }
+    if (handoff !== null) {
+      if (handoff === "new") {
+        wake?.notify(envelope);
+        console.log(`[inbox] handoff from ${envelope.from.streamId}`);
+      }
+      syncSession(true);
+      return;
+    }
     const transferHandled = maybeHandleSidecarFileTransfer(bridge, options.stateDir!, envelope);
     const autoHandled = transferHandled || maybeHandleSidecarCommand(bridge, options.stateDir!, envelope);
     if (!autoHandled && isInboxWorthy(envelope.type)) {
@@ -993,10 +1055,14 @@ function getCommandArgString(args: unknown, key: string): string | null {
 export function flushAgentOutbox(bridge: VDOBridge, stateDir: string): void {
   const blockedTargets = new Set<string>();
   for (const item of listQueuedAgentActions(stateDir)) {
-    const direct = item.action.kind === "dm" || item.action.kind === "command" || item.action.kind === "response";
+    const direct = item.action.kind === "dm" || item.action.kind === "command" || item.action.kind === "response" || item.action.kind === "handoff";
     if ("target" in item.action && blockedTargets.has(item.action.target)) continue;
     try {
       const envelope = prepareQueuedAgentEnvelope(item.path, item.action, bridge.identity);
+      if (envelope && item.action.kind === "handoff") {
+        flushHandoff(bridge, stateDir, envelope, item.path);
+        continue;
+      }
       if (envelope) {
         if (!bridge.bus.trySendEnvelope(envelope)) {
           blockedTargets.add(envelope.to!);
@@ -1036,6 +1102,69 @@ export function flushAgentOutbox(bridge: VDOBridge, stateDir: string): void {
     }
     removeQueuedAgentAction(item.path);
   }
+}
+
+function flushHandoff(bridge: VDOBridge, stateDir: string, envelope: MessageEnvelope, file: string): void {
+  if (!isHandoff(envelope)) throw new Error("invalid queued handoff");
+  const saved = readHandoffStatus(stateDir, envelope.id, envelope.to!);
+  const status = saved ?? initialHandoffStatus(envelope);
+  if (status.status === "stored") {
+    removeQueuedAgentAction(file);
+    return;
+  }
+  const now = Date.now();
+  if (now >= status.expiresAt) {
+    delete status.waitingFor;
+    writeHandoffStatus(stateDir, { ...status, status: "expired" });
+    removeQueuedAgentAction(file);
+    return;
+  }
+  // Older peers cannot deduplicate or confirm storage. Never retry into their inbox.
+  const peer = bridge.peers.getPeer(envelope.to!);
+  const waitingFor = !peer?.connected ? "peer_connection"
+    : !peer.announced || !peer.skills.includes(HANDOFF_SKILL) ? "peer_support" : undefined;
+  if (waitingFor) {
+    if (!saved || saved.waitingFor !== waitingFor) writeHandoffStatus(stateDir, { ...status, waitingFor });
+    return;
+  }
+  if (now < status.nextAttemptAt) return;
+  // Save the attempt before sending: a synchronous receipt must not be overwritten.
+  const attempt = { ...status, attempts: status.attempts + 1,
+    nextAttemptAt: now + Math.min(30_000, 2_000 * 2 ** Math.min(status.attempts, 4)) };
+  delete attempt.waitingFor;
+  writeHandoffStatus(stateDir, attempt);
+  if (bridge.bus.trySendEnvelope(envelope) && readHandoffStatus(stateDir, envelope.id, envelope.to!)?.status !== "stored") {
+    writeHandoffStatus(stateDir, { ...attempt, status: "awaiting_receipt" });
+  }
+}
+
+/** Handoffs alone use storage receipts and persistent deduplication. */
+export function handleSidecarHandoff(
+  bridge: VDOBridge, stateDir: string, envelope: MessageEnvelope,
+): "new" | "duplicate" | "receipt" | "rejected" | null {
+  if (isHandoffReceipt(envelope)) {
+    if (acceptHandoffReceipt(stateDir, envelope, bridge.identity.streamId)) {
+      const messageId = (envelope.payload as { messageId: string }).messageId;
+      for (const item of listQueuedAgentActions(stateDir)) {
+        if (item.action.kind === "handoff" && item.action.id === messageId && item.action.target === envelope.from.streamId) {
+          removeQueuedAgentAction(item.path);
+        }
+      }
+    }
+    return "receipt";
+  }
+  if (envelope.type !== "handoff") return null;
+  if (envelope.to !== bridge.identity.streamId) return "rejected";
+  const result = storeHandoff(stateDir, envelope);
+  if (result !== "rejected") {
+    const receipt = createEnvelope(bridge.identity, "ack", {
+      messageId: envelope.id, senderInstanceId: envelope.from.instanceId, forType: "handoff", receipt: "stored",
+    }, { to: envelope.from.streamId });
+    // If the return channel has gone away, the next retry receives another receipt.
+    try { bridge.bus.trySendEnvelope(receipt); }
+    catch (error) { console.error("[P2P] Handoff stored; receipt will be retried on redelivery:", error); }
+  }
+  return result;
 }
 
 function sendCommandResponse(
@@ -1515,6 +1644,8 @@ function buildAgentArgs(options: CliCommonOptions): string[] {
   if (options.password !== false) {
     args.push("--password", String(options.password));
   }
+  if (options.transport) args.push("--transport", options.transport);
+  if (options.relayConfig) args.push("--relay-config", path.resolve(options.relayConfig));
   if (options.waitMs !== 1500) {
     args.push("--wait-ms", String(options.waitMs));
   }
@@ -1556,6 +1687,7 @@ function buildAgentArgs(options: CliCommonOptions): string[] {
 
 function createSwarmBridge(options: CliCommonOptions, name: string, role: string): VDOBridge {
   return new VDOBridge({
+    ...bridgeTransportOptions(options),
     room: options.room,
     streamId: options.streamId,
     identity: { streamId: options.streamId, role, name },
@@ -1975,14 +2107,26 @@ async function runDoctor(stateRoot: string): Promise<void> {
   }
 }
 
-/**
- * Block until the sidecar's inbox has something in it.
- *
- * This is the pull half of the wake story: `--on-message` pushes a turn at the
- * agent, `wait` lets a shell loop pull one. Exit code 0 means mail arrived,
- * 1 means the timeout elapsed, so `while ninja-p2p wait --id x; do ...; done`
- * behaves the way a shell author expects.
- */
+async function waitForReceipt(stateDir: string, requestId: string, peer: string, timeoutMs: number): Promise<void> {
+  const startedAt = Date.now();
+  for (;;) {
+    const receipt = getAgentReceipt(stateDir, requestId, peer);
+    if (timeoutMs === 0 || ["stored", "responded", "acknowledged", "expired"].includes(receipt.status)) {
+      console.log(JSON.stringify(receipt, null, 2));
+      if (timeoutMs > 0 && receipt.status === "expired") process.exitCode = 1;
+      return;
+    }
+    const remaining = timeoutMs - (Date.now() - startedAt);
+    if (remaining <= 0) {
+      console.log(JSON.stringify({ ...receipt, timedOut: true, waitedMs: Date.now() - startedAt }, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+    await delay(Math.min(250, remaining));
+  }
+}
+
+/** Wait for pending mail without consuming it; exit 1 when the deadline passes. */
 async function waitForInbox(stateDir: string, timeoutMs: number, intervalMs: number): Promise<void> {
   const startedAt = Date.now();
 

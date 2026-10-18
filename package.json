@@ -1,12 +1,13 @@
 {
   "name": "@vdoninja/ninja-p2p",
   "version": "0.2.4",
-  "description": "Agent coordination and file handoffs over WebRTC, with persistent local inboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge",
+  "description": "Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "ninja-p2p": "./dist/cli.js"
+    "ninja-p2p": "./dist/cli.js",
+    "ninja-p2p-relay": "./runtime/relay-server.cjs"
   },
   "exports": {
     ".": {
@@ -46,6 +47,13 @@
   },
   "files": [
     "dist",
+    "runtime",
+    "mailbox-service/*.mjs",
+    "mailbox-service/package.json",
+    "mailbox-service/package-lock.json",
+    "mailbox-service/*.py",
+    "mailbox-service/*.service",
+    "mailbox-service/README.md",
     "dashboard.html",
     "README.md",
     "CHANGELOG.md",
@@ -57,6 +65,8 @@
     "docs/operations.md",
     "docs/releases.md",
     "docs/recovery-validation.md",
+    "docs/north-star.md",
+    "docs/cloud-connections.md",
     ".codex/skills/ninja-p2p",
     ".agents/skills/ninja-p2p",
     ".claude/skills/ninja-p2p"
@@ -69,7 +79,7 @@
     "check": "npm test && npm run build",
     "validate:live": "node ./scripts/validate-live.mjs",
     "validate:swarm": "node ./scripts/validate-swarm-live.mjs",
-    "sync:docs": "node -e \"const fs=require('node:fs'); fs.mkdirSync('docs',{recursive:true}); fs.copyFileSync('dashboard.html','docs/dashboard.html');\"",
+    "sync:docs": "node scripts/build-site.mjs",
     "prepare": "npm run build"
   },
   "keywords": [
@@ -129,6 +139,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "marked": "^14.1.4",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0"
   }

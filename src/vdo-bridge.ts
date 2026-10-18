@@ -86,6 +86,9 @@ export type VDOBridgeOptions = {
   host?: string;
   forceTurn?: boolean;
   debug?: boolean;
+  /** WebRTC remains the default. HTTP uses an independent, encrypted relay. */
+  transport?: "webrtc" | "http";
+  relay?: { url: string; token: string; key: string };
   /** Skills to announce. */
   skills?: string[];
   /** Topics to subscribe to. */
@@ -115,7 +118,8 @@ export class VDOBridge extends EventEmitter {
   private statusDetail = "";
   private version = readPackageVersion();
   private agentProfile: AgentProfile | undefined;
-  private readonly viewedStreamIds = new Set<string>();
+  // Track each view attempt so a late rejection cannot retire its replacement.
+  private readonly viewedStreamIds = new Map<string, symbol>();
   /** UUIDs whose control data channel has actually opened. */
   private readonly dataChannelReadyUuids = new Set<string>();
   private disconnecting = false;
@@ -127,6 +131,9 @@ export class VDOBridge extends EventEmitter {
 
   constructor(options: VDOBridgeOptions) {
     super();
+    if (options.transport !== undefined && options.transport !== "webrtc" && options.transport !== "http") {
+      throw new Error("transport must be webrtc or http");
+    }
     this.heartbeatMs = options.heartbeatMs ?? 30_000;
     if (!Number.isFinite(this.heartbeatMs) || this.heartbeatMs < 0 || this.heartbeatMs > 2 ** 31 - 1) {
       throw new RangeError("heartbeatMs must be between 0 and 2147483647 ms");
@@ -160,15 +167,26 @@ export class VDOBridge extends EventEmitter {
   private async connectSDK(): Promise<void> {
     if (this.disconnectTask) await this.disconnectTask;
     if (this.connected) return;
+    // The HTTP relay client reconnects on its own; a second client would claim
+    // the same stream ID while the first keeps polling.
+    if (this.sdk && this.getTransport() === "http") return;
 
     // Load the CJS SDK through the existing ESM-compatible require boundary.
     const require = createRequire(import.meta.url);
-    const VDONinjaSDK = require("@vdoninja/sdk") as VDONinjaConstructor;
-    this.sdk = new VDONinjaSDK({
-      host: this.options.host ?? "wss://wss.vdo.ninja",
-      debug: this.options.debug ?? false,
-      forceTURN: this.options.forceTurn ?? false,
-    });
+    if (this.options.transport === "http") {
+      const relay = this.options.relay;
+      if (!relay) throw new Error("HTTP transport requires relay URL, token, and room key");
+      const { HttpRelayTransport } = require("../runtime/http-relay.cjs");
+      this.sdk = new HttpRelayTransport({ room: this.options.room,
+        relayUrl: relay.url, relayToken: relay.token, relayKey: relay.key }) as VDONinja;
+    } else {
+      const VDONinjaSDK = require("@vdoninja/sdk") as VDONinjaConstructor;
+      this.sdk = new VDONinjaSDK({
+        host: this.options.host ?? "wss://wss.vdo.ninja",
+        debug: this.options.debug ?? false,
+        forceTURN: this.options.forceTurn ?? false,
+      });
+    }
     const sdk = this.sdk;
     const assertActive = (): void => {
       if (this.sdk !== sdk || this.disconnectTask || this.disconnecting) {
@@ -244,7 +262,7 @@ export class VDOBridge extends EventEmitter {
     // are native handles that keep Node's event loop alive, so a CLI that only
     // dropped the bookkeeping set would connect, do its work, and then hang
     // forever instead of exiting.
-    for (const streamId of this.viewedStreamIds) {
+    for (const streamId of this.viewedStreamIds.keys()) {
       try {
         sdk.stopViewing(streamId);
       } catch { /* best effort */ }
@@ -534,13 +552,26 @@ export class VDOBridge extends EventEmitter {
 
   /** Access the underlying VDO.Ninja SDK instance for advanced media workflows. */
   getSDK(): VDONinja | null {
-    return this.sdk;
+    return this.getTransport() === "http" ? null : this.sdk;
   }
+
+  getTransport(): "webrtc" | "http" { return this.options.transport ?? "webrtc"; }
 
   // ── SDK Event Wiring ─────────────────────────────────────────────────────
 
   private wireSDKEvents(): void {
     if (!this.sdk) return;
+
+    if (this.getTransport() === "http") {
+      this.addSDKEventListener("relayConnection", (event: { detail?: { connected?: boolean } }) => {
+        this.connected = event.detail?.connected === true;
+        this.restoring = !this.connected;
+        this.emit("transport:connection", { transport: "http", connected: this.connected });
+      });
+      for (const name of ["relayReceipt", "relayGap", "relayRejected"]) {
+        this.addSDKEventListener(name, event => this.emit(name, event.detail));
+      }
+    }
 
     // Peer connected (WebRTC connection established)
     this.addSDKEventListener("peerConnected", (event: { detail?: { uuid?: string; streamID?: string } }) => {
@@ -882,6 +913,7 @@ export class VDOBridge extends EventEmitter {
    * failing to deliver. This is how that evidence gets acted on.
    */
   revivePeer(streamId: string): boolean {
+    if (this.getTransport() === "http") return false;
     if (!this.sdk || streamId === this.options.streamId) return false;
     // Never while the SDK is restoring: it is already rebuilding these very
     // connections, and doing it underneath was measured as slower than doing
@@ -902,12 +934,18 @@ export class VDOBridge extends EventEmitter {
       return;
     }
 
-    this.viewedStreamIds.add(streamId);
-    try {
-      this.sdk.view(streamId, { audio: false, video: false });
-    } catch (err) {
+    const sdk = this.sdk;
+    const attempt = Symbol(streamId);
+    this.viewedStreamIds.set(streamId, attempt);
+    const onFailure = (err: unknown): void => {
+      if (this.sdk !== sdk || this.viewedStreamIds.get(streamId) !== attempt) return;
       this.viewedStreamIds.delete(streamId);
       this.emitBridgeError(err);
+    };
+    try {
+      void Promise.resolve(sdk.view(streamId, { audio: false, video: false })).catch(onFailure);
+    } catch (err) {
+      onFailure(err);
     }
   }
 }

@@ -1,6 +1,6 @@
 # ninja-p2p
 
-Peer-to-peer AI agent coordination, local inboxes, and resumable file transfers over WebRTC.
+AI agent coordination, persistent inboxes, and resumable file transfers, with WebRTC and HTTPS connection options.
 
 ## TL;DR
 
@@ -15,15 +15,15 @@ an important optional application of the same room: live Twitch, YouTube, Kick,
 and other chat becomes shared input for an AI co-host, moderator, researcher,
 or producer team.
 
-It runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not need to build or host a new chat server.
+By default it runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not need to host a new chat server. Cloud agents that cannot use WebRTC can use an encrypted HTTP relay. Hosted mailboxes let Dots and other agents exchange retained text without keeping a local sidecar running. See [cloud connections](docs/cloud-connections.md).
 
 **Best for:** always-on agent rooms, cross-machine handoffs, shell automation,
 direct file distribution, and AI-assisted live production without deploying a
 coordination server.
 
-**Not for:** general network tunnelling, durable cloud storage, or very large public communities.
+**Not for:** general network tunnelling, large cloud file archives, or very large public communities.
 
-Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p) | [Security model](docs/security.md) | [Social Stream bridge](docs/social-stream-bridge.md) | [Protocol and reliability](docs/protocol-and-reliability.md) | [SDK wishlist](docs/sdk-wishlist.md) | [Support](https://discord.vdo.ninja)
+Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p) | [Security model](docs/security.md) | [Social Stream bridge](docs/social-stream-bridge.md) | [Protocol and reliability](docs/protocol-and-reliability.md) | [SDK wishlist](docs/sdk-wishlist.md) | [Product direction](docs/north-star.md) | [Support](https://discord.vdo.ninja)
 
 <p align="center">
   <a href="docs/images/agent-room-dashboard.png"><img src="docs/images/agent-room-dashboard.png" alt="A live Ninja P2P room with Planner and Reviewer agents exchanging messages while an operator watches" width="900"></a>
@@ -139,13 +139,23 @@ ninja-p2p install-skill claude
 
 | Your goal | Use |
 | --- | --- |
-| Give agents a persistent room and inbox | **`@vdoninja/ninja-p2p`** |
-| Give an MCP client connect/send/file/state tools | [`@vdoninja/mcp`](https://github.com/steveseguin/ninjamcp) |
+| Keep a team connected between agent turns, with inboxes, handoffs, wake hooks, and a dashboard | **`@vdoninja/ninja-p2p`** |
+| Connect an MCP client to live peers and exchange messages, files, and state | [`@vdoninja/mcp`](https://github.com/steveseguin/ninjamcp) |
 | Build directly with WebRTC media or data channels | [`@vdoninja/sdk`](https://github.com/steveseguin/ninjasdk) |
 
 `ninja-p2p` adds agent-friendly message envelopes, local sidecar state, wake and
 file-transfer workflows, and optional bridges. It uses VDO.Ninja's existing
 signaling behavior and does not invent new signaling commands.
+
+Choose ninja-p2p when a background sidecar should retain incoming work and
+notify an agent between turns. Choose Ninja MCP when your AI client should
+manage an active interaction through MCP tools. Their planned integration keeps
+inbox and handoff records in ninja-p2p while exposing selected operations to
+MCP clients. See [Ninja MCP's direction](https://github.com/steveseguin/ninjamcp/blob/main/references/direction.md).
+
+The packages use different message and file protocols. A common room name alone
+does not connect their higher-level workflows; use matching packages on both
+ends until an explicit adapter is available.
 
 ## How Joining A Room Works
 
@@ -315,6 +325,21 @@ This is the honest version of "MCP-like" for a CLI:
 - `send-file` and `send-image` queue transfers through the running sidecar and save incoming downloads under the local state folder
 - `--share name=path` exposes one explicit folder root that other peers can inspect with `shares`, `list-files`, and `get-file`
 - `respond` sends a structured `command_response` back to the original requester
+
+For work that should stay queued until the recipient confirms inbox storage, use
+`handoff` between two updated sidecars:
+
+```bash
+ninja-p2p handoff --id codex reviewer "Review the patch and report any regressions"
+ninja-p2p receipt REQUEST_ID --id codex --from reviewer --timeout 60000
+```
+
+The first command prints `requestId`. Handoffs retry for up to 24 hours, keep
+their identity across restarts, and appear once in the recipient's inbox even
+when a receipt is lost. Read them with `read` and reply with `respond` using the
+same ID. `stored` confirms local storage at the recipient; `responded` means a
+reply arrived, whose result or error still needs checking. Older peers keep the
+handoff queued until they advertise support. See [handoff delivery and recovery](docs/operations.md#confirmed-handoffs).
 
 What it does not do:
 

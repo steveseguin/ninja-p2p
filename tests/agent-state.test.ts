@@ -18,6 +18,7 @@ import {
   writeAgentSession,
 } from "../src/agent-state.js";
 import { createEnvelope, parseEnvelope, type PeerIdentity } from "../src/protocol.js";
+import { HANDOFF_TTL_MS, listHandoffInbox, storeHandoff } from "../src/handoff.js";
 
 const identity: PeerIdentity = {
   streamId: "worker_bot",
@@ -219,6 +220,55 @@ test("inbox filenames isolate peer-controlled IDs and sender collisions", () => 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("handoff storage rejects invalid, expired, conflicting, and damaged records without losing pending work", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-storage-"));
+  try {
+    const now = Date.now();
+    const message = { ...createEnvelope(identity, "handoff", { request: "Review", expiresAt: now + HANDOFF_TTL_MS }, { to: "reviewer" }), ts: now };
+    const invalid = [
+      { ...message, to: null }, { ...message, topic: "broadcast" },
+      { ...message, payload: { request: "", expiresAt: now + 1000 } },
+      { ...message, payload: { request: "Review", expiresAt: now } },
+      { ...message, payload: { request: "Review", expiresAt: now + HANDOFF_TTL_MS + 1 } },
+      { ...message, ts: now + 60_001, payload: { request: "Review", expiresAt: now + 61_001 } },
+    ];
+    for (const item of invalid) assert.equal(storeHandoff(dir, item, now), "rejected");
+    assert.deepEqual(listHandoffInbox(dir), []);
+    assert.equal(storeHandoff(dir, message, now), "new");
+    writeFileSync(path.join(dir, "handoffs", "mismatched-name.json"), JSON.stringify({ envelope: message, receivedAt: now }));
+    assert.equal(listHandoffInbox(dir).length, 1, "inconsistent record filenames must not block consumption");
+    assert.equal(storeHandoff(dir, { ...message, payload: { request: "Different work", expiresAt: now + HANDOFF_TTL_MS } }, now), "rejected");
+    assert.equal(storeHandoff(dir, message, now + HANDOFF_TTL_MS + 1), "duplicate", "late delivery can still confirm an already stored request");
+    assert.equal(takeInboxMessages(dir, 0).length, 0);
+    assert.equal(takeInboxMessages(dir, 10, true).length, 1);
+    assert.equal(takeInboxMessages(dir, 10).length, 1);
+    assert.equal(storeHandoff(dir, message, now), "duplicate");
+    assert.equal(takeInboxMessages(dir, 10).length, 0);
+    const file = readdirSync(path.join(dir, "handoffs")).find(name => /^[a-f0-9]{64}\.json$/.test(name))!;
+    writeFileSync(path.join(dir, "handoffs", file), "broken JSON");
+    assert.throws(() => storeHandoff(dir, message, now), /invalid stored handoff/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("handoff IDs stay inside state and distinguish sender instances and identical text", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-ids-"));
+  try {
+    const message = createEnvelope(identity, "handoff", { request: "same text", expiresAt: Date.now() + 60_000 }, { to: "reviewer" });
+    const messages = [
+      { ...message, id: "../escape" }, { ...message, id: "..\\escape" },
+      { ...message, id: "../escape", from: { ...identity, instanceId: "another-instance" } },
+      { ...message, id: "../escape", from: { ...identity, streamId: "another-peer" } },
+    ];
+    for (const item of messages) assert.equal(storeHandoff(dir, item), "new");
+    const stored = listHandoffInbox(dir);
+    assert.equal(stored.length, messages.length);
+    for (const item of stored) assert.equal(path.dirname(item.path), path.join(dir, "handoffs"));
+    assert.equal(takeInboxMessages(dir, 10).length, messages.length);
+    for (const item of messages) assert.equal(storeHandoff(dir, item), "duplicate");
+    assert.deepEqual(listHandoffInbox(dir), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("queueAgentAction writes sortable outbox files", () => {

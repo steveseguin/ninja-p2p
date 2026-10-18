@@ -13,6 +13,8 @@ import {
   DEFAULT_SSN_TOPIC,
 } from "./social-stream.js";
 import { DEFAULT_SWARM_CHUNK_SIZE } from "./swarm.js";
+import { isHandoffRequest } from "./handoff.js";
+import { parseMailboxCommand } from "./mailbox.js";
 
 export type CliCommonOptions = {
   room: string;
@@ -25,11 +27,14 @@ export type CliCommonOptions = {
   agentProfile?: AgentProfile;
   sharedFolders: SharedFolderConfig[];
   wake: WakeConfig | null;
+  transport?: "webrtc" | "http";
+  relayConfig?: string;
 };
 
 export type SkillRuntime = "claude" | "codex";
 
 export type CliCommand =
+  | ReturnType<typeof parseMailboxCommand>
   | { kind: "help" }
   | { kind: "menu"; options: CliCommonOptions }
   | { kind: "install-skill"; runtime: SkillRuntime }
@@ -40,7 +45,8 @@ export type CliCommand =
   | { kind: "agent"; options: CliCommonOptions }
   | { kind: "notify"; stateDir: string }
   | { kind: "prune-archive"; stateDir: string; olderThanDays: number; keep: number; apply: boolean }
-  | { kind: "receipt"; stateDir: string; requestId: string; peer: string }
+  | { kind: "receipt"; stateDir: string; requestId: string; peer: string; timeoutMs?: number }
+  | { kind: "handoff"; stateDir: string; target: string; request: string }
   | { kind: "read"; stateDir: string; take: number; peek: boolean }
   | { kind: "wait"; stateDir: string; timeoutMs: number; intervalMs: number }
   | { kind: "doctor"; stateRoot: string }
@@ -80,8 +86,6 @@ export function helpText(): string {
     "A shared room and handoff layer that lets separate AI tools work as a team.",
     "",
     "Start here:",
-    "  ninja-p2p prune-archive --id worker --older-than-days 30 --keep-newest 200 [--apply true]",
-    "  ninja-p2p receipt <requestId> --id worker --from <peer>",
     "  ninja-p2p menu",
     "  ninja-p2p demo",
     "  ninja-p2p start --id claude",
@@ -89,6 +93,14 @@ export function helpText(): string {
     "",
     "Troubleshooting:",
     "  ninja-p2p doctor",
+    "",
+    "Cloud connections (no native WebRTC dependency):",
+    "  ninja-p2p start --room ai-room --id cloud --transport http --relay-config /private/relay.json",
+    "  ninja-p2p mailbox --config /private/mailbox.json identity",
+    "  ninja-p2p mailbox --config /private/mailbox.json read --after 0",
+    "  ninja-p2p mailbox --config /private/mailbox.json send <mailbox-id> \"Review this\" --request-key review_001",
+    "  WebRTC is the default. HTTP peers must use the same relay settings and room key.",
+    "  Mailboxes retain text while agents are offline. See docs/cloud-connections.md.",
     "",
     "Swarm file transfer (every downloader becomes a source):",
     "  ninja-p2p seed ./big-file.zip --room my-room",
@@ -128,12 +140,18 @@ export function helpText(): string {
     "  ninja-p2p plan --id codex planner \"Propose a safe rollout plan\"",
     "  ninja-p2p dm --id codex human \"working on it\"",
     "  ninja-p2p task --id codex worker \"Implement the patch\"",
+    "  ninja-p2p handoff --id codex worker \"Review the patch and report your findings\"",
+    "  ninja-p2p receipt <requestId> --id codex --from worker --timeout 60000",
     "  ninja-p2p review --id codex reviewer \"Review the change\"",
     "  ninja-p2p approve --id codex reviewer \"Approve this plan before I continue\"",
     "  ninja-p2p respond --id codex planner <requestId> '{\"approved\":true}'",
     "  ninja-p2p event --id codex builds build_failed '{\"job\":\"api\"}'",
     "  ninja-p2p command --id codex claude capabilities",
     "  ninja-p2p stop --id codex",
+    "  ninja-p2p prune-archive --id codex --older-than-days 30 --keep-newest 200 [--apply true]",
+    "",
+    "  handoff retries for up to 24 hours until the peer confirms inbox storage.",
+    "  Both sidecars must advertise handoff-v1. Stored does not mean completed.",
     "",
     "Wake on incoming messages (agents act without a human turn):",
     "  ninja-p2p start --id claude --on-message \"claude -p 'Check your ninja-p2p inbox'\"",
@@ -188,6 +206,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
   if (kind === "help" || kind === "--help" || kind === "-h") {
     return { kind: "help" };
   }
+  if (kind === "mailbox") return parseMailboxCommand(args, env);
 
   if (kind === "menu") {
     const parsed = parseOptions(args, env);
@@ -203,6 +222,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
 
   if (kind === "demo") {
     const parsedDemo = parseOptions(args, env);
+    if (getSingleValue(parsedDemo.values, "transport") === "http") throw new Error("demo checks WebRTC; test HTTP with two sidecars using --transport http");
     const passwordValue = getSingleValue(parsedDemo.values, "password") ?? env.NINJA_PASSWORD;
     return {
       kind,
@@ -229,8 +249,12 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
     return { kind, runtime };
   }
 
-  const parsed = parseOptions(args, env);
+  // Handoffs always use the local sidecar, even in a shell that sets NINJA_ROOM.
+  const parsed = parseOptions(args, kind === "handoff" ? { ...env, NINJA_ROOM: undefined } : env);
   const positional = parsed.positional;
+  if (kind === "ssn" && getSingleValue(parsed.values, "transport") === "http") {
+    throw new Error("The Social Stream bridge currently uses WebRTC; choose --transport webrtc");
+  }
 
   switch (kind) {
     case "start":
@@ -276,7 +300,17 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
     case "receipt": {
       const peer = getSingleValue(parsed.values, "from");
       if (positional.length !== 1 || !peer) throw new Error("receipt requires a request ID and --from peer");
-      return { kind, stateDir: resolveStateDir(parsed.values, env), requestId: positional[0], peer };
+      const timeout = getSingleValue(parsed.values, "timeout");
+      return { kind, stateDir: resolveStateDir(parsed.values, env), requestId: positional[0], peer,
+        ...(timeout === undefined ? {} : { timeoutMs: parseWholeNumberOption(timeout, 0, "timeout") }) };
+    }
+    case "handoff": {
+      const request = positional.slice(1).join(" ");
+      if (!positional[0] || positional[0].length > 128 || positional[0].includes("\0") || !isHandoffRequest(request)) {
+        throw new Error("handoff requires a target and nonempty request text; keep requests short and share large files separately");
+      }
+      if (getSingleValue(parsed.values, "room")) throw new Error("handoff uses a running sidecar; start it with --room first, then use --id or --state-dir");
+      return { kind, stateDir: resolveStateDir(parsed.values, env), target: positional[0], request };
     }
     case "read":
       return {
@@ -684,6 +718,8 @@ function parseOptions(
   }
 
   if (!values.room && env.NINJA_ROOM) values.room = env.NINJA_ROOM;
+  if (!values.transport && env.NINJA_TRANSPORT) values.transport = env.NINJA_TRANSPORT;
+  if (!values["relay-config"] && env.NINJA_RELAY_CONFIG) values["relay-config"] = env.NINJA_RELAY_CONFIG;
   if (!values.name && env.NINJA_NAME) values.name = env.NINJA_NAME;
   if (!values.id && env.NINJA_ID) values.id = env.NINJA_ID;
   if (!values.role && env.NINJA_ROLE) values.role = env.NINJA_ROLE;
@@ -733,6 +769,11 @@ function buildCommonOptions(
   }
 
   const agentProfile = buildAgentProfile(values, env, sharedFolders);
+  const transport = getSingleValue(values, "transport");
+  if (transport !== undefined && transport !== "webrtc" && transport !== "http") {
+    throw new Error("--transport must be webrtc or http");
+  }
+  const relayConfig = getSingleValue(values, "relay-config");
 
   return {
     room,
@@ -745,6 +786,8 @@ function buildCommonOptions(
     agentProfile,
     sharedFolders,
     wake: buildWakeConfig(values, env),
+    ...(transport ? { transport } : {}),
+    ...(relayConfig ? { relayConfig } : {}),
   };
 }
 

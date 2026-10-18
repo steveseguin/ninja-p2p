@@ -1,8 +1,15 @@
 # Protocol and reliability
 
-`ninja-p2p` is an agent coordination layer over VDO.Ninja WebRTC data channels. It does not replace or extend VDO.Ninja signaling.
+`ninja-p2p` is an agent coordination layer using VDO.Ninja WebRTC data channels
+by default. An explicit HTTP transport carries the same room envelopes through
+an independent encrypted relay. It does not replace or extend VDO.Ninja signaling.
 
-## Layers
+The hosted mailbox is a separate, retained text route exposed through MCP and
+`ninja-p2p mailbox`. It uses mailbox IDs and explicit peer pairing, rather than
+room membership. See [cloud connections](cloud-connections.md) for setup,
+retention, and delivery status.
+
+## WebRTC layers
 
 1. The VDO.Ninja SDK joins a room, discovers published stream IDs, and establishes WebRTC peer connections and data channels.
 2. `VDOBridge` asks the SDK to view discovered peers as data-only connections.
@@ -22,7 +29,13 @@ The application envelope contains an ID, timestamp, sender identity, message typ
   survive a sidecar restart. Rejected sends stay visible in `notify`'s queued
   count and do not enter the library's bounded in-memory queue. A blocked peer
   does not hold up another peer's direct messages.
-- There is no durable remote broker and no exactly-once guarantee. Applications that require confirmation should use message IDs with `ack` or `command_response` and make handlers idempotent.
+- Room transports have no durable remote broker and no exactly-once guarantee. Applications that require confirmation should use message IDs with `ack` or `command_response` and make handlers idempotent. The separate hosted mailbox retains text for seven days.
+- The opt-in `handoff` CLI keeps work queued until the destination sidecar
+  confirms local storage. It requires a current `handoff-v1` peer announcement,
+  retries the same envelope with backoff, and expires after 24 hours. Its
+  persistent receiver records suppress duplicate inbox entries after reads and
+  restarts. This confirms storage, not task execution. See
+  [confirmed handoffs](operations.md#confirmed-handoffs) for the workflow.
 - Room broadcasts are best-effort. They are not retained independently for every absent peer.
 - A history request is capped at 200 entries (invalid or non-positive counts
   default to 50) and can replay broadcasts plus messages sent to or by the
@@ -33,7 +46,17 @@ The application envelope contains an ID, timestamp, sender identity, message typ
 Malformed inbox/outbox records remain on disk and are skipped by normal reads.
 They are not counted as valid pending/queued work. Cached direct envelopes must
 match their action recipient, type, and ID; sender identity is preserved across
-restarts. Concurrent inbox readers return only records they successfully archive.
+restarts. Concurrent inbox readers return only records they successfully claim.
+
+Handoffs use type `handoff`, a direct recipient, a null topic, and payload
+`{ request, expiresAt }`. Expiry is an absolute Unix timestamp in milliseconds,
+at most 24 hours after the envelope timestamp. Request text is limited to 32,000
+UTF-8 bytes after JSON string encoding. A receiver sends an `ack` only after
+storage, with `{ messageId, senderInstanceId, forType: "handoff", receipt: "stored" }`.
+The sender correlates that receipt with the request ID, original sender instance,
+and expected reporting peer. Identities remain self-asserted; use trusted rooms.
+Handoff records use sender stream ID, sender instance ID, and message ID as their
+deduplication key. Distinct IDs with identical request text remain distinct work.
 
 `read --take 0` consumes nothing, `--peek true` leaves mail in place, and invalid
 counts fail. Wake limits and delays are validated and captured at construction;

@@ -3,17 +3,72 @@ import { mkdtempSync, mkdirSync, symlinkSync, rmSync, writeFileSync, utimesSync,
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ensureAgentState, getAgentReceipt, pruneAgentArchive, queueAgentAction, storeInboxMessage, takeInboxMessages } from "../src/agent-state.js";
-import { createEnvelope } from "../src/protocol.js";
+import { createEnvelope, type MessageEnvelope } from "../src/protocol.js";
 import { parseCliArgs } from "../src/cli-lib.js";
+import { initialHandoffStatus, isHandoff, storeHandoff, writeHandoffStatus } from "../src/handoff.js";
 
 const peer = { streamId: "reviewer", instanceId: "one", role: "agent", name: "Reviewer" };
 function temporary(fn: (dir: string) => void) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-state-ops-"));
   try { fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); }
 }
+
+test("concurrent CLI readers claim every handoff once even when request text is identical", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-readers-"));
+  try {
+    const expected = Array.from({ length: 24 }, () => createEnvelope(peer, "handoff", {
+      request: "same request", expiresAt: Date.now() + 60_000,
+    }, { to: "worker" }));
+    for (const message of expected) storeHandoff(dir, message);
+    const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
+    const read = () => new Promise<MessageEnvelope[]>((resolve, reject) => {
+      const child = spawn(process.execPath, ["--import", "tsx", cli, "read", "--state-dir", dir, "--take", "24"],
+        { windowsHide: true, timeout: 10_000 });
+      let stdout = "", stderr = "";
+      child.stdout.on("data", data => { stdout += data; });
+      child.stderr.on("data", data => { stderr += data; });
+      child.on("error", reject);
+      child.on("close", code => {
+        if (code !== 0) return reject(new Error(stderr || `reader exited ${code}`));
+        try { resolve(JSON.parse(stdout).messages); } catch (error) { reject(error); }
+      });
+    });
+    const delivered = (await Promise.all([read(), read(), read(), read()])).flat();
+    assert.equal(delivered.length, expected.length, "no duplicates or unexplained exclusions");
+    assert.deepEqual(delivered.map(message => message.id).sort(), expected.map(message => message.id).sort());
+    for (const message of expected) assert.equal(storeHandoff(dir, message), "duplicate");
+    assert.deepEqual(takeInboxMessages(dir, 30), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI handoff prints a request ID and receipt waiting reports storage or timeout without consuming mail", () => temporary(dir => {
+  const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
+  const invoke = (args: string[]) => spawnSync(process.execPath, ["--import", "tsx", cli, ...args, "--state-dir", dir],
+    { encoding: "utf8", timeout: 10_000, windowsHide: true });
+  const queued = invoke(["handoff", "reviewer", "Review the patch"]);
+  assert.equal(queued.status, 0, queued.stderr);
+  const { requestId } = JSON.parse(queued.stdout);
+  assert.equal(typeof requestId, "string");
+  const timeout = invoke(["receipt", requestId, "--from", "reviewer", "--timeout", "40"]);
+  assert.equal(timeout.status, 1, timeout.stderr);
+  const waiting = JSON.parse(timeout.stdout);
+  assert.equal(waiting.status, "queued");
+  assert.equal(waiting.timedOut, true);
+  assert.ok(waiting.waitedMs >= 40 && waiting.waitedMs < 2000);
+
+  const request = { ...createEnvelope(peer, "handoff", { request: "Review the patch", expiresAt: Date.now() + 60_000 }, { to: "reviewer" }), id: requestId };
+  assert.ok(isHandoff(request));
+  const ack = createEnvelope(peer, "ack", { forType: "handoff", receipt: "stored", messageId: requestId, senderInstanceId: peer.instanceId }, { to: "worker" });
+  writeHandoffStatus(dir, { ...initialHandoffStatus(request), status: "stored", receipt: ack });
+  storeInboxMessage(dir, createEnvelope(peer, "chat", { text: "unrelated pending mail" }));
+  const confirmed = invoke(["receipt", requestId, "--from", "reviewer", "--timeout", "5000"]);
+  assert.equal(confirmed.status, 0, confirmed.stderr);
+  assert.equal(JSON.parse(confirmed.stdout).status, "stored");
+  assert.equal(takeInboxMessages(dir, 20, true).length, 1);
+}));
 
 test("archive pruning previews first, combines age and keep, and preserves active/malformed state", () => temporary(dir => {
   const paths = ensureAgentState(dir);

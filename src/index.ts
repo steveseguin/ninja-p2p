@@ -81,3 +81,4 @@ export {
   type SharedFolderListing,
 } from "./shared-folders.js";
 export { VDOBridge, type VDOBridgeOptions } from "./vdo-bridge.js";
+export { HANDOFF_SKILL, HANDOFF_TTL_MS, type HandoffPayload, type HandoffStatus } from "./handoff.js";

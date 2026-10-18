@@ -19,6 +19,34 @@ const me: PeerIdentity = {
   instanceId: "inst_me",
 };
 
+test("independent HTTP peers exchange envelopes and keep SDK media access unavailable", async () => {
+  const require = createRequire(import.meta.url);
+  const { startRelayServer } = require("../runtime/relay-server.cjs");
+  const token = "test-token-".repeat(4);
+  const relay = await startRelayServer({ port: 0, token });
+  const config = { url: `http://127.0.0.1:${relay.port}`, token, key: "a".repeat(64) };
+  const a = new VDOBridge({ room: "test", streamId: "a", identity: { streamId: "a", role: "agent", name: "A" }, transport: "http", relay: config });
+  const b = new VDOBridge({ room: "test", streamId: "b", identity: { streamId: "b", role: "agent", name: "B" }, transport: "http", relay: config });
+  const messages: MessageEnvelope[] = [];
+  b.bus.on("message:chat", message => messages.push(message));
+  const until = async (condition: () => boolean) => {
+    const deadline = Date.now() + 5000;
+    while (!condition()) {
+      if (Date.now() > deadline) assert.fail("HTTP peer operation timed out");
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  };
+  try {
+    await a.connect(); await b.connect();
+    assert.equal(a.getTransport(), "http"); assert.equal(a.getSDK(), null);
+    await until(() => Boolean(a.peers.getPeer("b")?.announced && b.peers.getPeer("a")?.announced));
+    const first = a.bus.send("b", "chat", { text: "same text" });
+    const second = a.bus.send("b", "chat", { text: "same text" });
+    await until(() => messages.length === 2);
+    assert.deepEqual(messages.map(message => message.id), [first.id, second.id]);
+  } finally { await a.disconnect(); await b.disconnect(); await relay.close(); }
+});
+
 const other: PeerIdentity = {
   streamId: "worker_bot",
   role: "agent",
@@ -40,6 +68,7 @@ function makeBridge(): VDOBridge {
 }
 
 test("invalid heartbeat intervals fail before connection startup", () => {
+  assert.throws(() => new VDOBridge({ room: "test", streamId: me.streamId, identity: me, transport: "auto" as "http" }), /transport/);
   for (const heartbeatMs of [NaN, Infinity, -1, 2 ** 31]) {
     assert.throws(() => new VDOBridge({
       room: "test", streamId: me.streamId, identity: me, heartbeatMs,
@@ -814,4 +843,78 @@ test("updateAgentProfile broadcasts a skill update when connected", () => {
       can: ["edit"],
     },
   });
+});
+
+
+test("a rejected discovery view reports its error and permits a later retry", async () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  const failure = new Error("Not connected to signaling server");
+  const errors: unknown[] = [];
+  bridge.on("error", error => errors.push(error));
+  let attempts = 0;
+  Object.assign(bridge.getSDK()!, {
+    view() { attempts++; return Promise.reject(failure); },
+  });
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(errors, [failure]);
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(attempts, 2);
+  assert.deepEqual(errors, [failure, failure]);
+});
+
+test("a synchronous discovery view failure still reports and permits retry", () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  const errors: unknown[] = [];
+  bridge.on("error", error => errors.push(error));
+  let attempts = 0;
+  Object.assign(bridge.getSDK()!, {
+    view() { attempts++; throw new Error("adapter refused view"); },
+  });
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  assert.equal(attempts, 2);
+  assert.equal(errors.length, 2);
+});
+
+test("an obsolete discovery view failure does not clear a newer attempt", async () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  let rejectOld!: (error: Error) => void;
+  const old = new Promise<void>((_, reject) => { rejectOld = reject; });
+  let attempts = 0;
+  const errors: unknown[] = [];
+  bridge.on("error", error => errors.push(error));
+  Object.assign(bridge.getSDK()!, {
+    view() { return ++attempts === 1 ? old : Promise.resolve(); },
+  });
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  handlers.get("reconnected")!({});
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  rejectOld(new Error("previous attempt failed late"));
+  await new Promise(resolve => setImmediate(resolve));
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  assert.equal(attempts, 2, "the replacement must remain deduplicated");
+  assert.deepEqual(errors, []);
+});
+
+test("a discovery view rejection after teardown is handled without new bridge errors", async () => {
+  const bridge = makeBridge();
+  const { handlers } = wireTestSDK(bridge);
+  let rejectView!: (error: Error) => void;
+  const pending = new Promise<void>((_, reject) => { rejectView = reject; });
+  const errors: unknown[] = [];
+  bridge.on("error", error => errors.push(error));
+  Object.assign(bridge.getSDK()!, {
+    view() { return pending; }, stopViewing() {}, leaveRoom() {}, async disconnect() {},
+  });
+  handlers.get("streamAdded")!({ detail: { streamID: other.streamId } });
+  await bridge.disconnect();
+  rejectView(new Error("view cancelled by shutdown"));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(errors, []);
+  assert.equal(bridge.getSDK(), null);
 });

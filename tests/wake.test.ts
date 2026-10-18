@@ -28,6 +28,14 @@ function chat(text: string) {
   return createEnvelope(sender, "chat", { text });
 }
 
+test("handoff wake text contains the request and preserves distinct message IDs", () => {
+  const messages = [0, 1].map(() => createEnvelope(sender, "handoff", { request: "Review\0this patch", expiresAt: Date.now() + 1000 }, { to: "worker" }));
+  const env = buildWakeEnv(messages, context);
+  assert.equal(env.NINJA_WAKE_TEXT, "Review\uFFFDthis patch");
+  assert.equal(env.NINJA_WAKE_TYPES, "handoff");
+  assert.equal(env.NINJA_WAKE_COUNT, "2");
+});
+
 type FakeRun = {
   command: string;
   env: NodeJS.ProcessEnv;
@@ -123,6 +131,32 @@ test("WakeRunner removes an inherited room so child commands use the sidecar out
     runner.dispose();
     if (previousRoom === undefined) delete process.env.NINJA_ROOM;
     else process.env.NINJA_ROOM = previousRoom;
+  }
+});
+
+test("WakeRunner keeps relay secrets out of commands that read peer text", async () => {
+  const previous = { token: process.env.NINJA_RELAY_TOKEN, key: process.env.NINJA_RELAY_KEY };
+  const { runs, spawnFn } = makeFakeSpawn();
+  const runner = new WakeRunner({
+    config: { command: "echo hi", debounceMs: 1, limitPerMinute: 0 },
+    context,
+    spawnFn,
+  });
+  try {
+    process.env.NINJA_RELAY_TOKEN = "relay-token";
+    process.env.NINJA_RELAY_KEY = "a".repeat(64);
+    runner.notify(chat("wake up"));
+    await delay(40);
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0].env.NINJA_RELAY_TOKEN, undefined);
+    assert.equal(runs[0].env.NINJA_RELAY_KEY, undefined);
+    assert.equal(process.env.NINJA_RELAY_TOKEN, "relay-token", "the parent environment must remain intact");
+  } finally {
+    runner.dispose();
+    for (const [name, value] of [["NINJA_RELAY_TOKEN", previous.token], ["NINJA_RELAY_KEY", previous.key]] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 });
 

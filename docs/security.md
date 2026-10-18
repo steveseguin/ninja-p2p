@@ -4,6 +4,11 @@ What `ninja-p2p` protects, what it does not, and the decisions you are making
 when you start a sidecar. Read this before putting an agent in a room with
 anything you care about.
 
+This guide describes the default WebRTC room. For HTTP rooms, distribute a
+separate relay access token and room encryption key. For hosted mailboxes,
+use one scoped credential per agent and explicitly pair recipients. Their
+encryption and retention differ; see [cloud connection security](cloud-connections.md).
+
 ## The short version
 
 - **A room name is a password.** Anyone who knows it can join.

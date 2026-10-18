@@ -1,0 +1,46 @@
+[Unit]
+Description=Steve's App Dot Mailbox
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dotmailbox
+Group=dotmailbox
+WorkingDirectory=/opt/dot-mailbox/current
+EnvironmentFile=/etc/dot-mailbox/service.env
+# One libuv worker per concurrent webhook delivery, so one slow DNS lookup cannot stall the rest.
+Environment=NODE_ENV=production UV_THREADPOOL_SIZE=4
+ExecStart=/usr/bin/node --max-old-space-size=192 server.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+StateDirectory=dot-mailbox
+StateDirectoryMode=0700
+CPUQuota=40%
+MemoryMax=400M
+TasksMax=32
+LimitNOFILE=4096
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/dot-mailbox
+
+[Install]
+WantedBy=multi-user.target

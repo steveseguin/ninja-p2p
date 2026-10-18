@@ -23,6 +23,7 @@ import {
   type SharedFolderSummary,
 } from "./protocol.js";
 import type { SharedFolderConfig } from "./shared-folders.js";
+import { claimHandoff, HANDOFF_TTL_MS, isHandoff, isHandoffRequest, listHandoffInbox, readHandoffStatus } from "./handoff.js";
 
 export type AgentSessionState = {
   room: string;
@@ -32,6 +33,7 @@ export type AgentSessionState = {
   stateDir: string;
   pid: number;
   connected: boolean;
+  transport?: "webrtc" | "http";
   skills: string[];
   topics: string[];
   agentProfile: AgentProfile | null;
@@ -43,6 +45,7 @@ export type AgentSessionState = {
 export type QueuedAgentAction = { envelope?: MessageEnvelope } & (
   | { id: string; createdAt: number; kind: "chat"; text: string }
   | { id: string; createdAt: number; kind: "dm"; target: string; text: string }
+  | { id: string; createdAt: number; kind: "handoff"; target: string; request: string }
   | { id: string; createdAt: number; kind: "send_file"; target: string; filePath: string; transferKind: FileTransferKind }
   | { id: string; createdAt: number; kind: "command"; target: string; command: string; args?: unknown }
   | { id: string; createdAt: number; kind: "response"; target: string; requestId: string; result?: unknown; error?: string }
@@ -52,6 +55,7 @@ export type QueuedAgentAction = { envelope?: MessageEnvelope } & (
 export type QueuedAgentActionInput =
   | { kind: "chat"; text: string }
   | { kind: "dm"; target: string; text: string }
+  | { kind: "handoff"; target: string; request: string }
   | { kind: "send_file"; target: string; filePath: string; transferKind: FileTransferKind }
   | { kind: "command"; target: string; command: string; args?: unknown }
   | { kind: "response"; target: string; requestId: string; result?: unknown; error?: string }
@@ -148,6 +152,8 @@ export function queueAgentAction(
   stateDir: string,
   action: QueuedAgentActionInput,
 ): QueuedAgentAction {
+  if (action.kind === "handoff" && (!isHandoffRequest(action.request) || !action.target ||
+    action.target.length > 128 || action.target.includes("\0"))) throw new Error("invalid handoff target or request");
   const paths = ensureAgentState(stateDir);
   const queued = {
     ...action,
@@ -188,14 +194,17 @@ function isQueuedAgentAction(value: unknown): value is QueuedAgentAction {
   if (action.envelope != null) {
     if (!isValidEnvelope(action.envelope)) return false;
     const type = action.kind === "dm" ? "chat" : action.kind === "command" ? "command"
-      : action.kind === "response" ? "command_response" : null;
+      : action.kind === "response" ? "command_response" : action.kind === "handoff" ? "handoff" : null;
     if (type && (action.envelope.to !== action.target || action.envelope.type !== type || action.envelope.id !== action.id)) {
       return false;
     }
+    if (action.kind === "handoff" && (!isHandoff(action.envelope) || action.envelope.ts !== action.createdAt ||
+      action.envelope.payload.request !== action.request)) return false;
   }
   switch (action.kind) {
     case "chat": return text("text");
     case "dm": return requiredText("target") && text("text");
+    case "handoff": return requiredText("target") && isHandoffRequest(action.request);
     case "command": return requiredText("target") && requiredText("command");
     case "response": return requiredText("target") && requiredText("requestId") &&
       (action.error == null || text("error"));
@@ -213,11 +222,12 @@ export function prepareQueuedAgentEnvelope(
   action: QueuedAgentAction,
   identity: PeerIdentity,
 ): MessageEnvelope | null {
-  if (action.kind !== "dm" && action.kind !== "command" && action.kind !== "response") return null;
+  if (action.kind !== "dm" && action.kind !== "command" && action.kind !== "response" && action.kind !== "handoff") return null;
   if (action.envelope) return action.envelope;
-  const type = action.kind === "dm" ? "chat" : action.kind === "command" ? "command" : "command_response";
+  const type = action.kind === "dm" ? "chat" : action.kind === "command" ? "command" : action.kind === "handoff" ? "handoff" : "command_response";
   const payload = action.kind === "dm" ? { text: action.text }
     : action.kind === "command" ? { command: action.command, args: action.args }
+    : action.kind === "handoff" ? { request: action.request, expiresAt: action.createdAt + HANDOFF_TTL_MS }
     : action.error ? { requestId: action.requestId, ok: false, error: action.error }
     : { requestId: action.requestId, ok: true, result: action.result ?? null };
   const envelope = {
@@ -260,6 +270,7 @@ export function listInboxMessages(stateDir: string): InboxMessage[] {
       return item && isValidEnvelope(item.envelope) ? { ...item, path: file } : null;
     })
     .filter((item): item is InboxMessage => item !== null)
+    .concat(listHandoffInbox(stateDir))
     .sort((a, b) => a.envelope.ts - b.envelope.ts);
 }
 
@@ -274,6 +285,10 @@ export function takeInboxMessages(stateDir: string, count = 20, peek = false): I
   const taken: InboxMessage[] = [];
   for (const item of items) {
     if (taken.length >= selected.length) break;
+    if (item.envelope.type === "handoff" && path.dirname(item.path) === path.join(paths.stateDir, "handoffs")) {
+      if (claimHandoff(stateDir, item)) taken.push(item);
+      continue;
+    }
     const target = path.join(paths.archiveDir, path.basename(item.path));
     try {
       renameSync(item.path, target);
@@ -351,6 +366,14 @@ export function getAgentReceipt(stateDir: string, requestId: string, peer: strin
   receipts.sort((a, b) => a.ts - b.ts);
   const queued = listQueuedAgentActions(stateDir).some(({ action }) =>
     action.id === requestId && "target" in action && action.target === peer);
+  const handoff = readHandoffStatus(stateDir, requestId, peer);
+  if (handoff) {
+    if (handoff.receipt && !receipts.some(message => message.id === handoff.receipt!.id)) receipts.push(handoff.receipt);
+    receipts.sort((a, b) => a.ts - b.ts);
+    return { requestId, peer, status: receipts.some(message => message.type === "command_response") ? "responded" : handoff.status,
+      queued, receipts, delivery: { status: handoff.status, attempts: handoff.attempts, expiresAt: handoff.expiresAt,
+        ...(handoff.waitingFor ? { waitingFor: handoff.waitingFor } : {}) } };
+  }
   // Return every response, including failures/conflicts; a peer report is not proof of execution.
   const status = receipts.some(message => message.type === "command_response") ? "responded"
     : receipts.length ? "acknowledged" : queued ? "queued" : "unknown";

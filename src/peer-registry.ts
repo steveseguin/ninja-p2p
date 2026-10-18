@@ -26,6 +26,8 @@ export type PeerRecord = {
   connectedAt: number;
   lastSeenAt: number;
   connected: boolean;
+  /** An announce has arrived on this connection, rather than an earlier session. */
+  announced?: boolean;
 };
 
 export interface PeerRegistryEvents {
@@ -54,6 +56,7 @@ export class PeerRegistry extends EventEmitter {
         this.peers.delete(duplicateForUuid.streamId);
         this.uuidToStream.delete(duplicateForUuid.uuid);
       }
+      if (!existing.connected || existing.uuid !== uuid) existing.announced = false;
       if (existing.uuid !== uuid) this.uuidToStream.delete(existing.uuid);
       existing.uuid = uuid;
       existing.connected = true;
@@ -70,6 +73,7 @@ export class PeerRegistry extends EventEmitter {
       if (existingByUuid.streamId === uuid && streamId !== uuid) {
         this.rekeyPeer(uuid, streamId);
       }
+      if (!existingByUuid.connected) existingByUuid.announced = false;
       existingByUuid.connected = true;
       existingByUuid.connectedAt = Date.now();
       existingByUuid.lastSeenAt = Date.now();
@@ -145,6 +149,7 @@ export class PeerRegistry extends EventEmitter {
     const peer = this.resolve(identifier);
     if (!peer) return undefined;
     peer.identity = identity;
+    peer.announced = true;
     peer.skills = announce.skills ?? [];
     peer.status = announce.status ?? "online";
     peer.statusDetail = announce.statusDetail ?? "";

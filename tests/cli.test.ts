@@ -15,11 +15,13 @@ import {
   createPeerNoticeEnvelope,
   getAgentStatus,
   flushAgentOutbox,
+  handleSidecarHandoff,
   maybeHandleSidecarCommand,
   recordPeerNotice,
 } from "../src/cli.js";
-import { getInboxSummary, listQueuedAgentActions, queueAgentAction, storeInboxMessage, writeAgentSession, writePeersSnapshot } from "../src/agent-state.js";
-import { createEnvelope, type PeerIdentity } from "../src/protocol.js";
+import { getAgentReceipt, getInboxSummary, listQueuedAgentActions, pruneAgentArchive, queueAgentAction, storeInboxMessage, takeInboxMessages, writeAgentSession, writePeersSnapshot } from "../src/agent-state.js";
+import { createEnvelope, type MessageEnvelope, type PeerIdentity } from "../src/protocol.js";
+import { HANDOFF_SKILL, HANDOFF_TTL_MS, readHandoffStatus, writeHandoffStatus } from "../src/handoff.js";
 import { VDOBridge } from "../src/vdo-bridge.js";
 
 test("wait honors its timeout even when the polling interval is much longer", () => {
@@ -41,6 +43,37 @@ test("wait honors its timeout even when the polling interval is much longer", ()
   }
 });
 
+test("start reports relay mistakes instead of detaching an agent that will fail", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-start-relay-"));
+  const start = (...args: string[]) => spawnSync(process.execPath, [
+    "--import", "tsx", fileURLToPath(new URL("../src/cli.ts", import.meta.url)),
+    "start", "--room", "relay-check", "--state-dir", dir, ...args,
+  ], {
+    encoding: "utf8", timeout: 5000, windowsHide: true,
+    env: { ...process.env, NINJA_TRANSPORT: undefined, NINJA_RELAY_CONFIG: undefined },
+  });
+  try {
+    const missing = start("--transport", "http", "--relay-config", path.join(dir, "missing.json"));
+    assert.equal(missing.status, 1, missing.stdout);
+    assert.match(missing.stderr, /Cannot read relay config/);
+
+    const config = path.join(dir, "relay.json");
+    writeFileSync(config, JSON.stringify({ url: "https://relay.example.com", token: "t".repeat(32), key: "not-hex" }));
+    const badKey = start("--transport", "http", "--relay-config", config);
+    assert.equal(badKey.status, 1, badKey.stdout);
+    assert.match(badKey.stderr, /64 hexadecimal characters/);
+
+    const ignored = start("--relay-config", config);
+    assert.equal(ignored.status, 1, ignored.stdout);
+    assert.match(ignored.stderr, /--relay-config needs --transport http/);
+
+    const created = readdirSync(dir);
+    assert.ok(!created.includes("agent.log") && !created.includes("session.json"), `no agent was started: ${created.join(", ")}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 const me: PeerIdentity = {
   streamId: "codex",
   role: "agent",
@@ -55,14 +88,14 @@ const other: PeerIdentity = {
   instanceId: "inst_other",
 };
 
-function makeBridge() {
+function makeBridge(identity = me) {
   const bridge = new VDOBridge({
     room: "ai-room",
-    streamId: me.streamId,
+    streamId: identity.streamId,
     identity: {
-      streamId: me.streamId,
-      role: me.role,
-      name: me.name,
+      streamId: identity.streamId,
+      role: identity.role,
+      name: identity.name,
     },
     password: false,
     skills: ["cli", "chat", "command", "sidecar", "discovery"],
@@ -78,6 +111,177 @@ function makeBridge() {
   (bridge as unknown as { connected: boolean }).connected = true;
   return bridge;
 }
+
+function announceHandoffPeer(bridge: VDOBridge, identity: PeerIdentity): void {
+  bridge.peers.addPeer(identity.streamId, `uuid_${identity.streamId}`);
+  bridge.peers.updateFromAnnounce(identity.streamId, identity, {
+    skills: [HANDOFF_SKILL], status: "online", version: "test", topics: [],
+  });
+}
+
+test("handoffs survive dropped receipts and both sidecar restarts without duplicate work", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-"));
+  const senderDir = path.join(dir, "sender");
+  const receiverDir = path.join(dir, "receiver");
+  try {
+    let sender = makeBridge();
+    let receiver = makeBridge(other);
+    const sent: MessageEnvelope[] = [];
+    const delivered: string[] = [];
+    let dropReceipts = true;
+    const connect = () => {
+      announceHandoffPeer(sender, receiver.identity);
+      announceHandoffPeer(receiver, sender.identity);
+      sender.bus.on("message", message => handleSidecarHandoff(sender, senderDir, message));
+      receiver.bus.on("message", message => {
+        if (handleSidecarHandoff(receiver, receiverDir, message) === "new") delivered.push(message.id);
+      });
+      sender.bus.setSendDataFn(data => {
+        const message = data as MessageEnvelope;
+        sent.push(message);
+        receiver.bus.handleIncoming(message);
+        receiver.bus.handleIncoming(message); // transport redelivery before consumption
+        return true;
+      });
+      receiver.bus.setSendDataFn(data => {
+        // Receipt follows successful storage, even if its return path loses it.
+        const messageId = (data as MessageEnvelope).payload as { messageId: string };
+        assert.ok(delivered.includes(messageId.messageId) || getInboxSummary(receiverDir).pending > 0);
+        if (!dropReceipts) sender.bus.handleIncoming(data as MessageEnvelope);
+        return true;
+      });
+    };
+    connect();
+    const expected = [0, 1].map(() => queueAgentAction(senderDir, {
+      kind: "handoff", target: other.streamId, request: "Review the same text",
+    }).id);
+    flushAgentOutbox(sender, senderDir);
+    assert.deepEqual(delivered, expected, "distinct IDs with identical text are separate work");
+    assert.equal(listQueuedAgentActions(senderDir).length, 2, "transport acceptance is not a storage receipt");
+    assert.equal(getAgentReceipt(senderDir, expected[0], other.streamId).status, "awaiting_receipt");
+    flushAgentOutbox(sender, senderDir);
+    assert.equal(sent.length, 2, "retries respect persisted backoff");
+    assert.deepEqual(takeInboxMessages(receiverDir, 10).map(item => item.envelope.id), expected);
+    pruneAgentArchive(receiverDir, { olderThanDays: 0, keep: 0, apply: true });
+
+    sender = makeBridge();
+    receiver = makeBridge(other);
+    dropReceipts = false;
+    connect();
+    for (const id of expected) {
+      const status = readHandoffStatus(senderDir, id, other.streamId)!;
+      writeHandoffStatus(senderDir, { ...status, nextAttemptAt: 0 });
+    }
+    flushAgentOutbox(sender, senderDir);
+    assert.deepEqual(sent.slice(2), sent.slice(0, 2), "retries preserve IDs and sender instance across restart");
+    assert.deepEqual(delivered, expected, "consumption and archive pruning cannot resurrect a handoff");
+    assert.deepEqual(takeInboxMessages(receiverDir, 10), []);
+    assert.equal(listQueuedAgentActions(senderDir).length, 0);
+    for (const id of expected) {
+      const receipt = getAgentReceipt(senderDir, id, other.streamId);
+      assert.equal(receipt.status, "stored");
+      assert.equal(receipt.delivery?.attempts, 2);
+      assert.equal(receipt.receipts.length, 1);
+    }
+    assert.equal(getInboxSummary(senderDir).pending, 0, "storage receipts do not wake the sender");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("handoffs require current peer support, expire visibly, and do not hold up ordinary messages", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-gating-"));
+  try {
+    const bridge = makeBridge();
+    bridge.peers.addPeer(other.streamId, "old-peer");
+    const sent: MessageEnvelope[] = [];
+    bridge.bus.setSendDataFn(data => { sent.push(data as MessageEnvelope); return true; });
+    const queued = queueAgentAction(dir, { kind: "handoff", target: other.streamId, request: "Review" });
+    queueAgentAction(dir, { kind: "dm", target: other.streamId, text: "ordinary" });
+    flushAgentOutbox(bridge, dir);
+    assert.deepEqual(sent.map(message => message.type), ["chat"]);
+    assert.equal(getAgentReceipt(dir, queued.id, other.streamId).delivery?.waitingFor, "peer_support");
+    announceHandoffPeer(bridge, other);
+    bridge.peers.markDisconnected(other.streamId);
+    bridge.peers.addPeer(other.streamId, "replacement-peer");
+    flushAgentOutbox(bridge, dir);
+    assert.equal(sent.length, 1, "old capability announcements cannot authorize a replacement connection");
+    announceHandoffPeer(bridge, other);
+    bridge.peers.addPeer(other.streamId, `uuid_${other.streamId}`); // duplicate notification on the same connection
+    flushAgentOutbox(bridge, dir);
+    assert.equal(sent[1].type, "handoff");
+
+    const item = listQueuedAgentActions(dir)[0];
+    const expiredAt = Date.now() - 1;
+    const createdAt = expiredAt - HANDOFF_TTL_MS;
+    const envelope = { ...item.action.envelope!, ts: createdAt, payload: { request: "Review", expiresAt: expiredAt } };
+    writeFileSync(item.path, JSON.stringify({ ...item.action, createdAt, envelope }));
+    const status = readHandoffStatus(dir, queued.id, other.streamId)!;
+    writeHandoffStatus(dir, { ...status, expiresAt: expiredAt });
+    flushAgentOutbox(bridge, dir);
+    assert.equal(listQueuedAgentActions(dir).length, 0);
+    assert.equal(getAgentReceipt(dir, queued.id, other.streamId).status, "expired");
+    assert.equal(sent.length, 2);
+    const lateReceipt = createEnvelope(other, "ack", {
+      messageId: queued.id, senderInstanceId: envelope.from.instanceId, forType: "handoff", receipt: "stored",
+    }, { to: me.streamId });
+    handleSidecarHandoff(bridge, dir, lateReceipt);
+    assert.equal(getAgentReceipt(dir, queued.id, other.streamId).status, "stored");
+    assert.equal(getAgentReceipt(dir, queued.id, other.streamId).delivery?.waitingFor, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("unrelated acknowledgements cannot complete a handoff", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-receipts-"));
+  try {
+    const bridge = makeBridge();
+    announceHandoffPeer(bridge, other);
+    bridge.bus.setSendDataFn(() => true);
+    const action = queueAgentAction(dir, { kind: "handoff", target: other.streamId, request: "Review" });
+    flushAgentOutbox(bridge, dir);
+    const envelope = listQueuedAgentActions(dir)[0].action.envelope!;
+    const ack = createEnvelope(other, "ack", {
+      forType: "handoff", receipt: "stored", messageId: action.id, senderInstanceId: envelope.from.instanceId,
+    }, { to: me.streamId });
+    for (const invalid of [
+      { ...ack, to: "someone_else" }, { ...ack, from: { ...other, streamId: "someone_else" } },
+      { ...ack, payload: { ...(ack.payload as object), senderInstanceId: "previous_instance" } },
+      { ...ack, payload: { messageId: action.id } },
+    ]) handleSidecarHandoff(bridge, dir, invalid);
+    assert.equal(listQueuedAgentActions(dir).length, 1);
+    assert.equal(getAgentReceipt(dir, action.id, other.streamId).status, "awaiting_receipt");
+    handleSidecarHandoff(bridge, dir, ack);
+    assert.equal(listQueuedAgentActions(dir).length, 0);
+    assert.equal(getAgentReceipt(dir, action.id, other.streamId).status, "stored");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a broken receipt transport still leaves new handoffs available to wake and read", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-return-path-"));
+  try {
+    const receiver = makeBridge(other);
+    announceHandoffPeer(receiver, me);
+    receiver.bus.setSendDataFn(() => { throw new Error("return channel closed"); });
+    const message = createEnvelope(me, "handoff", { request: "Review", expiresAt: Date.now() + HANDOFF_TTL_MS - 1000 }, { to: other.streamId });
+    assert.equal(handleSidecarHandoff(receiver, dir, message), "new");
+    assert.deepEqual(takeInboxMessages(dir).map(item => item.envelope.id), [message.id]);
+    assert.equal(handleSidecarHandoff(receiver, dir, message), "duplicate");
+    assert.deepEqual(takeInboxMessages(dir), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("handoffs are never acknowledged before storage or when addressed to another peer", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-handoff-disk-error-"));
+  try {
+    const receiver = makeBridge(other);
+    announceHandoffPeer(receiver, me);
+    const sent: object[] = [];
+    receiver.bus.setSendDataFn(data => { sent.push(data); return true; });
+    const message = createEnvelope(me, "handoff", { request: "Review", expiresAt: Date.now() + 60_000 }, { to: other.streamId });
+    assert.equal(handleSidecarHandoff(receiver, dir, { ...message, to: me.streamId }), "rejected");
+    writeFileSync(path.join(dir, "handoffs"), "cannot create storage directory here");
+    assert.throws(() => handleSidecarHandoff(receiver, dir, message));
+    assert.deepEqual(sent, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("get-file preserves whitespace in a listed path instead of selecting another file", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-share-path-"));

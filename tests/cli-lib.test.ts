@@ -2,6 +2,26 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
+test("HTTP sessions are explicit and mailbox calls do not inherit a room", () => {
+  const session = parseCliArgs(["start", "--room", "project", "--id", "worker", "--transport", "http", "--relay-config", "private.json"], { USERPROFILE: "C:/Users/test" });
+  assert.equal(session.kind, "start");
+  if (session.kind === "start") {
+    assert.equal(session.options.transport, "http");
+    assert.equal(session.options.relayConfig, "private.json");
+  }
+  assert.throws(() => parseCliArgs(["start", "--room", "project", "--transport", "automatic"], { USERPROFILE: "C:/Users/test" }), /transport/);
+  assert.throws(() => parseCliArgs(["demo", "--transport", "http"], {}), /demo checks WebRTC/);
+  assert.throws(() => parseCliArgs(["ssn", "--transport", "http"], {}), /currently uses WebRTC/);
+  assert.deepEqual(parseCliArgs(["mailbox", "read", "--after", "17"], { NINJA_ROOM: "unrelated", NINJA_MAILBOX_CONFIG: "mailbox.json" }), {
+    kind: "mailbox", configFile: "mailbox.json", tool: "read_messages", arguments: { after_sequence: 17 },
+  });
+  assert.throws(() => parseCliArgs(["mailbox", "send", "a".repeat(32), "work"], { NINJA_MAILBOX_CONFIG: "mailbox.json" }), /request-key/);
+  assert.throws(() => parseCliArgs(["mailbox", "read", "--after", "9007199254740992"], { NINJA_MAILBOX_CONFIG: "mailbox.json" }), /safe integer/);
+  const send = parseCliArgs(["mailbox", "send", "a".repeat(32), "work", "--request-key", "request_001"], { NINJA_MAILBOX_CONFIG: "mailbox.json" });
+  assert.equal(send.kind, "mailbox");
+  if (send.kind === "mailbox") assert.equal(send.arguments.request_key, "request_001");
+});
+
 import {
   defaultNameForRuntime,
   defaultStreamId,
@@ -33,6 +53,26 @@ test("help text includes the simple install and connect flow", () => {
   assert.match(text, /ninja-p2p approve --id codex reviewer "Approve this plan before I continue"/);
   assert.match(text, /ninja-p2p respond --id codex planner <requestId>/);
   assert.match(text, /ninja-p2p event --id codex builds build_failed/);
+});
+
+test("handoff uses sidecar state and receipt waiting validates a bounded timeout", () => {
+  const env = { USERPROFILE: "C:\\test-user", NINJA_ROOM: "inherited-room" };
+  const parsed = parseCliArgs(["handoff", "--id", "planner", "worker", "Review", "the patch"], env);
+  assert.equal(parsed.kind, "handoff");
+  if (parsed.kind !== "handoff") return;
+  assert.equal(parsed.target, "worker");
+  assert.equal(parsed.request, "Review the patch");
+  assert.equal(parsed.stateDir, getDefaultStateDir("planner", env));
+  assert.throws(() => parseCliArgs(["handoff", "--room", "room", "worker", "Review"], {}), /running sidecar/);
+  for (const args of [["handoff", "worker"], ["handoff", "worker", "   "], ["handoff", "worker", "x".repeat(32_001)],
+    ["handoff", "worker", "\u2600".repeat(11_000)], ["handoff", "worker", "\0".repeat(6000)]]) {
+    assert.throws(() => parseCliArgs(args, {}), /request text/);
+  }
+  const receipt = parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--timeout", "100"], {});
+  assert.equal(receipt.kind === "receipt" && receipt.timeoutMs, 100);
+  for (const timeout of ["-1", "1.5", "Infinity", "nope", "9007199254740992"]) {
+    assert.throws(() => parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--timeout", timeout], {}), /--timeout/);
+  }
 });
 
 test("parseCliArgs parses connect command", () => {

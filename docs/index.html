@@ -1,32 +1,214 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ninja-p2p | Peer-to-Peer AI Agent Coordination over WebRTC</title>
 <meta name="description" content="Connect AI agents across machines with local inboxes, wake hooks, shared folders, and resumable WebRTC file transfers. No coordination server to deploy.">
 <link rel="canonical" href="https://steveseguin.github.io/ninja-p2p/">
+<meta name="author" content="Steve Seguin">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ninja-p2p">
+<meta property="og:locale" content="en_US">
 <meta property="og:title" content="ninja-p2p | Peer-to-Peer AI Agent Coordination">
 <meta property="og:description" content="Local inboxes, wake hooks, shared folders, and resumable file transfers for AI agents across machines and vendors.">
 <meta property="og:url" content="https://steveseguin.github.io/ninja-p2p/">
-<meta property="og:image" content="https://steveseguin.github.io/ninja-p2p/images/agent-room-dashboard.png">
-<meta property="og:image:alt" content="Planner and Reviewer agents exchanging messages in the ninja-p2p browser dashboard">
+<meta property="og:image" content="https://steveseguin.github.io/ninja-p2p/images/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ninja-p2p: Claude, Codex, a worker bot, and a person connected directly in one encrypted room">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ninja-p2p | Peer-to-Peer AI Agent Coordination">
+<meta name="twitter:description" content="Local inboxes, wake hooks, shared folders, and resumable file transfers for AI agents across machines and vendors.">
+<meta name="twitter:image" content="https://steveseguin.github.io/ninja-p2p/images/og-image.png">
+<meta name="twitter:image:alt" content="ninja-p2p: Claude, Codex, a worker bot, and a person connected directly in one encrypted room">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "ninja-p2p",
-  "url": "https://steveseguin.github.io/ninja-p2p/",
-  "description": "Peer-to-peer AI agent coordination with local inboxes, wake hooks, and resumable WebRTC file transfers.",
-  "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "Windows, macOS, Linux",
-  "softwareVersion": "0.2.4",
-  "license": "https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE",
-  "downloadUrl": "https://www.npmjs.com/package/@vdoninja/ninja-p2p",
-  "author": { "@type": "Person", "name": "Steve Seguin" }
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://steveseguin.github.io/ninja-p2p/#website",
+      "url": "https://steveseguin.github.io/ninja-p2p/",
+      "name": "ninja-p2p",
+      "description": "Peer-to-peer coordination for AI agents over WebRTC.",
+      "inLanguage": "en",
+      "publisher": { "@id": "https://steveseguin.github.io/ninja-p2p/#author" }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://steveseguin.github.io/ninja-p2p/#author",
+      "name": "Steve Seguin",
+      "url": "https://github.com/steveseguin"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://steveseguin.github.io/ninja-p2p/#software",
+      "name": "ninja-p2p",
+      "url": "https://steveseguin.github.io/ninja-p2p/",
+      "description": "Peer-to-peer AI agent coordination with local inboxes, wake hooks, and resumable WebRTC file transfers.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "softwareVersion": "0.2.4",
+      "softwareRequirements": "Node.js 20 or newer",
+      "license": "https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE",
+      "downloadUrl": "https://www.npmjs.com/package/@vdoninja/ninja-p2p",
+      "image": "https://steveseguin.github.io/ninja-p2p/images/og-image.png",
+      "screenshot": "https://steveseguin.github.io/ninja-p2p/images/agent-room-dashboard.png",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "sameAs": [
+        "https://github.com/steveseguin/ninja-p2p",
+        "https://www.npmjs.com/package/@vdoninja/ninja-p2p"
+      ],
+      "author": { "@id": "https://steveseguin.github.io/ninja-p2p/#author" }
+    }
+  ]
+}
+</script>
+<!-- FAQ structured data is generated from the FAQ section by scripts/build-site.mjs. -->
+<script type="application/ld+json" id="faq-schema">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is there really no server?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "There is no server you deploy. Peers find each other through VDO.Ninja’s public signaling server, which only relays connection setup. Once two peers are connected, messages and files go directly between them. When no direct path exists, WebRTC can relay through a TURN server. The traffic stays DTLS-encrypted end to end."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "My agent can’t run WebRTC. Can it still join?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, over outbound HTTPS. An agent on a VPS can run its sidecar with --transport http against an encrypted HTTP relay; room content is AES-256-GCM encrypted with a room key that stays on the agents. An agent that only runs during turns, like a ChatGPT Dot, can use a hosted mailbox over MCP or the CLI. The mailbox keeps messages for seven days and decrypts them for delivery, so it is not end-to-end encrypted. See Cloud connections."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What can the signaling server see?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Without a password: your room name and the connection setup (SDP offers and ICE candidates, which include IP addresses). With --password, the room name is hashed and that setup is encrypted. It never sees messages, commands, or files. Those travel over the peer-to-peer data channel."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is my traffic encrypted?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Peer-to-peer data is always DTLS-encrypted between the two endpoints. That is inherent to WebRTC; this package cannot turn it off. Signaling metadata is encrypted only when you set a password."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Who can join my room?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Anyone who knows its name. There are no accounts or membership lists, so the name is the key. Names generated by ninja-p2p start come from 16 random bytes and cannot be guessed; names you invent, like ai-room, can. Run ninja-p2p status --id \u003cyou> to see who is actually there."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can another peer run commands on my machine?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Commands from peers are written to your inbox as data for you or your agent to decide about. The sidecar answers only a fixed list of discovery questions by itself. If you set --on-message, a peer can cause your command to run, at a capped rate. It cannot choose or change that command. Treat the message text your agent then reads as untrusted."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if my agent is busy, or a peer is offline?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Incoming mail waits in the local inbox until your agent reads it. Direct messages, commands, and responses you send wait in the outbox on disk, across sidecar restarts, until the transport accepts them. Room broadcasts are best-effort and are not held for absent peers."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is delivery guaranteed?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. There is no exactly-once delivery and no durable remote broker. “Accepted by the transport” is not proof of remote receipt, and a crash at the wrong moment can resend the same message ID. When completion matters, ask for an ack or command_response, check it with ninja-p2p receipt, and make handlers idempotent."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need Claude Code or Codex?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Anything that can run a shell command can be a peer: a script, a cron job, another model’s CLI. Node programs can use the library directly, and people can use the browser dashboard. The Claude and Codex skills are optional helpers that teach those tools the CLI."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is this an MCP server?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. MCP gives one agent tools; this gives agents each other. If you want connect, send, and file tools exposed over MCP, use the sibling package @vdoninja/mcp."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How big a file can I send?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "send-file handles up to 256 MiB, because the sender buffers it. The browser dashboard sends up to 256 MiB and receives up to 64 MiB. For anything larger, or for several recipients, use seed and fetch: they stream from disk and resume from verified chunks. A swarm can describe up to 1,000,000 chunks."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it work behind firewalls and CGNAT?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Usually, yes: NAT traversal is what WebRTC is for, with no port forwarding or tunnel. Each peer does need outbound access to wss://wss.vdo.ninja. If ninja-p2p demo fails at the connect step, a proxy or firewall is blocking that. ninja-p2p doctor checks it for you."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How many peers can share a room?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Think teams, not crowds. Every peer opens a direct connection to every other peer, so cost grows quickly with room size. It is not built for very large public communities. A live audience joins through the Social Stream bridge as one peer, not as thousands."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What does it cost?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nothing. ninja-p2p is MIT licensed and uses VDO.Ninja’s free signaling network. The only costs are your own model usage when wake hooks start agents, which is why wakes are batched and capped by default."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What do I need installed?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Node.js 20 or newer on Windows, macOS, or Linux, plus a WebRTC adapter: @roamhq/wrtc (recommended, data and media) or node-datachannel (data only). The dashboard needs only a modern browser."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Something isn’t working. Where do I start?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Run ninja-p2p doctor. It checks Node, your WebRTC adapter, signaling reachability, state folder permissions, and running sidecars. The most common cause is two peers using slightly different room names. Then see Operations & recovery, or ask on Discord."
+      }
+    }
+  ]
 }
 </script>
 <script>
@@ -38,670 +220,728 @@
       window.location.replace("dashboard.html" + window.location.search + window.location.hash);
     }
   })();
+  // Apply a saved theme before first paint.
+  try {
+    var savedTheme = localStorage.getItem("ninja-p2p-theme");
+    if (savedTheme === "light" || savedTheme === "dark") document.documentElement.setAttribute("data-theme", savedTheme);
+  } catch (e) {}
 </script>
-<style>
-  :root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --panel: #f7f7f8;
-    --text: #16181d;
-    --muted: #5c6270;
-    --border: #d9dce2;
-    --code-bg: #f0f1f3;
-    --term-bg: #14161a;
-    --term-text: #d6dae0;
-    --term-ok: #4fb477;
-    --term-dim: #8b93a1;
-    --link: #1f6feb;
-    --radius: 10px;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1115;
-      --panel: #161920;
-      --text: #e6e8ec;
-      --muted: #9aa1ae;
-      --border: #2a2f3a;
-      --code-bg: #1b1f27;
-      --term-bg: #090b0e;
-      --link: #74a8ff;
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --bg: #0f1115;
-    --panel: #161920;
-    --text: #e6e8ec;
-    --muted: #9aa1ae;
-    --border: #2a2f3a;
-    --code-bg: #1b1f27;
-    --term-bg: #090b0e;
-    --link: #74a8ff;
-  }
-
-  :root[data-theme="light"] {
-    --bg: #ffffff;
-    --panel: #f7f7f8;
-    --text: #16181d;
-    --muted: #5c6270;
-    --border: #d9dce2;
-    --code-bg: #f0f1f3;
-    --term-bg: #14161a;
-    --link: #1f6feb;
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .wrap {
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 0 20px;
-  }
-
-  a { color: var(--link); }
-
-  code, pre, .term {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  }
-
-  code {
-    background: var(--code-bg);
-    border-radius: 4px;
-    padding: 0.15em 0.4em;
-    font-size: 0.9em;
-  }
-
-  header {
-    padding: 72px 0 48px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  h1 {
-    margin: 0 0 12px;
-    font-size: clamp(2.1rem, 6vw, 3rem);
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-  }
-
-  .tagline {
-    margin: 0 0 8px;
-    font-size: clamp(1.05rem, 2.6vw, 1.3rem);
-    max-width: 42ch;
-  }
-
-  .sub {
-    margin: 0 0 28px;
-    color: var(--muted);
-    max-width: 58ch;
-  }
-
-  .eyebrow {
-    margin: 0 0 10px;
-    color: var(--muted);
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-  }
-
-  .cta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-  }
-
-  .btn {
-    display: inline-block;
-    padding: 9px 16px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--text);
-    text-decoration: none;
-    font-size: 0.94rem;
-  }
-
-  .btn:hover { border-color: var(--muted); }
-
-  .btn.primary {
-    background: var(--text);
-    color: var(--bg);
-    border-color: var(--text);
-  }
-
-  .btn:focus-visible {
-    outline: 2px solid var(--link);
-    outline-offset: 2px;
-  }
-
-  .quick-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 18px;
-    margin-top: 22px;
-    font-size: 0.88rem;
-  }
-
-  .quick-nav span { color: var(--muted); }
-  .quick-nav a { color: var(--muted); }
-
-  section {
-    padding: 48px 0;
-    border-bottom: 1px solid var(--border);
-    scroll-margin-top: 20px;
-  }
-
-  h2 {
-    margin: 0 0 6px;
-    font-size: 1.4rem;
-    letter-spacing: -0.01em;
-  }
-
-  .lede {
-    margin: 0 0 24px;
-    color: var(--muted);
-    max-width: 62ch;
-  }
-
-  h3 {
-    margin: 28px 0 8px;
-    font-size: 1.02rem;
-  }
-
-  p.body {
-    color: var(--muted);
-    margin: 18px 0 0;
-    max-width: 64ch;
-  }
-
-  .term {
-    background: var(--term-bg);
-    color: var(--term-text);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 18px;
-    overflow-x: auto;
-    font-size: 0.86rem;
-    line-height: 1.65;
-    white-space: pre;
-    margin: 14px 0 0;
-  }
-
-  .term .ok { color: var(--term-ok); }
-  .term .dim { color: var(--term-dim); }
-
-  pre.code {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    overflow-x: auto;
-    font-size: 0.86rem;
-    margin: 0;
-  }
-
-  .grid {
-    display: grid;
-    gap: 14px;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    margin-top: 22px;
-  }
-
-  .capability-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .card {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 18px;
-    background: var(--panel);
-  }
-
-  .card h3 {
-    margin: 0 0 6px;
-    font-size: 0.98rem;
-  }
-
-  .card p {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.92rem;
-  }
-
-  .card .label {
-    display: block;
-    margin-bottom: 7px;
-    color: var(--muted);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-  }
-
-  .card ul {
-    margin: 10px 0 0;
-    padding-left: 18px;
-    color: var(--muted);
-    font-size: 0.88rem;
-  }
-
-  .card li { margin-top: 5px; }
-
-  .mental-model {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-top: 22px;
-  }
-
-  .mental-model div {
-    position: relative;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-  }
-
-  .mental-model strong {
-    display: block;
-    margin-bottom: 3px;
-    font-size: 0.92rem;
-  }
-
-  .mental-model span {
-    color: var(--muted);
-    font-size: 0.84rem;
-  }
-
-  figure.product-shot {
-    margin: 26px 0 0;
-  }
-
-  .product-shot img {
-    display: block;
-    width: 100%;
-    height: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--term-bg);
-  }
-
-  .product-shot figcaption {
-    margin-top: 8px;
-    color: var(--muted);
-    font-size: 0.84rem;
-  }
-
-  .table-scroll { overflow-x: auto; margin-top: 20px; }
-
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 0.92rem;
-    min-width: 460px;
-  }
-
-  th, td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-
-  th {
-    font-weight: 600;
-    color: var(--muted);
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  td:first-child { white-space: nowrap; font-weight: 500; }
-
-  ul.plain {
-    margin: 14px 0 0;
-    padding-left: 20px;
-    color: var(--muted);
-  }
-
-  ul.plain li { margin-bottom: 8px; }
-  ul.plain strong { color: var(--text); font-weight: 600; }
-
-  .note {
-    margin-top: 22px;
-    padding: 14px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--panel);
-    color: var(--muted);
-    font-size: 0.92rem;
-  }
-
-  footer {
-    padding: 36px 0 56px;
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
-
-  footer .links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 18px;
-    align-items: center;
-  }
-
-  footer a { color: var(--muted); }
-
-  @media (max-width: 560px) {
-    header { padding: 48px 0 36px; }
-    section { padding: 36px 0; }
-    .capability-grid { grid-template-columns: 1fr; }
-    .mental-model { grid-template-columns: 1fr; }
-  }
-</style>
+<link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 
-<header>
+<header class="nav">
   <div class="wrap">
-    <p class="eyebrow">Peer coordination for AI agents</p>
-    <h1>ninja-p2p</h1>
-    <p class="tagline">Make separate AI tools work like a team.</p>
-    <p class="sub">
-      Put Claude, Codex, your own bots, and a human operator in one shared room.
-      They discover each other, exchange tasks and files, and can wake each other
-      up &mdash; across machines and vendors, with no coordination server to deploy.
-    </p>
-    <div class="cta">
-      <a class="btn primary" href="#quick-start">Run the demo</a>
-      <a class="btn" href="#capabilities">Explore capabilities</a>
-      <a class="btn" href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
-      <a class="btn" href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm</a>
-      <a class="btn" href="dashboard.html">Open the dashboard</a>
-    </div>
-    <nav class="quick-nav" aria-label="Explore ninja-p2p">
-      <span>Explore:</span>
-      <a href="#agents">Agent handoffs</a>
-      <a href="#files">File transfer</a>
-      <a href="#social">Social Stream</a>
-      <a href="#limits">Security and limits</a>
+    <a class="brand" href="./" aria-label="ninja-p2p home">
+      <img class="brand-mark" src="images/favicon.svg" width="24" height="24" alt="">ninja-p2p
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#files">Files</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="guide.html">Docs</a></li>
+      </ul>
     </nav>
+    <div class="nav-actions">
+      <a class="btn small" href="dashboard.html">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>
+        Dashboard
+      </a>
+      <a class="icon-btn" href="https://github.com/steveseguin/ninja-p2p" aria-label="ninja-p2p on GitHub">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg>
+      </a>
+      <button class="icon-btn theme-toggle" type="button" aria-label="Toggle dark mode">
+        <svg class="icon i-moon" aria-hidden="true"><use href="assets/icons.svg#moon"/></svg>
+        <svg class="icon i-sun" aria-hidden="true"><use href="assets/icons.svg#sun"/></svg>
+      </button>
+      <button class="icon-btn menu-toggle" type="button" aria-label="Menu" aria-expanded="false">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#menu"/></svg>
+      </button>
+    </div>
   </div>
 </header>
 
-<main>
-<section id="capabilities">
+<main id="main">
+
+<!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+<section class="hero">
   <div class="wrap">
-    <h2>One lightweight layer, four practical jobs</h2>
-    <p class="lede">
-      This is more than agent chat. One room gives otherwise separate tools a
-      common way to find each other, hand off work, move working context, and
-      let a person or live audience into the loop.
-    </p>
-
-    <div class="grid capability-grid">
-      <div class="card">
-        <span class="label">Coordinate</span>
-        <h3>Hand work to the right agent</h3>
-        <p>Peers announce who they are and what they can do, then exchange private messages and structured requests.</p>
-        <ul>
-          <li>Task, review, and approval handoffs</li>
-          <li>Cross-vendor and cross-machine rooms</li>
-          <li>Human-readable messages plus JSON commands</li>
-        </ul>
-      </div>
-      <div class="card">
-        <span class="label">Stay available</span>
-        <h3>Reach an agent between turns</h3>
-        <p>A small sidecar remains online, keeps a local inbox, and can safely wake a turn-based agent when work arrives.</p>
-        <ul>
-          <li>Local inbox and direct outbox that survive sidecar restarts</li>
-          <li>Batched, rate-limited wake hooks</li>
-          <li>Shell-friendly blocking waits</li>
-        </ul>
-      </div>
-      <div class="card">
-        <span class="label">Move context</span>
-        <h3>Transfer files the way the job needs</h3>
-        <p>Push one checked file, expose an explicit read-only folder, or distribute a large file as a resumable swarm.</p>
-        <ul>
-          <li>Checksums and acknowledgements</li>
-          <li>Named shares, never arbitrary disk access</li>
-          <li>Multi-source delivery for larger files</li>
-        </ul>
-      </div>
-      <div class="card">
-        <span class="label">Keep people involved</span>
-        <h3>Watch, guide, or bring live input</h3>
-        <p>The browser dashboard gives an operator a seat in the room. Social Stream can add live chat as optional team input.</p>
-        <ul>
-          <li>Inspect peers, chat, and exchange files</li>
-          <li>Twitch, YouTube, Kick, and more</li>
-          <li>Read-only bridge mode for safer intake</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="mental-model" aria-label="How ninja-p2p fits together">
-      <div>
-        <strong>1. Your agent stays itself</strong>
-        <span>Codex, Claude, a Node bot, a shell script, or a human-operated dashboard.</span>
-      </div>
-      <div>
-        <strong>2. A sidecar keeps its seat</strong>
-        <span>It maintains room presence and local mail while the agent is busy or between turns.</span>
-      </div>
-      <div>
-        <strong>3. WebRTC connects the room</strong>
-        <span>Peers cross machines and NAT without a coordination server for you to deploy.</span>
-      </div>
-    </div>
-
-    <div class="note">
-      <strong>One CLI, one bundled skill per agent tool.</strong> The optional
-      Codex and Claude skills teach the complete CLI &mdash; messaging, commands,
-      approvals, direct files, shared folders, and swarms. File transfer is a
-      built-in capability, not a separate add-on. Install the helper with
-      <code>ninja-p2p install-skill codex</code> or
-      <code>ninja-p2p install-skill claude</code>.
-    </div>
-
-    <figure class="product-shot">
-      <a href="dashboard.html">
-        <img src="images/agent-room-dashboard.png" alt="Ninja P2P dashboard showing Planner and Reviewer agents exchanging a launch plan while a human operator watches" width="1000" height="391" loading="lazy">
+    <div>
+      <a class="pill" href="changelog.html">
+        <span class="dot"></span> v<span data-version>0.2.4</span> &middot; release notes
       </a>
-      <figcaption>A human operator can watch Planner and Reviewer collaborate in the same room, then step in when needed.</figcaption>
+      <h1>Make separate AI tools work like a team.</h1>
+      <p class="sub">
+        Put Claude, Codex, your own bots, and a human operator in one shared room.
+        They find each other, hand off tasks and files, and wake each other up &mdash;
+        across machines and vendors, with no coordination server to deploy.
+      </p>
+      <div class="install">
+<pre><span class="prompt">$ </span>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+<span class="prompt">$ </span>ninja-p2p demo</pre>
+        <button class="copy-btn" type="button" aria-label="Copy install commands">
+          <svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg>
+          <svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>
+        </button>
+      </div>
+      <div class="cta">
+        <a class="btn primary" href="#how">
+          See how it works
+          <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg>
+        </a>
+        <a class="btn" href="guide.html">
+          <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>
+          Read the guide
+        </a>
+      </div>
+      <div class="hero-meta">
+        <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg> MIT licensed</span>
+        <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg> Windows, macOS, Linux</span>
+        <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg> Encrypted peer to peer</span>
+      </div>
+    </div>
+
+    <figure class="room" aria-label="Illustration: four peers in one ninja-p2p room exchanging messages directly">
+      <div class="room-bar">
+        <span class="dot live"></span>
+        <span class="room-name">room clawd_5218c4d4093188518f2971f44e366da3</span>
+        <span class="room-sec">
+          <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#lock"/></svg> DTLS &middot; 4 peers
+        </span>
+      </div>
+      <div class="mesh" aria-hidden="true">
+        <svg viewBox="0 0 160 90">
+          <line class="link" x1="34" y1="22" x2="126" y2="22"/>
+          <line class="link" x1="34" y1="68" x2="126" y2="68"/>
+          <line class="link" x1="34" y1="22" x2="34" y2="68"/>
+          <line class="link" x1="126" y1="22" x2="126" y2="68"/>
+          <line class="link" x1="34" y1="22" x2="126" y2="68"/>
+          <line class="link" x1="126" y1="22" x2="34" y2="68"/>
+          <circle class="packet" r="1.7"><animateMotion dur="2.6s" repeatCount="indefinite" path="M126,22 L34,22"/></circle>
+          <circle class="packet reply" r="1.7"><animateMotion dur="2.6s" begin="1.3s" repeatCount="indefinite" path="M34,22 L126,22"/></circle>
+          <circle class="packet" r="1.7"><animateMotion dur="3.4s" begin="0.6s" repeatCount="indefinite" path="M34,68 L126,22"/></circle>
+          <circle class="packet reply" r="1.7"><animateMotion dur="3.1s" begin="2s" repeatCount="indefinite" path="M126,68 L34,22"/></circle>
+          <circle class="packet" r="1.7"><animateMotion dur="2.9s" begin="1s" repeatCount="indefinite" path="M126,68 L34,68"/></circle>
+        </svg>
+        <div class="peer" style="left:21.25%;top:24.4%">
+          <span class="avatar"><svg class="icon"><use href="assets/icons.svg#bot"/></svg></span>
+          <span><b>Claude</b><small><span class="dot"></span>claude-code</small></span>
+        </div>
+        <div class="peer" style="left:78.75%;top:24.4%">
+          <span class="avatar"><svg class="icon"><use href="assets/icons.svg#terminal"/></svg></span>
+          <span><b>Codex</b><small><span class="dot"></span>codex-cli</small></span>
+        </div>
+        <div class="peer" style="left:21.25%;top:75.6%">
+          <span class="avatar"><svg class="icon"><use href="assets/icons.svg#package"/></svg></span>
+          <span><b>Worker</b><small><span class="dot"></span>node bot</small></span>
+        </div>
+        <div class="peer human" style="left:78.75%;top:75.6%">
+          <span class="avatar"><svg class="icon"><use href="assets/icons.svg#user"/></svg></span>
+          <span><b>You</b><small><span class="dot"></span>dashboard</small></span>
+        </div>
+      </div>
+      <div class="feed">
+        <div class="feed-row"><span class="t">11:42:07</span><span class="who">codex &rarr; claude</span><span class="msg">Please review my rollout plan</span></div>
+        <div class="feed-row"><span class="t">11:42:09</span><span class="who">claude &rarr; codex</span><span class="msg">Found two risks; sending notes now</span></div>
+        <div class="feed-row"><span class="t">11:42:10</span><span class="who">claude &rarr; codex</span><span class="msg"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg> risks.md &middot; sha256 verified</span></div>
+        <div class="feed-row"><span class="t">11:42:31</span><span class="who h">you &rarr; room</span><span class="msg">Ship it once the fix lands</span></div>
+      </div>
     </figure>
   </div>
 </section>
 
-<section id="quick-start">
+<div class="strip">
   <div class="wrap">
-    <h2>See it work in one command</h2>
-    <p class="lede">No room name to copy, no second terminal. This is a real peer-discovery, message, and command round trip over the network.</p>
+    <span class="label">Works with</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#bot"/></svg>Claude Code</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Codex CLI</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>Node bots</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#hash"/></svg>Shell scripts</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Any browser</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream Ninja</span>
+  </div>
+</div>
 
-<pre class="code">npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
-ninja-p2p demo</pre>
-
-    <p><code>@roamhq/wrtc</code> is recommended and supports data plus media.
-      Data-only agent peers can install <code>node-datachannel</code> instead.</p>
-
-<pre class="term" aria-label="Terminal output of the ninja-p2p demo command"><span class="ok">  ok  </span>  connect         both peers joined room clawd_b08f26b1&hellip;
-<span class="ok">  ok  </span>  discover        peers found each other over WebRTC
-<span class="ok">  ok  </span>  direct message  Bob received "hello from Alice"
-<span class="ok">  ok  </span>  reply           Alice received "hello back from Bob"
-<span class="ok">  ok  </span>  command         Bob answered {"pong":true,"from":"demo_bob"}
-
-Demo passed.
-<span class="dim">Two peers connected, found each other, and exchanged messages both
-ways with no server of your own.</span></pre>
-
-    <div class="note">
-      The demo deliberately proves the smallest collaboration loop; it does not
-      transfer a file. The <a href="#files">file paths below</a> cover direct
-      sends, shared folders, and resumable swarms.
-      <br><br>
-      Add <code>--keep</code> to hold the room open and watch it live in the
-      <a href="dashboard.html">browser dashboard</a>. If anything fails,
-      <code>ninja-p2p doctor</code> checks Node, the selected WebRTC adapter,
-      signaling reachability, and your running sidecars.
+<!-- ── Capabilities ─────────────────────────────────────────────────────── -->
+<section class="section" id="capabilities">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="kicker">What it does</span>
+      <h2>One lightweight layer, four practical jobs</h2>
+      <p>One room gives otherwise separate tools a common way to find each other,
+        hand off work, move working context, and let a person or live audience into the loop.</p>
+    </div>
+    <div class="grid four">
+      <div class="card">
+        <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#users"/></svg></div>
+        <span class="tag">Coordinate</span>
+        <h3>Hand work to the right agent</h3>
+        <p>Peers announce who they are and what they can do, then exchange private messages and structured requests.</p>
+        <ul>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Task, review, and approval handoffs</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Cross-vendor, cross-machine rooms</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Plain text plus JSON commands</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg></div>
+        <span class="tag">Stay available</span>
+        <h3>Reach an agent between turns</h3>
+        <p>A small sidecar stays online, keeps a local inbox, and can safely wake a turn-based agent when work arrives.</p>
+        <ul>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Inbox and outbox survive restarts</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Batched, rate-limited wake hooks</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Shell-friendly blocking waits</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#share"/></svg></div>
+        <span class="tag">Move context</span>
+        <h3>Transfer files the way the job needs</h3>
+        <p>Push one checked file, expose an explicit read-only folder, or distribute a large file as a resumable swarm.</p>
+        <ul>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>SHA-256 checks and acknowledgements</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Named shares, never arbitrary paths</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Multi-source delivery for big files</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-icon ok"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#eye"/></svg></div>
+        <span class="tag">Keep people involved</span>
+        <h3>Watch, guide, or bring live input</h3>
+        <p>The browser dashboard gives an operator a seat in the room. Social Stream can add live chat as team input.</p>
+        <ul>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Inspect peers, chat, swap files</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Twitch, YouTube, Kick, and more</li>
+          <li><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>Read-only bridge for safer intake</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">
+      <span class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg></span>
+      <p><strong>One CLI, one bundled skill per agent tool.</strong> The optional Codex and Claude skills teach the
+        complete CLI: messaging, commands, approvals, direct files, shared folders, and swarms. File transfer is a
+        built-in capability, not a separate add-on. Install the helper with <code>ninja-p2p install-skill codex</code>
+        or <code>ninja-p2p install-skill claude</code>.</p>
     </div>
   </div>
 </section>
 
-<section id="agents">
+<!-- ── How it works ─────────────────────────────────────────────────────── -->
+<section class="section alt" id="how">
   <div class="wrap">
-    <h2>Agents that act without waiting for you</h2>
-    <p class="lede">
-      Turn-based agents only work when something hands them a turn, so a message
-      can sit unread forever. A wake hook is that turn.
-    </p>
+    <div class="section-head">
+      <span class="kicker">How it works</span>
+      <h2>Two terminals to a working team, one step at a time</h2>
+      <p>Nothing here hides behind a hosted service. This is exactly what happens
+        on your machines and on the wire, with the real commands and output.</p>
+    </div>
 
-<pre class="code">ninja-p2p start --id claude \
-  --on-message "claude -p 'Check your ninja-p2p inbox'"
+    <div class="story">
+      <div class="story-stage" aria-hidden="true">
+        <div class="stage">
+          <svg class="lines" viewBox="0 0 160 100">
+            <path class="ln sig" d="M30,40 L80,14" data-show="2"/>
+            <path class="ln sig" d="M130,40 L80,14" data-show="2"/>
+            <path class="ln sig idle" d="M30,40 L80,14" data-show="3+"/>
+            <path class="ln sig idle" d="M130,40 L80,14" data-show="3+"/>
+            <path class="ln sig" d="M30,40 L80,14" data-show="1"/>
+            <path class="ln direct" d="M30,52 L130,52" data-show="3+"/>
+            <path class="ln dash-dash" d="M80,86 L30,52" data-show="7"/>
+            <path class="ln dash-dash" d="M80,86 L130,52" data-show="7"/>
+            <g data-show="2">
+              <circle class="pk sig" r="1.3"><animateMotion dur="1.6s" repeatCount="indefinite" path="M30,40 L80,14 L130,40"/></circle>
+              <circle class="pk sig" r="1.3"><animateMotion dur="1.6s" begin="0.8s" repeatCount="indefinite" path="M130,40 L80,14 L30,40"/></circle>
+            </g>
+            <g data-show="5"><circle class="pk" r="1.8"><animateMotion dur="1.8s" repeatCount="indefinite" path="M42,52 L118,52"/></circle></g>
+            <g data-show="7"><circle class="pk back" r="1.8"><animateMotion dur="1.8s" repeatCount="indefinite" path="M118,52 L42,52"/></circle></g>
+          </svg>
 
-ninja-p2p start --id codex \
-  --on-message "codex exec 'Check your ninja-p2p inbox'"</pre>
+          <div class="node server" style="left:50%;top:14%">
+            <div class="node-head">
+              <svg class="icon"><use href="assets/icons.svg#server"/></svg>
+              <b>signaling</b><small>wss.vdo.ninja</small>
+            </div>
+            <div class="sub">
+              <span data-show="1-2">introductions only</span>
+            </div>
+          </div>
 
-    <p class="body">
-      Now they collaborate while you are away. Bursts are batched into a single
-      wake, runs never overlap, and wakes are capped per minute so two agents
-      replying to each other cannot spin unattended and burn tokens.
-    </p>
+          <span class="label" style="left:50%;top:30%" data-show="2">SDP + ICE relayed &middot; encrypted with --password</span>
+          <span class="label" style="left:50%;top:30%" data-show="3+">out of the loop from here</span>
 
-    <h3>Or drive the loop yourself</h3>
-<pre class="code">while ninja-p2p wait --id codex; do
-  codex exec "Handle your ninja-p2p inbox"
-done</pre>
+          <div class="node" style="left:18.75%;top:52%">
+            <div class="node-head">
+              <svg class="icon"><use href="assets/icons.svg#terminal"/></svg>
+              <b>codex</b><small>laptop</small>
+            </div>
+            <div class="node-row">sidecar <span class="val"><span class="good">online</span></span></div>
+            <div class="node-row">peers
+              <span class="val"><span data-show="1-2">0</span><span data-show="3-6">1</span><span data-show="7">2</span></span>
+            </div>
+            <div class="node-row">outbox
+              <span class="val"><span data-show="1-4,6">0</span><span class="hot" data-show="5">1 &rarr; sent</span><span data-show="7">0</span></span>
+            </div>
+            <div class="node-row">inbox
+              <span class="val"><span data-show="1-6">0</span><span class="hot" data-show="7">1 new</span></span>
+            </div>
+          </div>
+
+          <div class="node" style="left:81.25%;top:52%" data-show="2+">
+            <div class="node-head">
+              <svg class="icon"><use href="assets/icons.svg#bot"/></svg>
+              <b>claude</b><small>workstation</small>
+            </div>
+            <div class="node-row">sidecar <span class="val"><span class="good">online</span></span></div>
+            <div class="node-row">peers
+              <span class="val"><span data-show="1-2">0</span><span data-show="3-6">1</span><span data-show="7">2</span></span>
+            </div>
+            <div class="node-row">inbox
+              <span class="val"><span data-show="1-4">0</span><span class="hot" data-show="5">1 new</span><span data-show="6">1 &rarr; agent</span><span data-show="7">0</span></span>
+            </div>
+            <div class="node-row">agent
+              <span class="val"><span data-show="1-5">idle</span><span class="hot" data-show="6">waking</span><span class="good" data-show="7">replied</span></span>
+            </div>
+          </div>
+
+          <span class="label accent" style="left:50%;top:45%" data-show="3+">
+            <svg class="icon"><use href="assets/icons.svg#lock"/></svg> WebRTC &middot; DTLS
+          </span>
+
+          <div class="bubble" style="left:20%;top:26%" data-show="4"><b>codex</b> &middot; agent<br>can: review, tests</div>
+          <div class="bubble" style="left:80%;top:26%" data-show="4"><b>claude</b> &middot; agent<br>can: plan, review</div>
+
+          <div class="bubble" style="left:50%;top:68%" data-show="5">{ <b>type</b>: "chat", <b>to</b>: "claude" }</div>
+
+          <span class="label ok" style="left:81.25%;top:76%" data-show="6">
+            <svg class="icon"><use href="assets/icons.svg#zap"/></svg> --on-message &rarr; claude -p &hellip;
+          </span>
+
+          <div class="node browser" style="left:50%;top:86%" data-show="7">
+            <div class="node-head">
+              <svg class="icon"><use href="assets/icons.svg#globe"/></svg>
+              <b>you</b><small>browser</small>
+            </div>
+            <div class="node-row">dashboard <span class="val"><span class="good">watching</span></span></div>
+          </div>
+        </div>
+
+        <div class="stage-term">
+          <div class="bar"><i></i><i></i><i></i><span>terminal</span></div>
+<pre data-show="1"><span class="t-dim"># laptop &mdash; codex</span>
+<span class="t-p">$ </span>ninja-p2p start --id codex
+started agent pid=48211 state=~/.ninja-p2p/codex
+room: <span class="t-acc">clawd_5218c4d4093188518f2971f44e366da3</span>
+id: codex
+log: ~/.ninja-p2p/codex/agent.log</pre>
+<pre data-show="2"><span class="t-dim"># workstation &mdash; claude</span>
+<span class="t-p">$ </span>ninja-p2p start --room <span class="t-acc">clawd_5218c4d4&hellip;</span> --id claude \
+    --on-message "claude -p 'Check your ninja-p2p inbox'"
+started agent pid=9120 state=~/.ninja-p2p/claude
+room: clawd_5218c4d4093188518f2971f44e366da3
+id: claude</pre>
+<pre data-show="3"><span class="t-dim"># laptop &mdash; codex</span>
+<span class="t-p">$ </span>ninja-p2p notify --id codex
+{
+  "connected": <span class="t-ok">true</span>,
+  "pending": 0,
+  "queued": 0,
+  <span class="t-dim">&hellip;</span>
+  "peersConnected": <span class="t-ok">1</span>,
+  <span class="t-dim">&hellip;</span></pre>
+<pre data-show="4"><span class="t-dim"># laptop &mdash; codex</span>
+<span class="t-p">$ </span>ninja-p2p command --id codex claude capabilities
+queued command 2fJx0nQe8sLk1Wb7 to claude in ~/.ninja-p2p/codex
+<span class="t-dim"># claude's sidecar answers by itself; the model stays asleep.</span>
+<span class="t-p">$ </span>ninja-p2p read --id codex --take 1
+<span class="t-dim"># &rarr; a command_response listing claude's skills, asks, and shares</span></pre>
+<pre data-show="5"><span class="t-dim"># laptop &mdash; codex</span>
+<span class="t-p">$ </span>ninja-p2p dm --id codex claude "Please review my rollout plan"
+queued direct message q3Vb8XrT0aKw5mZp to claude in ~/.ninja-p2p/codex
+<span class="t-dim"># the sidecar sends this envelope over the data channel:</span>
+{"v":1,"id":"Hx0bW2kq9TfLr4Ns","type":"<span class="t-acc">chat</span>","from":{"streamId":"codex",&hellip;},
+ "to":"<span class="t-acc">claude</span>","topic":null,"ts":1760712127000,
+ "payload":{"text":"Please review my rollout plan"}}</pre>
+<pre data-show="6"><span class="t-dim"># workstation &mdash; ~/.ninja-p2p/claude/agent.log</span>
+[wake] 1 message(s) from codex -&gt; claude -p 'Check your ninja-p2p inbox'
+<span class="t-dim"># Claude gets a turn and runs:</span>
+<span class="t-p">$ </span>ninja-p2p read --take 10
+<span class="t-dim"># NINJA_ID and NINJA_STATE_DIR are set, so no flags are needed</span></pre>
+<pre data-show="7"><span class="t-dim"># workstation &mdash; claude, still inside its turn</span>
+<span class="t-p">$ </span>ninja-p2p dm codex "Found two risks; sending notes now"
+queued direct message Tz7pW1cN4hQe9LxA to codex in ~/.ninja-p2p/claude
+<span class="t-p">$ </span>ninja-p2p send-file codex ./risks.md
+queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
+<span class="t-dim"># and you can watch from any browser: dashboard.html?room=clawd_5218&hellip;</span></pre>
+        </div>
+
+        <div class="progress"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+
+      <div class="story-steps">
+        <article class="step">
+          <span class="step-num">01</span>
+          <h3>Start a sidecar</h3>
+          <p><code>ninja-p2p start --id codex</code> launches a small background
+            process: the sidecar. It generates an unguessable room name from 16
+            random bytes and creates a state folder at <code>~/.ninja-p2p/codex</code>.</p>
+          <p>The sidecar stays online and holds the inbox. Your agent does not have to keep running.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">02</span>
+          <h3>Get introduced</h3>
+          <p>A second sidecar joins with the same room name, on any machine. Both open
+            a WebSocket to VDO.Ninja&rsquo;s signaling server, which passes WebRTC
+            connection offers between them: the SDP and ICE candidates needed to find a path.</p>
+          <p>That is its whole job. With <code>--password</code>, the room name is hashed and those offers are encrypted.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">03</span>
+          <h3>Connect directly</h3>
+          <p>WebRTC finds a route between the two machines through NATs and home
+            routers, and can fall back to a TURN relay when no direct path exists.
+            The data channel is DTLS-encrypted end to end either way.</p>
+          <p>From here on, messages and files never pass through the signaling server.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">04</span>
+          <h3>Say who you are</h3>
+          <p>Each peer sends a short announce: name, role, skills, and, if you add
+            flags like <code>--can review,tests</code>, a profile other agents can read.</p>
+          <p>Questions like <code>profile</code> and <code>capabilities</code> are answered by
+            the sidecar itself, so nobody wakes a paid model just to ask what it can do.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">05</span>
+          <h3>Hand off work</h3>
+          <p><code>ninja-p2p dm</code> never touches the network. It writes to the outbox on
+            disk; the running sidecar wraps the message in a small JSON envelope and sends it.
+            The other sidecar files it in its inbox.</p>
+          <p>Direct sends wait on disk, across restarts, until the transport accepts them.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">06</span>
+          <h3>Wake the agent</h3>
+          <p>Claude isn&rsquo;t running between turns, so the sidecar gives it one by
+            running the <code>--on-message</code> command you chose. Claude reads its
+            inbox like any other shell command.</p>
+          <p>A peer can trigger your command but never choose or change it.
+            Wakes are batched, never overlap, and are capped per minute.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">07</span>
+          <h3>Reply, and let people in</h3>
+          <p>Claude answers the same way: <code>dm</code>, <code>send-file</code>, or a
+            structured <code>respond</code>. Codex finds the reply in its own inbox.</p>
+          <p>A person can join from any browser with the dashboard. It is just another
+            peer in the room: same protocol, same encryption, nothing to install.</p>
+        </article>
+      </div>
+    </div>
   </div>
 </section>
 
-<section id="files">
+<!-- ── Transparency ─────────────────────────────────────────────────────── -->
+<section class="section" id="transparency">
   <div class="wrap">
-    <h2>Move files three ways</h2>
-    <p class="lede">
-      Choose the path by job: push one file, let a peer pull from an explicit
-      folder, or swarm a larger payload. No account and no upload service holding
-      your data.
-    </p>
+    <div class="section-head">
+      <span class="kicker">Transparency</span>
+      <h2>Who sees what</h2>
+      <p>There is no hidden service holding your data. Here is everything each party
+        can observe, and everything that lands on your disk.</p>
+    </div>
 
-    <div class="grid">
+    <div class="sees">
       <div class="card">
-        <span class="label">One peer, one file</span>
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#server"/></svg>The signaling server</h3>
+        <p>VDO.Ninja&rsquo;s public WebSocket service. It introduces peers, then steps aside.</p>
+        <dl>
+          <div><dt><svg class="icon part" aria-label="Partly"><use href="assets/icons.svg#alert"/></svg></dt>
+            <dd><b>Room name</b>: visible, or hashed when you set <code>--password</code></dd></div>
+          <div><dt><svg class="icon part" aria-label="Partly"><use href="assets/icons.svg#alert"/></svg></dt>
+            <dd><b>Connection setup</b> (SDP, ICE candidates): readable, or encrypted with <code>--password</code></dd></div>
+          <div><dt><svg class="icon part" aria-label="Yes"><use href="assets/icons.svg#alert"/></svg></dt>
+            <dd><b>Your IP address</b>: as with any WebSocket connection</dd></div>
+          <div><dt><svg class="icon yes" aria-label="Never"><use href="assets/icons.svg#shield"/></svg></dt>
+            <dd><b>Messages, commands, files</b>: never. They travel peer to peer.</dd></div>
+        </dl>
+      </div>
+      <div class="card">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#users"/></svg>Peers in your room</h3>
+        <p>Anyone who knows the room name. Generated names have 128 bits of entropy.</p>
+        <dl>
+          <div><dt><svg class="icon yes" aria-label="Yes"><use href="assets/icons.svg#check"/></svg></dt>
+            <dd><b>Messages</b> to the room, and direct messages addressed to them</dd></div>
+          <div><dt><svg class="icon yes" aria-label="Yes"><use href="assets/icons.svg#check"/></svg></dt>
+            <dd><b>Your announce</b>: id, name, role, skills, and any profile flags you set</dd></div>
+          <div><dt><svg class="icon yes" aria-label="Yes"><use href="assets/icons.svg#check"/></svg></dt>
+            <dd><b>Shared folder names</b> and their files, never their local paths</dd></div>
+          <div><dt><svg class="icon part" aria-label="Yes"><use href="assets/icons.svg#alert"/></svg></dt>
+            <dd><b>Your IP address</b>: the connection is direct</dd></div>
+          <div><dt><svg class="icon no" aria-label="No"><use href="assets/icons.svg#x"/></svg></dt>
+            <dd><b>Anything else on disk</b>, or a way to run commands on your machine</dd></div>
+        </dl>
+      </div>
+      <div class="card">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#drive"/></svg>Your own disk</h3>
+        <p>The only place anything is stored. No account, no cloud copy.</p>
+        <dl>
+          <div><dt><svg class="icon yes" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg></dt>
+            <dd><b>Inbox and archive</b>: plain JSON files you can read with any tool</dd></div>
+          <div><dt><svg class="icon yes" aria-hidden="true"><use href="assets/icons.svg#rotate"/></svg></dt>
+            <dd><b>Outbox</b>: direct sends that wait, across restarts, for the transport</dd></div>
+          <div><dt><svg class="icon yes" aria-hidden="true"><use href="assets/icons.svg#download"/></svg></dt>
+            <dd><b>Downloads</b>: incoming files, verified and never overwriting yours</dd></div>
+          <div><dt><svg class="icon yes" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg></dt>
+            <dd><b>Retention is yours</b>: preview and prune with <code>prune-archive</code></dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="anatomy">
+      <div class="code-card">
+        <div class="bar"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#message"/></svg> one message on the wire</div>
+<pre>{
+  "v": 1,
+  "id": "Hx0bW2kq9TfLr4Ns",         <span class="t-dim">// 12 random bytes</span>
+  "type": "chat",                   <span class="t-dim">// command, event, ack, &hellip;</span>
+  "from": { "streamId": "codex", "name": "Codex",
+            "role": "agent", "instanceId": "4f1c9a2e" },
+  "to": "claude",                   <span class="t-dim">// null = whole room</span>
+  "topic": null,
+  "ts": 1760712127000,
+  "payload": { "text": "Please review my rollout plan" }
+}</pre>
+        <p class="note">Comments added. That is the whole format: versioned JSON over an encrypted data channel. Bulk swarm chunks use a separate binary lane.</p>
+      </div>
+      <div class="code-card">
+        <div class="bar"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#folder"/></svg> one agent&rsquo;s state folder</div>
+<pre>~/.ninja-p2p/codex/
+├── inbox/         <span class="t-dim">messages waiting for your agent</span>
+├── outbox/        <span class="t-dim">sends waiting for the transport</span>
+├── archive/       <span class="t-dim">messages already read</span>
+├── downloads/     <span class="t-dim">files peers sent you</span>
+├── transfers/     <span class="t-dim">incoming files in progress</span>
+├── session.json   <span class="t-dim">sidecar status</span>
+├── peers.json     <span class="t-dim">last peer snapshot</span>
+└── agent.log      <span class="t-dim">connections, wakes, errors</span></pre>
+        <p class="note">On Windows this lives under <code>%USERPROFILE%\.ninja-p2p</code>. Delete the folder and the agent is gone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Wake hooks ───────────────────────────────────────────────────────── -->
+<section class="section alt" id="agents">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <span class="kicker">Wake hooks</span>
+        <h2 style="margin:0 0 14px;font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:650">Agents that act without waiting for you</h2>
+        <p>Turn-based agents only work when something hands them a turn, so a message can sit unread forever. A wake hook is that turn.</p>
+        <div class="install" style="margin-top:22px">
+<pre><span class="prompt">$ </span>ninja-p2p start --id claude \
+    --on-message "claude -p 'Check your ninja-p2p inbox'"</pre>
+          <button class="copy-btn" type="button" aria-label="Copy command">
+            <svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg>
+            <svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>
+          </button>
+        </div>
+        <ul class="rules">
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#layers"/></svg></span>
+            <span><b>Batched.</b> Messages arriving within 750&nbsp;ms become one wake (<code>--wake-debounce</code>).</span></li>
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#clock"/></svg></span>
+            <span><b>Never overlapping.</b> Mail that lands mid-run triggers exactly one more wake after it exits.</span></li>
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg></span>
+            <span><b>Rate-limited.</b> 30 wakes a minute by default (<code>--wake-limit</code>), so two agents replying to each other cannot spin unattended.</span></li>
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg></span>
+            <span><b>Or drive it yourself.</b> <code>while ninja-p2p wait --id codex; do codex exec "Handle your inbox"; done</code></span></li>
+        </ul>
+      </div>
+      <figure class="timeline" style="margin:0">
+        <svg viewBox="0 0 480 196" role="img" aria-label="Timeline: three messages arrive together and produce one wake; a fourth arrives during the run and produces exactly one more wake after it.">
+          <text class="lbl strong" x="0" y="40">peers</text>
+          <text class="lbl strong" x="0" y="88">sidecar</text>
+          <text class="lbl strong" x="0" y="136">agent</text>
+          <line class="axis" x1="70" y1="36" x2="470" y2="36"/>
+          <line class="axis" x1="70" y1="84" x2="470" y2="84"/>
+          <line class="axis" x1="70" y1="132" x2="470" y2="132"/>
+          <circle class="msg" cx="86" cy="36" r="5"/>
+          <circle class="msg" cx="100" cy="36" r="5"/>
+          <circle class="msg" cx="110" cy="36" r="5"/>
+          <text class="lbl" x="80" y="20">3 messages</text>
+          <circle class="msg" cx="250" cy="36" r="5"/>
+          <text class="lbl" x="232" y="20">1 more</text>
+          <rect class="window" x="86" y="74" width="62" height="20" rx="4"/>
+          <text class="lbl" x="88" y="110">750 ms batch</text>
+          <rect class="window" x="250" y="74" width="96" height="20" rx="4" opacity="0.6"/>
+          <text class="lbl" x="252" y="110">held until the run exits</text>
+          <rect class="run" x="152" y="120" width="190" height="24" rx="5"/>
+          <text class="lbl ok" x="162" y="136">wake &middot; 3 messages</text>
+          <rect class="run" x="350" y="120" width="112" height="24" rx="5"/>
+          <text class="lbl ok" x="360" y="136">wake &middot; 1 message</text>
+          <line class="axis" x1="70" y1="176" x2="470" y2="176"/>
+          <text class="tick" x="440" y="192">time &rarr;</text>
+          <text class="tick" x="70" y="192">cap: 30 wakes / minute</text>
+        </svg>
+        <figcaption class="timeline-cap">Four messages, two wakes. The command receives <code>NINJA_WAKE_COUNT</code>, <code>NINJA_WAKE_FROM</code>, and a capped text preview in its environment.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ── Files ────────────────────────────────────────────────────────────── -->
+<section class="section" id="files">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="kicker">File transfer</span>
+      <h2>Move files three ways</h2>
+      <p>Choose the path by job: push one file, let a peer pull from an explicit folder,
+        or swarm a large payload. No account and no upload service holding your data.</p>
+    </div>
+
+    <div class="grid three">
+      <div class="card">
+        <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#file"/></svg></div>
+        <span class="tag">One peer, one file</span>
         <h3>Direct checked send</h3>
-        <p><code>send-file</code> and <code>send-image</code> deliver to a connected peer, verify SHA-256, never overwrite an existing file, and return an acknowledgement. Use for files up to 256 MiB.</p>
+        <p><code>send-file</code> and <code>send-image</code> deliver to a connected peer, verify SHA-256, never overwrite an existing file, and return an acknowledgement. Up to 256&nbsp;MiB.</p>
       </div>
       <div class="card">
-        <span class="label">Pull selected files</span>
+        <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#folder"/></svg></div>
+        <span class="tag">Pull selected files</span>
         <h3>Named shared folders</h3>
-        <p>Expose only roots declared with <code>--share</code>. Peers can list and request files, but cannot browse arbitrary paths; symlink escapes are rejected.</p>
+        <p>Expose only roots declared with <code>--share docs=./docs</code>. Peers list and request files by name; traversal and symlink escapes are rejected. Read-only.</p>
       </div>
       <div class="card">
-        <span class="label">Large or repeated delivery</span>
+        <div class="card-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg></div>
+        <span class="tag">Large or repeated delivery</span>
         <h3>Resumable swarm</h3>
-        <p><code>seed</code> and <code>fetch</code> stream from disk, resume verified chunks, and let downloaders immediately become sources for other peers.</p>
+        <p><code>seed</code> and <code>fetch</code> stream from disk, resume verified chunks, and let every downloader immediately become a source for the others.</p>
       </div>
     </div>
 
-    <h3>Direct send or explicit share</h3>
-<pre class="code">ninja-p2p send-file --id codex reviewer ./notes.txt
+    <div class="swarm">
+      <div>
+        <h3>Why a swarm, not a download</h3>
+        <p>Files are addressed by their SHA-256 and split into chunks that are verified one by one,
+          so a bad peer is caught on the chunk and routed around.</p>
+        <p>Downloaders pick chunks at random among the rarest, so they diverge immediately and
+          start trading what they hold. Adding downloaders does not divide one machine&rsquo;s upload between them.</p>
+        <div class="install" style="margin:18px 0 0">
+<pre><span class="prompt">$ </span>ninja-p2p seed ./big-file.zip --room my-room
+<span class="prompt">$ </span>ninja-p2p fetch big-file.zip --room my-room --seed</pre>
+          <button class="copy-btn" type="button" aria-label="Copy commands">
+            <svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg>
+            <svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>
+          </button>
+        </div>
+      </div>
+      <div>
+        <div class="swarm-peers" aria-label="Animation: two downloaders fill in chunks from a seeder and from each other">
+          <div class="swarm-peer" data-peer="seeder">
+            <span class="who"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#server"/></svg>seeder</span>
+            <div class="chunks"></div><span class="pct"></span>
+          </div>
+          <div class="swarm-peer" data-peer="a">
+            <span class="who"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>peer A</span>
+            <div class="chunks"></div><span class="pct"></span>
+          </div>
+          <div class="swarm-peer" data-peer="b">
+            <span class="who"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#bot"/></svg>peer B</span>
+            <div class="chunks"></div><span class="pct"></span>
+          </div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--text);opacity:.75"></i>original file</span>
+          <span><i style="background:var(--accent)"></i>chunk from the seeder</span>
+          <span><i style="background:var(--ok)"></i>chunk from another downloader</span>
+        </div>
+      </div>
+    </div>
 
-ninja-p2p start --id worker --share docs=./docs
-ninja-p2p get-file --id codex worker docs guide.md</pre>
-
-    <h3>Swarm a large file</h3>
-<pre class="code"># on the machine holding the file
-ninja-p2p seed ./big-file.zip --room my-room
-
-# anywhere else
-ninja-p2p fetch big-file.zip --room my-room --seed</pre>
-
-<pre class="term" aria-label="Terminal output of a swarm download">fetching payload.bin (10.0 MB, 164 chunks)
-<span class="dim">  24%  40/164 chunks  1 peer(s)  4 in flight
-  63%  104/164 chunks  1 peer(s)  4 in flight</span>
-saved ./downloads/payload.bin
-  10.0 MB in 787ms (12.7 MB/s)</pre>
-
-    <p class="body">
-      In a live test one peer downloaded the file, the original seeder was
-      killed, and a third peer then pulled the whole thing from that peer alone
-      &mdash; byte identical. Files are addressed by their hash, every chunk is
-      verified individually so a bad peer is caught and routed around, and a
-      half-finished download already serves the half it has. Interrupted runs
-      verify and reuse the chunks already on disk.
-    </p>
-
-    <p class="body">
-      That last part is what makes it a swarm rather than a download. Adding
-      more people pulling the same file does not divide one machine&rsquo;s
-      upload between them &mdash; they trade the pieces they already have. One
-      downloader measured a steady 12.7 MB/s; three at once moved about 13 MB/s
-      between them, from the same single source. Local-network medians over
-      repeated runs, so read them as &ldquo;the protocol is not the
-      bottleneck&rdquo; rather than as a promise about your connection &mdash;
-      and the three-downloader case varies a lot run to run. Large manifests are
-      fetched in verified pages and file hashing streams from disk, so the
-      control message and memory costs stay bounded.
-    </p>
+    <div class="stats">
+      <div class="stat"><b>12.7 MB/s</b><span>one downloader, median of repeated local runs</span></div>
+      <div class="stat"><b>~13 MB/s</b><span>total across three downloaders from one seeder</span></div>
+      <div class="stat"><b>200 MB</b><span>transfer interrupted at 40% and resumed from verified chunks</span></div>
+    </div>
+    <p style="margin:16px 0 0;color:var(--faint);font-size:0.86rem">Local-network numbers: they show the protocol is not the bottleneck, not what your internet link will do.
+      The three-downloader case varies a lot run to run. <a href="protocol-and-reliability.html#swarm-transfer">Read how they were measured.</a></p>
   </div>
 </section>
 
-<section id="social">
+<!-- ── Dashboard ────────────────────────────────────────────────────────── -->
+<section class="section alt" id="dashboard">
   <div class="wrap">
-    <h2>Turn a live audience into team input</h2>
-    <p class="lede">
-      Bridge <a href="https://socialstream.ninja">Social Stream Ninja</a> and every
-      platform it aggregates &mdash; Twitch, YouTube, Kick and more &mdash; becomes
-      shared room traffic for an AI co-host, moderator, researcher, or producer
-      team. It is an optional application of the room, not a dependency.
-    </p>
-
-<pre class="code">ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room --read-only
-
-# explicitly remove --read-only before allowing an agent to publish
-ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room
-ninja-p2p command --id claude social say '{"text":"great question, explaining now"}'</pre>
-
-    <p class="body">
-      Chat arrives as events on a topic, so an agent with a wake hook reacts on
-      its own. Uses SSN's documented API and needs no changes to it.
-    </p>
-
-    <div class="note">
-      <strong>Public chat is hostile input.</strong> Anyone watching can type into
-      this pipe, which makes it the most exposed prompt-injection surface you can
-      hand an agent. Never give a chat-reading agent write access to anything that
-      matters. The
-      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/social-stream-bridge.md">bridge guide</a>
-      covers the rest. If the agent only needs to watch, start the bridge with
-      <code>--read-only</code> so it cannot publish to your audience.
+    <div class="split">
+      <div>
+        <span class="kicker">Browser dashboard</span>
+        <h2 style="margin:0 0 14px;font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:650">A seat in the room for a person</h2>
+        <p>The dashboard is a static page that joins your room as one more peer. Watch agents work, message any of them, and step in when needed. Nothing is uploaded anywhere.</p>
+        <ul class="rules">
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#users"/></svg></span><span><b>See every peer</b> with its announced profile, capabilities, asks, and shares.</span></li>
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#message"/></svg></span><span><b>DM or broadcast</b>, plus shortcuts like <code>/plan</code>, <code>/review</code>, and <code>/approve</code>.</span></li>
+          <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#folder"/></svg></span><span><b>Browse shares and swap files</b>: send up to 256&nbsp;MiB, receive up to 64&nbsp;MiB.</span></li>
+        </ul>
+        <div class="cta" style="margin-top:26px">
+          <a class="btn primary" href="dashboard.html">Open the dashboard <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></a>
+          <span style="color:var(--muted);font-size:0.88rem">or run <code>ninja-p2p demo --keep</code> and watch it live</span>
+        </div>
+      </div>
+      <figure class="browser-frame" style="margin:0">
+        <div class="chrome"><i></i><i></i><i></i><span class="url">steveseguin.github.io/ninja-p2p/dashboard.html</span></div>
+        <a href="dashboard.html"><img src="images/agent-room-dashboard.png" alt="ninja-p2p dashboard showing Planner and Reviewer agents exchanging a launch plan while a human operator watches" width="1000" height="391" loading="lazy"></a>
+      </figure>
     </div>
   </div>
 </section>
 
-<section id="comparison">
+<!-- ── Social Stream ────────────────────────────────────────────────────── -->
+<section class="section" id="social">
   <div class="wrap">
-    <h2>Why not something you already have</h2>
-    <p class="lede">Every alternative fails at least one of: across machines, across vendors, no server.</p>
+    <div class="split">
+      <div>
+        <span class="kicker">Optional: live audiences</span>
+        <h2 style="margin:0 0 14px;font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:650">Turn a live audience into team input</h2>
+        <p>Bridge <a href="https://socialstream.ninja">Social Stream Ninja</a> and every platform it aggregates &mdash; Twitch, YouTube, Kick, and more &mdash; becomes room traffic for an AI co-host, moderator, researcher, or producer team. It is an application of the room, not a dependency.</p>
+        <div class="install" style="margin-top:22px">
+<pre><span class="prompt">$ </span>ninja-p2p ssn --session &lt;id&gt; --room ai-room --read-only</pre>
+          <button class="copy-btn" type="button" aria-label="Copy command">
+            <svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg>
+            <svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon warn"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#alert"/></svg></div>
+        <h3>Public chat is hostile input</h3>
+        <p>Anyone watching can type into this pipe, which makes it the most exposed prompt-injection surface you can hand an agent. Never give a chat-reading agent write access to anything that matters.</p>
+        <p style="margin-top:10px">With <code>--read-only</code> the bridge does not advertise <code>say</code> and refuses it if sent anyway, so an agent cannot reach your audience even if it tries. <a href="social-stream-bridge.html">Bridge guide</a></p>
+      </div>
+    </div>
+  </div>
+</section>
 
+<!-- ── Comparison ───────────────────────────────────────────────────────── -->
+<section class="section alt" id="compare">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="kicker">Alternatives</span>
+      <h2>Why not something you already have</h2>
+      <p>Every alternative misses at least one of: across machines, across vendors, no server to run.</p>
+    </div>
     <div class="table-scroll">
-      <table>
-        <thead>
-          <tr><th>Instead of</th><th>What it cannot do</th></tr>
-        </thead>
+      <table class="compare">
+        <thead><tr><th>Option</th><th>Where it falls short</th></tr></thead>
         <tbody>
+          <tr class="us"><td>ninja-p2p</td><td>Signaling relies on VDO.Ninja&rsquo;s public network; built for teams, not large public rooms</td></tr>
           <tr><td>Claude Code subagents</td><td>Same machine, same vendor, ephemeral</td></tr>
-          <tr><td>MCP</td><td>Client to server &mdash; gives an agent tools, not other agents</td></tr>
+          <tr><td>MCP</td><td>Client to server: gives an agent tools, not other agents</td></tr>
           <tr><td>Agent2Agent (A2A)</td><td>Needs HTTP endpoints you host and expose</td></tr>
           <tr><td>Redis, NATS, a queue</td><td>You run the server</td></tr>
           <tr><td>Shared files or git</td><td>Same filesystem, or a remote you manage</td></tr>
@@ -709,87 +949,253 @@ ninja-p2p command --id claude social say '{"text":"great question, explaining no
         </tbody>
       </table>
     </div>
-
-    <p class="body">
-      The WebRTC choice does real work here: NAT traversal is free, so an agent
-      behind CGNAT can reach one across town with no port forwarding, no tunnel,
-      and no VPS. Signaling rides <a href="https://vdo.ninja">VDO.Ninja</a>'s
-      existing network, already carrying live video at scale, so there was no new
-      chat server to build.
-    </p>
+    <p style="margin:20px 0 0;color:var(--muted);max-width:52em">The WebRTC choice does real work: an agent behind CGNAT can reach one across town with no port forwarding, tunnel, or VPS.
+      Signaling rides <a href="https://vdo.ninja">VDO.Ninja</a>&rsquo;s existing network, already carrying live video at scale, so there was no new chat server to build.</p>
   </div>
 </section>
 
-<section id="toolkit">
+<!-- ── Security ─────────────────────────────────────────────────────────── -->
+<section class="section" id="security">
   <div class="wrap">
-    <h2>What you get</h2>
+    <div class="section-head">
+      <span class="kicker">Security &amp; limits</span>
+      <h2>Honest about what it protects</h2>
+      <p>A room is a shared space, not a trust boundary. Here is exactly what someone in it can and cannot do.</p>
+    </div>
 
-    <div class="grid">
+    <div class="can-cannot">
       <div class="card">
-        <h3>Rooms and presence</h3>
-        <p>Peers announce who they are, what they can do, and what they can be asked for.</p>
+        <h3>A peer in your room can</h3>
+        <ul>
+          <li><svg class="icon" style="color:var(--muted)" aria-hidden="true"><use href="assets/icons.svg#message"/></svg><span>Send you messages. They land in your inbox as JSON: stored, not executed.</span></li>
+          <li><svg class="icon" style="color:var(--muted)" aria-hidden="true"><use href="assets/icons.svg#download"/></svg><span>Send a bounded file into your downloads folder, never over an existing file.</span></li>
+          <li><svg class="icon" style="color:var(--muted)" aria-hidden="true"><use href="assets/icons.svg#help"/></svg><span>Ask a fixed, hard-coded set of discovery questions the sidecar answers itself.</span></li>
+          <li><svg class="icon" style="color:var(--muted)" aria-hidden="true"><use href="assets/icons.svg#folder"/></svg><span>Read files from folders you declared with <code>--share</code>, one at a time.</span></li>
+          <li><svg class="icon" style="color:var(--muted)" aria-hidden="true"><use href="assets/icons.svg#zap"/></svg><span>Trigger your <code>--on-message</code> command, if you set one, at a capped rate.</span></li>
+        </ul>
       </div>
       <div class="card">
-        <h3>A local inbox</h3>
-        <p>A sidecar stays connected and holds messages on disk while your agent is busy.</p>
+        <h3>A peer cannot</h3>
+        <ul>
+          <li><svg class="icon no" aria-hidden="true"><use href="assets/icons.svg#x"/></svg><span>Choose or alter a shell command on your machine.</span></li>
+          <li><svg class="icon no" aria-hidden="true"><use href="assets/icons.svg#x"/></svg><span>Read any path you did not explicitly share.</span></li>
+          <li><svg class="icon no" aria-hidden="true"><use href="assets/icons.svg#x"/></svg><span>Write outside the downloads folder, overwrite, modify, or delete your files.</span></li>
+          <li><svg class="icon no" aria-hidden="true"><use href="assets/icons.svg#x"/></svg><span>Start a swarm download on your machine; that waits for your <code>fetch</code>.</span></li>
+          <li><svg class="icon no" aria-hidden="true"><use href="assets/icons.svg#x"/></svg><span>Make you join another room or connect to another peer.</span></li>
+        </ul>
       </div>
-      <div class="card">
-        <h3>Files and shares</h3>
-        <p>Send checked files and images, or expose named read-only folders peers can pull from.</p>
-      </div>
-      <div class="card">
-        <h3>Approval gates</h3>
-        <p>One agent can block on another's sign-off before it continues.</p>
-      </div>
-      <div class="card">
-        <h3>A browser dashboard</h3>
-        <p>Watch the room, message any peer, and send or download files from any device.</p>
-      </div>
-      <div class="card">
-        <h3>Claude and Codex skills</h3>
-        <p>Optional skills teach each CLI when and how to use the commands.</p>
-      </div>
-      <div class="card">
-        <h3>Live chat bridge</h3>
-        <p>One live audience becomes shared input for an optional AI co-host or production team.</p>
-      </div>
-      <div class="card">
-        <h3>Swarm file transfer</h3>
-        <p>Large transfers resume, verify every chunk, and turn downloaders into sources.</p>
-      </div>
+    </div>
+
+    <div class="grid three limits">
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#key"/></svg>A room name is a password</h3>
+        <p>Anyone who knows it can join, and there is no kick or ban. Let the tool generate one, and set <code>--password</code> for real work.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#user"/></svg>Identity is self-asserted</h3>
+        <p>Peers choose their own name and role. Envelopes are not signed, and there is no replay protection.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg>Acceptance is not completion</h3>
+        <p>Direct sends wait on disk until the transport accepts them. Use acknowledgements and idempotent handlers when completion matters; broadcasts are best-effort.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#message"/></svg>Peer text is untrusted</h3>
+        <p>A message reaching an agent with tools is a prompt-injection surface. Scope that agent&rsquo;s permissions accordingly.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#server"/></svg>&ldquo;No server&rdquo; means none you host</h3>
+        <p>Signaling still runs on VDO.Ninja&rsquo;s network, run by the same author as this package.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Not a VPN, tunnel, or MCP server</h3>
+        <p>It moves messages and files between peers, not arbitrary network traffic. MCP gives an agent tools; this gives agents each other.</p></div>
+    </div>
+    <p style="margin:24px 0 0"><a href="security.html">Read the full security model &rarr;</a></p>
+  </div>
+</section>
+
+<!-- ── FAQ ──────────────────────────────────────────────────────────────── -->
+<section class="section alt" id="faq">
+  <div class="wrap">
+    <div class="section-head center">
+      <span class="kicker">FAQ</span>
+      <h2>Questions people ask first</h2>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>Is there really no server?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a">
+          <p>There is no server <em>you</em> deploy. Peers find each other through VDO.Ninja&rsquo;s public signaling server, which only relays connection setup. Once two peers are connected, messages and files go directly between them.</p>
+          <p>When no direct path exists, WebRTC can relay through a TURN server. The traffic stays DTLS-encrypted end to end.</p>
+        </div>
+      </details>
+      <details>
+        <summary>My agent can&rsquo;t run WebRTC. Can it still join?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a">
+          <p>Yes, over outbound HTTPS. An agent on a VPS can run its sidecar with <code>--transport http</code> against an encrypted HTTP relay; room content is AES-256-GCM encrypted with a room key that stays on the agents. An agent that only runs during turns, like a ChatGPT Dot, can use a hosted mailbox over MCP or the CLI.</p>
+          <p>The mailbox keeps messages for seven days and decrypts them for delivery, so it is not end-to-end encrypted. See <a href="cloud-connections.html">Cloud connections</a>.</p>
+        </div>
+      </details>
+      <details>
+        <summary>What can the signaling server see?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a">
+          <p>Without a password: your room name and the connection setup (SDP offers and ICE candidates, which include IP addresses). With <code>--password</code>, the room name is hashed and that setup is encrypted.</p>
+          <p>It never sees messages, commands, or files. Those travel over the peer-to-peer data channel.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Is my traffic encrypted?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Yes. Peer-to-peer data is always DTLS-encrypted between the two endpoints. That is inherent to WebRTC; this package cannot turn it off. Signaling metadata is encrypted only when you set a password.</p></div>
+      </details>
+      <details>
+        <summary>Who can join my room?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Anyone who knows its name. There are no accounts or membership lists, so the name is the key. Names generated by <code>ninja-p2p start</code> come from 16 random bytes and cannot be guessed; names you invent, like <code>ai-room</code>, can. Run <code>ninja-p2p status --id &lt;you&gt;</code> to see who is actually there.</p></div>
+      </details>
+      <details>
+        <summary>Can another peer run commands on my machine?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a">
+          <p>No. Commands from peers are written to your inbox as data for you or your agent to decide about. The sidecar answers only a fixed list of discovery questions by itself.</p>
+          <p>If you set <code>--on-message</code>, a peer can cause <em>your</em> command to run, at a capped rate. It cannot choose or change that command. Treat the message text your agent then reads as untrusted.</p>
+        </div>
+      </details>
+      <details>
+        <summary>What happens if my agent is busy, or a peer is offline?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Incoming mail waits in the local inbox until your agent reads it. Direct messages, commands, and responses you send wait in the outbox on disk, across sidecar restarts, until the transport accepts them. Room broadcasts are best-effort and are not held for absent peers.</p></div>
+      </details>
+      <details>
+        <summary>Is delivery guaranteed?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>No. There is no exactly-once delivery and no durable remote broker. &ldquo;Accepted by the transport&rdquo; is not proof of remote receipt, and a crash at the wrong moment can resend the same message ID. When completion matters, ask for an <code>ack</code> or <code>command_response</code>, check it with <code>ninja-p2p receipt</code>, and make handlers idempotent.</p></div>
+      </details>
+      <details>
+        <summary>Do I need Claude Code or Codex?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>No. Anything that can run a shell command can be a peer: a script, a cron job, another model&rsquo;s CLI. Node programs can use the library directly, and people can use the browser dashboard. The Claude and Codex skills are optional helpers that teach those tools the CLI.</p></div>
+      </details>
+      <details>
+        <summary>Is this an MCP server?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>No. MCP gives one agent tools; this gives agents each other. If you want connect, send, and file tools exposed over MCP, use the sibling package <a href="https://github.com/steveseguin/ninjamcp"><code>@vdoninja/mcp</code></a>.</p></div>
+      </details>
+      <details>
+        <summary>How big a file can I send?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p><code>send-file</code> handles up to 256&nbsp;MiB, because the sender buffers it. The browser dashboard sends up to 256&nbsp;MiB and receives up to 64&nbsp;MiB. For anything larger, or for several recipients, use <code>seed</code> and <code>fetch</code>: they stream from disk and resume from verified chunks. A swarm can describe up to 1,000,000 chunks.</p></div>
+      </details>
+      <details>
+        <summary>Does it work behind firewalls and CGNAT?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Usually, yes: NAT traversal is what WebRTC is for, with no port forwarding or tunnel. Each peer does need outbound access to <code>wss://wss.vdo.ninja</code>. If <code>ninja-p2p demo</code> fails at the connect step, a proxy or firewall is blocking that. <code>ninja-p2p doctor</code> checks it for you.</p></div>
+      </details>
+      <details>
+        <summary>How many peers can share a room?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Think teams, not crowds. Every peer opens a direct connection to every other peer, so cost grows quickly with room size. It is not built for very large public communities. A live audience joins through the Social Stream bridge as one peer, not as thousands.</p></div>
+      </details>
+      <details>
+        <summary>What does it cost?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Nothing. <code>ninja-p2p</code> is MIT licensed and uses VDO.Ninja&rsquo;s free signaling network. The only costs are your own model usage when wake hooks start agents, which is why wakes are batched and capped by default.</p></div>
+      </details>
+      <details>
+        <summary>What do I need installed?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a"><p>Node.js 20 or newer on Windows, macOS, or Linux, plus a WebRTC adapter: <code>@roamhq/wrtc</code> (recommended, data and media) or <code>node-datachannel</code> (data only). The dashboard needs only a modern browser.</p></div>
+      </details>
+      <details>
+        <summary>Something isn&rsquo;t working. Where do I start?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
+        <div class="a">
+          <p>Run <code>ninja-p2p doctor</code>. It checks Node, your WebRTC adapter, signaling reachability, state folder permissions, and running sidecars. The most common cause is two peers using slightly different room names.</p>
+          <p>Then see <a href="operations.html">Operations &amp; recovery</a>, or ask on <a href="https://discord.vdo.ninja">Discord</a>.</p>
+        </div>
+      </details>
     </div>
   </div>
 </section>
 
-<section id="limits">
+<!-- ── Docs ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="docs">
   <div class="wrap">
-    <h2>Honest limits</h2>
-    <p class="lede">Worth knowing before you build on it.</p>
-    <ul class="plain">
-      <li><strong>A room name is a password.</strong> Anyone who knows it can join. Let the tool generate one, and set <code>--password</code> for real work. See the <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">security model</a>.</li>
-      <li><strong>Acceptance is not completion.</strong> Direct sidecar work stays on disk until the transport accepts it. Use acknowledgements and duplicate-safe handlers when remote completion matters; broadcasts are best-effort.</li>
-      <li><strong>Choose the right file path.</strong> Simple sends buffer up to 256 MiB; use <code>seed</code>/<code>fetch</code> for larger or multi-recipient transfers.</li>
-      <li><strong>Not an MCP server.</strong> MCP gives an agent tools; this gives agents each other.</li>
-      <li><strong>Identity is self-asserted.</strong> Envelopes are not signed.</li>
-      <li><strong>Not a VPN or a tunnel.</strong> It moves messages between peers, not arbitrary network traffic.</li>
-      <li><strong>&ldquo;No server&rdquo; means no server you host.</strong> Signaling still runs on VDO.Ninja's network.</li>
-    </ul>
+    <div class="section-head">
+      <span class="kicker">Documentation</span>
+      <h2>Go deeper</h2>
+      <p>Every guide is written to the same standard: what it does, what it does not, and how it was tested.</p>
+    </div>
+    <div class="grid three docs-grid">
+      <a class="card" href="guide.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</h3>
+        <p>Install, start two agents, wake hooks, shared folders, swarms, the CLI, and the library.</p>
+        <span class="more">Start here <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="security.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</h3>
+        <p>What a room is, what is encrypted, what a peer can do to you, and what is not protected.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="protocol-and-reliability.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#layers"/></svg>Protocol &amp; reliability</h3>
+        <p>Layers, delivery semantics, the swarm design, and what was measured and deliberately not built.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="operations.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</h3>
+        <p>Upgrade without losing work, inspect queued mail, recover files, and diagnose wakes.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="social-stream-bridge.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream bridge</h3>
+        <p>Setup, the event shape, read-only mode, and safety notes for live chat input.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="cloud-connections.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</h3>
+        <p>Join from agents that cannot run WebRTC, through an encrypted HTTP relay or a hosted mailbox.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Final CTA ────────────────────────────────────────────────────────── -->
+<section class="final">
+  <div class="wrap">
+    <h2>See it work in one command</h2>
+    <p>No room name to copy, no second terminal. A real discovery, message, and command round trip over the network.</p>
+    <div class="install">
+<pre><span class="prompt">$ </span>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
+<span class="prompt">$ </span>ninja-p2p demo</pre>
+      <button class="copy-btn" type="button" aria-label="Copy install commands">
+        <svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg>
+        <svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg>
+      </button>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="guide.html">Read the guide <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></a>
+      <a class="btn" href="https://github.com/steveseguin/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg> GitHub</a>
+      <a class="btn" href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg> npm</a>
+    </div>
   </div>
 </section>
 </main>
 
-<footer>
+<footer class="footer">
   <div class="wrap">
-    <div class="links">
-      <span>MIT licensed</span>
-      <a href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
-      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm</a>
-      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/security.md">Security</a>
-      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/protocol-and-reliability.md">Protocol</a>
-      <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/operations.md">Operations</a>
-      <a href="https://github.com/steveseguin/ninja-p2p/releases/tag/v0.2.4">Release 0.2.4</a>
-      <a href="https://vdo.ninja">VDO.Ninja</a>
-      <a href="https://discord.vdo.ninja">Discord</a>
+    <div>
+      <a class="brand" href="./"><img class="brand-mark" src="images/favicon.svg" width="24" height="24" alt="">ninja-p2p</a>
+      <p class="fine">Peer coordination for AI agents over WebRTC. Built on <a href="https://vdo.ninja">VDO.Ninja</a>.</p>
+    </div>
+    <div>
+      <h4>Product</h4>
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Docs</h4>
+      <ul>
+        <li><a href="guide.html">Guide</a></li>
+        <li><a href="security.html">Security model</a></li>
+        <li><a href="protocol-and-reliability.html">Protocol</a></li>
+        <li><a href="operations.html">Operations</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Community</h4>
+      <ul>
+        <li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li>
+        <li><a href="https://discord.vdo.ninja">Discord</a></li>
+        <li><a href="changelog.html">Release <span data-version>0.2.4</span></a></li>
+        <li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li>
+      </ul>
+    </div>
+    <div class="footer-base">
+      <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>
+      <span>Claude and Codex are trademarks of their respective owners. ninja-p2p is not affiliated with Anthropic or OpenAI.</span>
     </div>
   </div>
 </footer>

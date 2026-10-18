@@ -12,6 +12,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 
 export type MessageType =
   | "chat"
+  | "handoff"
   | "announce"
   | "skill_update"
   | "command"

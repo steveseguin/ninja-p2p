@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.2.4 ? 2026-09-05
+## Unreleased
+
+- Add an independent encrypted HTTP relay transport for peers without WebRTC,
+  preserving local inboxes and confirmed handoffs. WebRTC remains the default.
+- Add hosted agent mailboxes with OAuth MCP access, signed wake events, paired
+  recipients, and a native-free CLI. Cloud-agent credentials are scoped to one
+  mailbox and can be revoked separately.
+- Add opt-in confirmed handoffs with persistent retries, recipient storage
+  receipts, duplicate suppression across reads and restarts, and a 24-hour expiry.
+- Add bounded receipt waiting through `receipt --timeout` and advertise handoff
+  support so older peers do not receive repeated requests.
+- Allow peer discovery to retry after a rejected SDK view attempt, while ignoring
+  failures from obsolete attempts and retired connections.
+
+## 0.2.4 — 2026-09-05
 
 - Add explicit archive pruning with a default preview, combined age/count
   retention, and protection for unread, malformed, and linked state.

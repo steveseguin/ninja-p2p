@@ -184,6 +184,10 @@ export class WakeRunner {
     // The sidecar itself may have been configured through NINJA_ROOM. Inheriting
     // it would switch child CLI calls from the local outbox to a new connection.
     delete env.NINJA_ROOM;
+    // Wake commands read untrusted peer text and use the local outbox, so they
+    // never need the relay's bearer token or room key.
+    delete env.NINJA_RELAY_TOKEN;
+    delete env.NINJA_RELAY_KEY;
     this.log(`[wake] ${batch.length} message(s) from ${env.NINJA_WAKE_FROM || "unknown"} -> ${this.config.command}`);
 
     let child: WakeChild;
@@ -251,7 +255,8 @@ function firstText(batch: MessageEnvelope[]): string {
   for (const envelope of batch) {
     const payload = envelope.payload;
     if (typeof payload !== "object" || payload === null) continue;
-    const text = (payload as Record<string, unknown>).text;
+    const text = envelope.type === "handoff" ? (payload as Record<string, unknown>).request
+      : (payload as Record<string, unknown>).text;
     if (typeof text === "string" && text.trim()) {
       const safeText = text.replace(/\0/g, "\uFFFD");
       return safeText.length <= MAX_WAKE_TEXT_LENGTH

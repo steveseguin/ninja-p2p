@@ -12,7 +12,9 @@ GitHub release notes are created separately. No npm token belongs in the repo.
    `dashboard.html`. Keep SDK minimum/pin changes separate from package version
    changes unless compatibility testing supports them.
 3. Group the changelog into user-facing changes, update affected guides and
-   landing-page metadata, and synchronize the dashboard with `npm run sync:docs`.
+   landing-page copy, and rebuild the site with `npm run sync:docs`. It copies the
+   dashboard, renders the Markdown guides into `docs/`, and stamps the package
+   version and FAQ data into the landing page.
 4. Run `npm run check`, `node scripts/validate-adapter.mjs @roamhq/wrtc`, and
    `npm pack --dry-run`. Confirm new user guides are included in `package.json`'s
    `files` list and that secrets, scratch files, and local state are excluded.

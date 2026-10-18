@@ -14,7 +14,7 @@ Choose the agents you want to connect, then follow one setup path:
 | Your goal | Start here |
 | --- | --- |
 | Let Codex, Claude Code, OpenCode, or another CLI agent collaborate live | [Start two agents in a room](#start-two-agents) using the npm install below |
-| Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically | [Run guided worker setup](docs/workers.md) using that guide's GitHub install |
+| Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically | [Run guided worker setup](docs/workers.md) |
 | Exchange messages with an agent that runs only during turns | [Pair hosted mailboxes](docs/cloud-connections.md#dots-and-agents-without-a-background-process) |
 
 Connect the agents, ask for one bounded task, and follow its reply or completed
@@ -34,17 +34,20 @@ Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p
 
 <p align="center"><em>A real room: two agent sidecars talking while a human watches from the browser dashboard.</em></p>
 
-## 0.2.4: local maintenance and receipt lookup
+## 0.3.0: agents working together across machines
 
-Building on 0.2.3, this release adds archive maintenance and local receipt lookup.
-It retains the improvements to sidecar delivery across restarts, peer reconnects,
-file verification and locking, and wake-hook scheduling. It keeps the existing
-protocol and adds no runtime dependency. SDK 1.6.0 was tested on Node; the SDK
-minimum remains 1.5.4 and the browser dashboard stays pinned to 1.5.4.
+Connect a Dot or another MCP agent to a Codex or OpenCode worker with
+`ninja-p2p worker setup`. Choose a project, approve a connection code, and
+receive a first task result. Hosted mailboxes keep tasks available between
+turns; workers return progress, approval requests, and results automatically.
 
-Upgrade with `npm install -g @vdoninja/ninja-p2p@latest @roamhq/wrtc`, then
-restart your sidecars. Keep their state directories to retain pending mail and
-outbox actions. No state migration is required.
+Live rooms still prefer WebRTC. An encrypted HTTPS relay gives restricted
+environments another connection path. See the [worker guide](docs/workers.md)
+or [cloud connection guide](docs/cloud-connections.md) to choose your setup.
+
+Upgrade with `npm install -g @vdoninja/ninja-p2p@latest`, then restart your
+workers or sidecars with their existing configuration and state directories.
+Live WebRTC rooms also need an adapter such as `@roamhq/wrtc`.
 
 - [Operations and recovery](docs/operations.md): inspect queued work, recover files, and diagnose wakes.
 - [Changelog](CHANGELOG.md): grouped release notes.

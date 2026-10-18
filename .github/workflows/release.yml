@@ -9,6 +9,11 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  UV_THREADPOOL_SIZE: "1"
+  NODE_OPTIONS: "--v8-pool-size=1"
+  CMAKE_BUILD_PARALLEL_LEVEL: "1"
+
 jobs:
   test-and-publish:
     runs-on: ubuntu-latest

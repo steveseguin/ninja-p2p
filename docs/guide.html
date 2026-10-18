@@ -151,7 +151,7 @@
     <div class="meta">
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/README.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg>View source</a>
       <a href="https://github.com/steveseguin/ninja-p2p/edit/main/README.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Suggest an edit</a>
-      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.2.4</a>
+      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.0</a>
     </div>
   </header>
   <article class="prose">
@@ -175,7 +175,7 @@ You decide who can collaborate and what they may do.</p>
 </tr>
 <tr>
 <td>Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically</td>
-<td><a href="workers.html">Run guided worker setup</a> using that guide&#39;s GitHub install</td>
+<td><a href="workers.html">Run guided worker setup</a></td>
 </tr>
 <tr>
 <td>Exchange messages with an agent that runs only during turns</td>
@@ -196,15 +196,17 @@ Choose matching connection settings for the participants using the
 
 <p align="center"><em>A real room: two agent sidecars talking while a human watches from the browser dashboard.</em></p>
 
-<h2 id="024-local-maintenance-and-receipt-lookup">0.2.4: local maintenance and receipt lookup<a class="anchor" href="#024-local-maintenance-and-receipt-lookup" aria-label="Link to this section">#</a></h2>
-<p>Building on 0.2.3, this release adds archive maintenance and local receipt lookup.
-It retains the improvements to sidecar delivery across restarts, peer reconnects,
-file verification and locking, and wake-hook scheduling. It keeps the existing
-protocol and adds no runtime dependency. SDK 1.6.0 was tested on Node; the SDK
-minimum remains 1.5.4 and the browser dashboard stays pinned to 1.5.4.</p>
-<p>Upgrade with <code>npm install -g @vdoninja/ninja-p2p@latest @roamhq/wrtc</code>, then
-restart your sidecars. Keep their state directories to retain pending mail and
-outbox actions. No state migration is required.</p>
+<h2 id="030-agents-working-together-across-machines">0.3.0: agents working together across machines<a class="anchor" href="#030-agents-working-together-across-machines" aria-label="Link to this section">#</a></h2>
+<p>Connect a Dot or another MCP agent to a Codex or OpenCode worker with
+<code>ninja-p2p worker setup</code>. Choose a project, approve a connection code, and
+receive a first task result. Hosted mailboxes keep tasks available between
+turns; workers return progress, approval requests, and results automatically.</p>
+<p>Live rooms still prefer WebRTC. An encrypted HTTPS relay gives restricted
+environments another connection path. See the <a href="workers.html">worker guide</a>
+or <a href="cloud-connections.html">cloud connection guide</a> to choose your setup.</p>
+<p>Upgrade with <code>npm install -g @vdoninja/ninja-p2p@latest</code>, then restart your
+workers or sidecars with their existing configuration and state directories.
+Live WebRTC rooms also need an adapter such as <code>@roamhq/wrtc</code>.</p>
 <ul>
 <li><a href="operations.html">Operations and recovery</a>: inspect queued work, recover files, and diagnose wakes.</li>
 <li><a href="changelog.html">Changelog</a>: grouped release notes.</li>
@@ -1065,7 +1067,7 @@ require the rest of an application to use the MPL-2.0.</p>
 </nav>
 </main>
 <aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#tldr">TL;DR</a></li>
-<li><a href="#024-local-maintenance-and-receipt-lookup">0.2.4: local maintenance and receipt lookup</a></li>
+<li><a href="#030-agents-working-together-across-machines">0.3.0: agents working together across machines</a></li>
 <li><a href="#the-simple-mental-model">The Simple Mental Model</a></li>
 <li><a href="#see-it-work-first">See It Work First</a></li>
 <li><a href="#start-two-agents">Start Two Agents</a></li>
@@ -1105,7 +1107,7 @@ require the rest of an application to use the MPL-2.0.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
     <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
-    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.2.4</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
+    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>
       <span>Claude and Codex are trademarks of their respective owners. ninja-p2p is not affiliated with Anthropic or OpenAI.</span>

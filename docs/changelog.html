@@ -151,12 +151,18 @@
     <div class="meta">
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/CHANGELOG.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg>View source</a>
       <a href="https://github.com/steveseguin/ninja-p2p/edit/main/CHANGELOG.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Suggest an edit</a>
-      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.2.4</a>
+      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.0</a>
     </div>
   </header>
   <article class="prose">
-<h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
+<h2 id="030--2026-10-18">0.3.0 — 2026-10-18<a class="anchor" href="#030--2026-10-18" aria-label="Link to this section">#</a></h2>
 <ul>
+<li><p>Fix npm command launchers on Linux and macOS when invoked through symlinks.</p>
+</li>
+<li><p>Add guided <code>worker setup</code>: choose Codex or OpenCode and a project, approve a
+short connection code, and receive the first read-only task result. Settings
+are saved privately, and interrupted setup resumes without duplicating work.</p>
+</li>
 <li><p>Add background mailbox workers for Codex and OpenCode, with allowed senders,
 task progress, approval decisions, cancellation and saved results across restarts.</p>
 </li>
@@ -376,7 +382,7 @@ co-host, moderation, research, and live-production use case.</li>
 <a class="next" href="recovery-validation.html"><small>Next</small>Recovery validation</a>
 </nav>
 </main>
-<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#unreleased">Unreleased</a></li>
+<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#030--2026-10-18">0.3.0 — 2026-10-18</a></li>
 <li><a href="#024--2026-09-05">0.2.4 — 2026-09-05</a></li>
 <li><a href="#023--2026-09-05">0.2.3 — 2026-09-05</a></li>
 <li><a href="#sidecar-delivery-and-inboxes" style="padding-left:24px">Sidecar delivery and inboxes</a></li>
@@ -404,7 +410,7 @@ co-host, moderation, research, and live-production use case.</li>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
     <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
-    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.2.4</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
+    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>
       <span>Claude and Codex are trademarks of their respective owners. ninja-p2p is not affiliated with Anthropic or OpenAI.</span>

@@ -23,7 +23,7 @@ if (testFiles.length === 0) {
 
 const result = spawnSync(
   process.execPath,
-  ["--import", "tsx", "--test", ...testFiles],
+  ["--import", "tsx", "--test", "--test-concurrency=1", ...testFiles],
   {
     cwd: repositoryRoot,
     stdio: "inherit",

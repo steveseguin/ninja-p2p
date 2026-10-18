@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -23,6 +23,24 @@ import { getAgentReceipt, getInboxSummary, listQueuedAgentActions, pruneAgentArc
 import { createEnvelope, type MessageEnvelope, type PeerIdentity } from "../src/protocol.js";
 import { HANDOFF_SKILL, HANDOFF_TTL_MS, readHandoffStatus, writeHandoffStatus } from "../src/handoff.js";
 import { VDOBridge } from "../src/vdo-bridge.js";
+
+test("npm symlink commands run their entry points on Unix", { skip: process.platform === "win32" }, () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-bin-links-"));
+  try {
+    for (const [source, command, expected] of [
+      ["../src/cli.ts", "ninja-p2p", /worker setup/],
+      ["../runtime/call-server.mjs", "ninja-p2p-call", /ninja-p2p-call/],
+      ["../runtime/relay-server.cjs", "ninja-p2p-relay", /ninja-p2p-relay/],
+    ] as const) {
+      const alias = path.join(dir, command);
+      symlinkSync(fileURLToPath(new URL(source, import.meta.url)), alias);
+      const result = spawnSync(process.execPath, ["--import", "tsx", alias, "--help"], { encoding: "utf8", timeout: 10000 });
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, expected);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("wait honors its timeout even when the polling interval is much longer", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-wait-timeout-"));

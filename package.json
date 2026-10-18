@@ -1,6 +1,6 @@
 {
   "name": "@vdoninja/ninja-p2p",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge",
   "type": "module",
   "main": "./dist/index.js",

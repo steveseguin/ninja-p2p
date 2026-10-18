@@ -32,7 +32,7 @@ export async function callMailbox(config: MailboxConfig, name: string, args: Rec
         Accept: "application/json", Connection: "close", "MCP-Protocol-Version": version, "Mcp-Method": "tools/call", "Mcp-Name": name },
       body: JSON.stringify({ jsonrpc: "2.0", id: requestId, method: "tools/call", params: {
         name, arguments: args, _meta: { "io.modelcontextprotocol/protocolVersion": version,
-          "io.modelcontextprotocol/clientInfo": { name: "ninja-p2p", version: "0.2.4" },
+          "io.modelcontextprotocol/clientInfo": { name: "ninja-p2p", version: "0.3.0" },
           "io.modelcontextprotocol/clientCapabilities": {} },
       } }),
     });

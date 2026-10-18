@@ -8,11 +8,10 @@ mailbox website or with `get_task` in your requesting agent.
 ## 1. Install and sign in
 
 Install Node.js 20 or newer and Codex CLI or OpenCode. Sign in to that agent CLI
-and make sure it works in your project folder. Install Ninja P2P from the current
-GitHub source:
+and make sure it works in your project folder. Install Ninja P2P:
 
 ```sh
-npm install -g github:steveseguin/ninja-p2p
+npm install -g @vdoninja/ninja-p2p@latest
 ```
 
 You also need a mailbox account and a requester mailbox connected to your Dot

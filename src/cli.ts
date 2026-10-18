@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -2204,7 +2204,9 @@ async function exitCleanly(): Promise<void> {
   process.exit(process.exitCode ?? 0);
 }
 
-const entry = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
+// npm uses symlinks for installed commands on Unix. Imports still stay inert.
+let entry = false;
+try { entry = !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { /* Not a filesystem entry point. */ }
 if (entry) {
   main(process.argv.slice(2))
     .then(exitCleanly)

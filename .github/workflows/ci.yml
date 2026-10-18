@@ -7,12 +7,18 @@ on:
 permissions:
   contents: read
 
+env:
+  UV_THREADPOOL_SIZE: "1"
+  NODE_OPTIONS: "--v8-pool-size=1"
+  CMAKE_BUILD_PARALLEL_LEVEL: "1"
+
 jobs:
   test:
     name: Node ${{ matrix.node }} / ${{ matrix.adapter.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         node: [20, 22, 24]
         adapter:
@@ -52,6 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         adapter:
           - name: wrtc

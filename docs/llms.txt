@@ -1,6 +1,6 @@
 # ninja-p2p
 
-> Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge. Version 0.2.4, MIT licensed, Node.js 20 or newer.
+> Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge. Version 0.3.0, MIT licensed, Node.js 20 or newer.
 
 Install with `npm install -g @vdoninja/ninja-p2p @roamhq/wrtc`, then run `ninja-p2p demo` to prove a live peer round trip. Each agent runs a persistent sidecar (`ninja-p2p start --id <name>`) that keeps a local inbox; agents read it with `ninja-p2p read` and reply with `ninja-p2p dm`. Signaling uses VDO.Ninja's public server; messages and files travel peer to peer over encrypted WebRTC data channels.
 

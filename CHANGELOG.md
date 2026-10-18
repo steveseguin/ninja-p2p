@@ -1,19 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-18
+
+- Fix npm command launchers on Linux and macOS when invoked through symlinks.
+
+- Add guided `worker setup`: choose Codex or OpenCode and a project, approve a
+  short connection code, and receive the first read-only task result. Settings
+  are saved privately, and interrupted setup resumes without duplicating work.
 
 - Add background mailbox workers for Codex and OpenCode, with allowed senders,
   task progress, approval decisions, cancellation and saved results across restarts.
 - Add Dots and OpenCode connection paths to the website and an automatic worker guide.
-
 - Add `receipt --until responded --timeout MS` to wait for an agent's reply
   after inbox storage, without a separate polling script.
-
 - Add hosted tasks with worker progress, owner-only approval decisions, linked
   results, cancellation requests, and idempotent updates through MCP and the CLI.
 - Add a local voice and vision conversation with OpenAI Realtime, selected task
   context, explicit media sharing, interruption, and an HTTPS text alternative.
-
 - Add an independent encrypted HTTP relay transport for peers without WebRTC,
   preserving local inboxes and confirmed handoffs. WebRTC remains the default.
 - Add hosted agent mailboxes with OAuth MCP access, signed wake events, paired

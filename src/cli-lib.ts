@@ -15,6 +15,7 @@ import {
 import { DEFAULT_SWARM_CHUNK_SIZE } from "./swarm.js";
 import { isHandoffRequest } from "./handoff.js";
 import { parseMailboxCommand } from "./mailbox.js";
+import type { SetupOptions } from "./worker-setup.js";
 
 export type CliCommonOptions = {
   room: string;
@@ -33,10 +34,31 @@ export type CliCommonOptions = {
 
 export type SkillRuntime = "claude" | "codex";
 
-export function parseWorkerCommand(args: string[]): { kind: "worker"; action: "start" | "run" | "status" | "stop"; configFile: string } {
+export function parseWorkerCommand(args: string[]): { kind: "worker"; action: "start" | "run" | "status" | "stop"; configFile: string } | { kind: "worker-setup"; options: SetupOptions } {
+  if (args[0] === "setup") {
+    const options: SetupOptions = { noOpen: false, wait: 300 };
+    const seen = new Set<string>();
+    for (let i = 1; i < args.length; i++) {
+      const flag = args[i];
+      if (seen.has(flag)) throw new Error(`Repeated setup option ${flag}`);
+      seen.add(flag);
+      if (flag === "--no-open") { options.noOpen = true; continue; }
+      if (!["--agent", "--workspace", "--server", "--config", "--executable", "--model", "--wait"].includes(flag)) throw new Error(`Unknown setup option ${flag}`);
+      const value = args[++i];
+      if (!value || value.startsWith("--")) throw new Error(`Missing value for ${flag}`);
+      if (flag === "--agent") {
+        if (value !== "codex" && value !== "opencode") throw new Error("--agent must be codex or opencode");
+        options.agent = value;
+      } else if (flag === "--wait") {
+        if (!/^\d+$/.test(value) || Number(value) > 3600) throw new Error("--wait must be 0-3600 seconds");
+        options.wait = Number(value);
+      } else options[flag.slice(2) as "workspace" | "server" | "config" | "executable" | "model"] = value;
+    }
+    return { kind: "worker-setup", options };
+  }
   const [action, flag, file, ...extra] = args;
   if (!["start", "run", "status", "stop"].includes(action) || flag !== "--config" || !file || extra.length) {
-    throw new Error("Use worker start|run|status|stop --config worker.json");
+    throw new Error("Use worker setup, or worker start|run|status|stop --config worker.json");
   }
   return { kind: "worker", action: action as "start" | "run" | "status" | "stop", configFile: path.resolve(file) };
 }
@@ -108,6 +130,9 @@ export function helpText(): string {
     "  ninja-p2p mailbox --config /private/mailbox.json identity",
     "  ninja-p2p mailbox --config /private/mailbox.json read --after 0",
     "  ninja-p2p mailbox --config /private/mailbox.json task list",
+    "  ninja-p2p worker setup",
+    "  ninja-p2p worker setup --agent codex --workspace /path/to/project [--server URL] [--no-open]",
+    "    Options: --config FILE --executable PATH --model ID --wait SECONDS (default 300)",
     "  ninja-p2p worker start --config /private/worker.json",
     "  ninja-p2p worker status --config /private/worker.json",
     "  ninja-p2p worker stop --config /private/worker.json",

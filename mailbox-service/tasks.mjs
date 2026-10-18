@@ -67,9 +67,9 @@ export class Tasks {
     if (usage(true) + bytes > 8 * 1024 * 1024) fail('task_account_storage_limit', 409);
     if (usage(false) + bytes > 128 * 1024 * 1024) fail('task_service_storage_limit', 503);
   }
-  create(box, input, ownerAction = false) {
+  create(box, input, ownerAction = false, inTransaction = false) {
     const args = createTaskSchema.parse(input), fingerprint = hash(JSON.stringify(args));
-    return this.store.transaction(() => {
+    const create = () => {
       const previous = this.store.get('SELECT * FROM tasks WHERE requester=? AND request_key=?', box, args.request_key);
       if (previous) {
         if (previous.fingerprint !== fingerprint) fail('idempotency_conflict', 409);
@@ -87,7 +87,8 @@ export class Tasks {
       const row = this.row(box, taskId);
       this.event(row, ownerAction ? 'owner:' + source.owner : 'mailbox:' + box, args, 'submitted', data, box, args.recipient_id, ownerAction);
       return { ...this.get(box, taskId), duplicate: false };
-    });
+    };
+    return inTransaction ? create() : this.store.transaction(create);
   }
   event(row, actor, args, action, data, sender, target, ownerAction = false) {
     const event = { action, status: row.status, note: data.note, progress: data.progress,

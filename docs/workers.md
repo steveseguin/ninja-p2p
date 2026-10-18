@@ -5,24 +5,79 @@ Start the worker once; it checks its hosted mailbox, runs one task at a time,
 and returns the result to the same task. Follow progress and decisions on the
 mailbox website or with `get_task` in your requesting agent.
 
-## 1. Connect your agents
+## 1. Install and sign in
 
-Install Node.js 20 or newer and your preferred agent CLI. Sign in to that CLI
-and make sure it works in the project folder you want it to use. This worker
-guide uses the current GitHub source. Install it on the worker's machine:
+Install Node.js 20 or newer and Codex CLI or OpenCode. Sign in to that agent CLI
+and make sure it works in your project folder. Install Ninja P2P from the current
+GitHub source:
 
 ```sh
 npm install -g github:steveseguin/ninja-p2p
 ```
 
-[Create and pair two mailboxes](cloud-connections.md#dots-and-agents-without-a-background-process):
-one for the requester, one for this worker. Keep the worker's credential file
-outside its project folder. No WebRTC adapter is required for mailbox tasks.
-The requester connects through the mailbox's MCP plugin; it does not need this
-CLI installation. The README's npm package and WebRTC adapter installation is
-for live rooms.
+You also need a mailbox account and a requester mailbox connected to your Dot
+or other MCP agent. Your service operator supplies the private account key;
+[connect your requester](cloud-connections.md#dots-and-agents-without-a-background-process)
+if it is not connected yet. Mailbox tasks use HTTPS and need no WebRTC adapter.
 
-## 2. Start the worker
+## 2. Connect your worker
+
+On the computer where Codex or OpenCode will work, run:
+
+```sh
+ninja-p2p worker setup
+```
+
+Choose the agent and project folder. Setup opens the mailbox website with a
+short connection code. Match it to your terminal, sign in, choose the requester
+that may send work, and select **Connect worker**. Keep **Run a first read-only
+task** checked to receive a short review of the project's README.
+
+Setup saves private settings outside the project, starts the worker, checks its
+connection, and shows the first task's result. It uses your CLI's existing login;
+model usage is billed by your agent provider. Keep the worker's computer running
+to receive tasks. Follow the task link to see progress on the website.
+
+For a VPS or a terminal without prompts:
+
+```sh
+ninja-p2p worker setup --agent codex --workspace /path/to/project --no-open
+```
+
+Use `--agent opencode` for OpenCode. Open the printed link on another computer
+to approve the connection. Use `--server https://your-mailbox.example` for your
+own mailbox service. The default is `https://mcp.steves.app`.
+
+Settings are saved under `~/.ninja-p2p/workers/`; setup prints their exact path
+and the status and stop commands. `--config /private/worker.json` chooses another
+location. Keep the config, credential, setup record and state directory together
+and outside the project. Run the same command to resume an interrupted setup
+or check the original first task without submitting it again.
+
+Setup waits up to five minutes for the result. If the task is still pending,
+the worker continues in the background; follow the task link or rerun setup.
+`--wait SECONDS` changes this wait, and `--wait 0` checks once.
+
+## 3. Ask for a result
+
+In your paired Dot or other MCP agent, ask:
+
+“Create a task for my paired worker to review the project README. Return the
+three most useful improvements. Monitor this task and show me its result.”
+
+The requester uses `create_task`, then reads updates with `get_task`. Dots can
+monitor `message.created` for task notifications. Their own platform permissions
+still apply. You can also [create and follow a task on the mailbox website](tasks.md).
+
+Tasks show **waiting**, **working**, **needs your decision**, and the final
+result. Only tasks assigned to this mailbox by a paired sender in `allowedPeers`
+can launch the worker. Ordinary messages and replies do not launch jobs.
+
+## Optional: configure a worker manually
+
+If you already have a paired worker mailbox and credential file, save the
+following configuration outside its project folder. Guided setup users can
+edit the file whose path setup printed, then restart the worker.
 
 Next to that credential file, save `worker.json`:
 
@@ -56,21 +111,6 @@ Check for `running: true` and `state: "waiting"` before sending the first task.
 run the status command again after a few seconds. For `connection_error`, read
 `detail` in the status output; for a process that exits, check
 `worker.state/worker.log`.
-
-## 3. Ask for a result
-
-In your paired Dot or other MCP agent, ask:
-
-“Create a task for my paired worker to review the project README. Return the
-three most useful improvements. Monitor this task and show me its result.”
-
-The requester uses `create_task`, then reads updates with `get_task`. Dots can
-monitor `message.created` for task notifications. Their own platform permissions
-still apply. You can also [create and follow a task on the mailbox website](tasks.md).
-
-Tasks show **waiting**, **working**, **needs your decision**, and the final
-result. Only tasks assigned to this mailbox by a paired sender in `allowedPeers`
-can launch the worker. Ordinary messages and replies do not launch jobs.
 
 ## Choose what the worker may do
 
@@ -109,7 +149,7 @@ If the network disconnects, the worker retains task updates and retries them
 with the same request keys. A saved result is delivered without running the
 agent again. If execution was interrupted without a saved outcome, the task
 asks for a decision before another attempt. Review the workspace and the logs
-under `worker.state/runs/TASK_ID/` first: an interrupted turn may have completed
+under the worker state directory’s `runs/TASK_ID/` first: an interrupted turn may have completed
 some actions. Decline to prevent another attempt.
 
 Check connection errors and task IDs with:

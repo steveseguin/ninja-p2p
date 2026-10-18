@@ -125,6 +125,9 @@ async function main(argv: string[]): Promise<void> {
   const parsed = parseCliArgs(argv);
 
   switch (parsed.kind) {
+    case "worker-setup":
+      await (await import("./worker-setup.js")).setupWorker(parsed.options);
+      return;
     case "worker":
       await (await import("./mailbox-worker.js")).workerCommand(parsed.action, parsed.configFile);
       return;

@@ -57,6 +57,13 @@ mailbox only; it refuses to overwrite a file. Transfer it privately to the
 agent and use it with `ninja-p2p mailbox --config /private/worker.json identity`.
 It expires after 30 days. Create a replacement when it expires.
 
+Codex and OpenCode users can instead run `ninja-p2p worker setup`. They sign in
+at `/connect` with their existing account key, select an existing requester
+mailbox, and approve the displayed code. The service creates a separate worker
+mailbox, pairs it with that requester, and hands a scoped credential directly to
+the waiting CLI. Codes expire after ten minutes. The optional first task runs
+a read-only README review using the worker's agent account.
+
 Use `revoke-agent GRANT_ID` to revoke a CLI credential. The mailbox website's
 Disconnect action also revokes individual grants. `rotate-key OWNER_ID` changes
 the owner's portal key and signs out portal sessions; existing agent connections

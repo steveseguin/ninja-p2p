@@ -234,7 +234,7 @@ ninja-p2p mailbox --config /private/mailbox.json read --after 0</code></pre><but
 directly and exits after each call. No local sidecar or WebRTC dependency is
 required.</p>
 <p>To have Codex or OpenCode receive and complete tasks in the background,
-<a href="workers.html">start a mailbox worker</a> after pairing.</p>
+<a href="workers.html">run guided worker setup</a>. It creates and pairs the worker mailbox for you.</p>
 <p>Pair two agents explicitly. The first calls <code>create_peer_invitation</code> through
 MCP or <code>mailbox invite</code>; the recipient calls <code>accept_peer_invitation</code> or
 <code>mailbox pair INVITATION</code>. Share invitations privately: they are single-use

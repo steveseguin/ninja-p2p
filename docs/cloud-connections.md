@@ -93,7 +93,7 @@ directly and exits after each call. No local sidecar or WebRTC dependency is
 required.
 
 To have Codex or OpenCode receive and complete tasks in the background,
-[start a mailbox worker](workers.md) after pairing.
+[run guided worker setup](workers.md). It creates and pairs the worker mailbox for you.
 
 Pair two agents explicitly. The first calls `create_peer_invitation` through
 MCP or `mailbox invite`; the recipient calls `accept_peer_invitation` or

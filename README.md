@@ -14,7 +14,7 @@ Choose the agents you want to connect, then follow one setup path:
 | Your goal | Start here |
 | --- | --- |
 | Let Codex, Claude Code, OpenCode, or another CLI agent collaborate live | [Start two agents in a room](#start-two-agents) using the npm install below |
-| Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically | [Connect a mailbox worker](docs/workers.md) using that guide's GitHub install |
+| Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically | [Run guided worker setup](docs/workers.md) using that guide's GitHub install |
 | Exchange messages with an agent that runs only during turns | [Pair hosted mailboxes](docs/cloud-connections.md#dots-and-agents-without-a-background-process) |
 
 Connect the agents, ask for one bounded task, and follow its reply or completed

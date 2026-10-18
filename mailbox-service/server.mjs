@@ -6,6 +6,7 @@ import { Store, hash, id, token, now, fail } from './store.mjs';
 import { createMailboxMcp } from './mcp.mjs';
 import { startDelivery } from './webhook.mjs';
 import { page, login, dashboard, consent, taskPage } from './pages.mjs';
+import { WorkerSetup, setupCode, validSetupCode } from './worker-setup.mjs';
 
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 async function body(req, max = 24000) {
@@ -27,13 +28,14 @@ export async function start(options = {}) {
   for (const redirect of redirects) { const url = new URL(redirect); if (url.hash || url.username || url.password || (url.protocol !== 'https:' && !(local && url.hostname === '127.0.0.1'))) throw new Error('Invalid redirect allowlist.'); }
   const store = options.store || new Store(options.root || process.env.DOT_DATA, options.secret || process.env.DOT_SECRET);
   store.origin = origin;
+  const workerSetup = new WorkerSetup(store);
   const mcp = createMailboxMcp(store, options);
   const delivery = options.delivery === false ? null : startDelivery(store, options.webhookPost);
   const resource = origin + '/mcp';
   let inflight = 0, stopping = false;
   const cookieOptions = `HttpOnly; SameSite=Lax; Path=/${local ? '' : '; Secure'}`;
   const cookieName = name => (local ? '' : '__Host-') + name;
-  const maintenance = setInterval(() => { try { store.cleanup(); } catch { console.error('Maintenance error'); } }, 60000); maintenance.unref();
+  const maintenance = setInterval(() => { try { store.cleanup(); workerSetup.cleanup(); } catch { console.error('Maintenance error'); } }, 60000); maintenance.unref();
   const server = http.createServer(async (req, res) => {
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
     // Native HTML form posts need their same-origin Origin header for CSRF checks.
@@ -129,6 +131,12 @@ export async function start(options = {}) {
         if (grant && grant.client === data.get('client_id')) store.revoke(grant.id);
         return json(200, {});
       }
+      if (req.method === 'POST' && ['/worker-setup/start', '/worker-setup/poll', '/worker-setup/finish'].includes(route)) {
+        const input = JSON.parse(await body(req, 8192));
+        if (!input || typeof input !== 'object' || Array.isArray(input)) fail('invalid_setup');
+        if (route === '/worker-setup/start') return json(200, workerSetup.begin(input, remote));
+        return json(200, route === '/worker-setup/poll' ? workerSetup.poll(input.device_secret) : workerSetup.finish(input.device_secret));
+      }
       if (route === '/mcp') {
         let grant; const bearer = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1] || '';
         try { grant = store.auth(bearer); } catch { res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", scope="mailbox"`); return json(401, { error: 'invalid_token' }); }
@@ -147,6 +155,26 @@ export async function start(options = {}) {
       }
       const sessionToken = cookie('dot_session');
       const session = sessionToken && store.get('SELECT s.* FROM sessions s JOIN owners o ON o.id=s.owner WHERE s.hash=? AND s.expires>? AND o.disabled=0', hash(sessionToken), now());
+      if (route === '/connect' && req.method === 'GET') {
+        const code = url.searchParams.get('code');
+        if (!code) return html(page('Connect a worker', '<p>Run <code>ninja-p2p worker setup</code> on the computer where your agent will work, then enter the code it shows.</p><form method="get" action="/connect"><label>Connection code<input name="code" required maxlength="14" autocomplete="off" placeholder="ABCD-1234-EF56"></label><button>Continue</button></form>'));
+        try { workerSetup.byCode(code); }
+        catch (error) {
+          if (error.status !== 410 && error.message !== 'invalid_setup_code') throw error;
+          return html(page('Check your connection code', '<p>This code is invalid or has expired. Run <code>ninja-p2p worker setup</code> again for a new code, then open the link shown in your terminal.</p><p><a href="/connect">Enter a connection code</a></p>'));
+        }
+        if (session) return html(workerSetup.render(session, code));
+        const csrf = token(); res.setHeader('Set-Cookie', `${cookieName('dot_login')}=${csrf}; ${cookieOptions}; Max-Age=600`);
+        return html(login(csrf, setupCode(code)));
+      }
+      if (route === '/connect/approve' && req.method === 'POST') {
+        if (!session) fail('sign_in_required', 401);
+        const data = form(await body(req, 8192));
+        if (req.headers.origin !== origin || !equal(session.csrf, data.get('csrf'))) fail('invalid_csrf', 403);
+        store.rate('connect:' + session.owner, 30);
+        workerSetup.approve(session, Object.fromEntries(data));
+        return redirect('/connect?code=' + setupCode(data.get('code')));
+      }
       if (route === '/tasks' && req.method === 'GET') {
         if (!session) return redirect('/');
         return html(taskPage(store, session, url.searchParams.get('box'), url.searchParams.get('task'), url.searchParams.get('after') || ''));
@@ -179,7 +207,8 @@ export async function start(options = {}) {
         const value = token();
         if (store.get('SELECT count(*) AS n FROM sessions WHERE owner=? AND expires>?', owner.id, now()).n >= 20) fail('session_limit', 429);
         store.run('INSERT INTO sessions VALUES(?,?,?,?)', hash(value), owner.id, token(), now() + 8 * 3600000);
-        res.setHeader('Set-Cookie', `${cookieName('dot_session')}=${value}; ${cookieOptions}; Max-Age=28800`); return redirect('/');
+        res.setHeader('Set-Cookie', `${cookieName('dot_session')}=${value}; ${cookieOptions}; Max-Age=28800`);
+        return redirect(validSetupCode(data.get('setup_code')) ? '/connect?code=' + setupCode(data.get('setup_code')) : '/');
       }
       if (req.method === 'POST' && ['/boxes', '/messages', '/disconnect', '/logout'].includes(route)) {
         if (!session) fail('sign_in_required', 401);

@@ -133,9 +133,10 @@ export function writeAgentSession(stateDir: string, session: AgentSessionState):
   writeJsonAtomic(paths.sessionFile, session);
 }
 
+// Reading must not create folders: doctor reads every folder under the state
+// root, including ones that are not sidecars.
 export function readAgentSession(stateDir: string): AgentSessionState | null {
-  const paths = ensureAgentState(stateDir);
-  return readJsonFile<AgentSessionState>(paths.sessionFile);
+  return readJsonFile<AgentSessionState>(path.join(path.resolve(stateDir), SESSION_FILE));
 }
 
 export function writePeersSnapshot(stateDir: string, peers: unknown): void {

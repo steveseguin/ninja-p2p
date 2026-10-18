@@ -104,9 +104,10 @@
     <nav aria-label="Primary">
       <ul class="nav-links">
         <li><a href="./#how">How it works</a></li>
-        <li><a href="./#faq">FAQ</a></li>
-        <li><a href="guide.html">Guide</a></li>
+        <li><a href="./#files">Files</a></li>
         <li><a href="security.html">Security</a></li>
+        <li><a href="./#faq">FAQ</a></li>
+        <li><a href="guide.html">Docs</a></li>
       </ul>
     </nav>
     <div class="nav-actions">
@@ -120,11 +121,13 @@
 
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
+<button class="docs-menu" type="button" aria-expanded="false" aria-controls="docs-groups"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg><span>All guides</span><span class="docs-menu-current">Social Stream bridge</span><svg class="icon i-chevron" aria-hidden="true"><use href="assets/icons.svg#chevron-down"/></svg></button>
+<div class="docs-groups" id="docs-groups">
 <h4>Start</h4><ul>
-<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg>Tasks &amp; approvals</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
-<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -142,6 +145,7 @@
 <li><a href="north-star.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Product direction</a></li>
 <li><a href="sdk-wishlist.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg>SDK wishlist</a></li>
 </ul>
+</div>
 </nav>
 <main id="main">
   <header class="docs-head">
@@ -226,7 +230,7 @@ room should be able to publish to the audience.</p>
 <tr>
 <td><code>--topic &lt;name&gt;</code></td>
 <td><code>social</code></td>
-<td>topic the chat events are published on</td>
+<td>topic the chat events are published on. Agent sidecars file <code>social</code> and <code>events</code> into their inbox; any other topic reaches only library peers subscribed to it</td>
 </tr>
 <tr>
 <td><code>--read-only</code></td>
@@ -374,11 +378,11 @@ peer-to-peer with <strong>no relay server in the path at all</strong> — which 
 an internal implementation detail, so relying on it would be building on
 something that can change without warning. See requirement G.</p>
 <hr>
-<h1 id="requirements-for-social-stream-ninja">Requirements for Social Stream Ninja<a class="anchor" href="#requirements-for-social-stream-ninja" aria-label="Link to this section">#</a></h1>
+<h2 id="requirements-for-social-stream-ninja">Requirements for Social Stream Ninja<a class="anchor" href="#requirements-for-social-stream-ninja" aria-label="Link to this section">#</a></h2>
 <p>Everything above works against SSN as it exists. This section is the proposal
 side: what SSN — especially the standalone desktop app — could change to make
 agent integration genuinely accessible. Ordered by impact.</p>
-<h2 id="a-scoped-session-tokens-highest-impact-and-a-security-fix">A. Scoped session tokens <em>(highest impact, and a security fix)</em><a class="anchor" href="#a-scoped-session-tokens-highest-impact-and-a-security-fix" aria-label="Link to this section">#</a></h2>
+<h3 id="a-scoped-session-tokens-highest-impact-and-a-security-fix">A. Scoped session tokens <em>(highest impact, and a security fix)</em><a class="anchor" href="#a-scoped-session-tokens-highest-impact-and-a-security-fix" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> The session ID is the only credential and it grants everything:
 read chat, send chat to every platform, block users, clear overlays, and inject
 fake donation events. SSN&#39;s own docs say so — <em>&quot;Anyone with your session ID can
@@ -417,7 +421,7 @@ cautious streamer is &quot;do not point an autonomous agent at this,&quot; and a
 token is what changes that answer. In the meantime <code>ninja-p2p ssn --read-only</code>
 enforces the same posture from this side, which helps against an over-eager
 agent but not against anyone who already holds the session id.</p>
-<h2 id="b-a-single-connect-an-app-setup-surface">B. A single &quot;Connect an app&quot; setup surface<a class="anchor" href="#b-a-single-connect-an-app-setup-surface" aria-label="Link to this section">#</a></h2>
+<h3 id="b-a-single-connect-an-app-setup-surface">B. A single &quot;Connect an app&quot; setup surface<a class="anchor" href="#b-a-single-connect-an-app-setup-surface" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> Receiving chat requires two specific toggles, the critical one is
 third in a list under <code>Global settings and tools</code> → <code>Mechanics</code>, and missing it
 fails <strong>silently</strong> — the client connects successfully and simply receives
@@ -431,7 +435,7 @@ a sign the UI is asking too much.</p>
 </ol>
 <p>That counter alone would eliminate most integration support questions, because
 the user can see whether the problem is on their side or the client&#39;s.</p>
-<h2 id="c-a-healthhandshake-response">C. A health/handshake response<a class="anchor" href="#c-a-healthhandshake-response" aria-label="Link to this section">#</a></h2>
+<h3 id="c-a-healthhandshake-response">C. A health/handshake response<a class="anchor" href="#c-a-healthhandshake-response" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> A client can connect to the relay with a completely invalid session
 and get a successful connection that never delivers anything. I verified this:
 a random session ID connects fine. There is no way to distinguish &quot;wrong
@@ -441,7 +445,7 @@ answering:</p>
 <div class="codeblock"><span class="lang">json</span><pre><code>{ &quot;sessionActive&quot;: true, &quot;publishers&quot;: 1, &quot;channels&quot;: [4], &quot;sources&quot;: [&quot;twitch&quot;,&quot;youtube&quot;] }</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p><code>getChatSources</code> already exists and is close to this; formalising it as a
 health check and documenting the &quot;no publisher&quot; response would be enough.</p>
-<h2 id="d-standalone-app-host-the-bridge-natively">D. Standalone app: host the bridge natively<a class="anchor" href="#d-standalone-app-host-the-bridge-natively" aria-label="Link to this section">#</a></h2>
+<h3 id="d-standalone-app-host-the-bridge-natively">D. Standalone app: host the bridge natively<a class="anchor" href="#d-standalone-app-host-the-bridge-natively" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> The standalone desktop app is already a persistent process that
 does not need a browser window open — a much better host for an agent bridge
 than a browser extension. But today a user still has to run a second process
@@ -456,18 +460,18 @@ room&quot;</strong>, which:</p>
 </ul>
 <p>That collapses the whole setup to one checkbox and one copy-paste, which is the
 difference between a feature people try and one they finish.</p>
-<h2 id="e-outbound-rate-limiting-for-agent-sent-chat">E. Outbound rate limiting for agent-sent chat<a class="anchor" href="#e-outbound-rate-limiting-for-agent-sent-chat" aria-label="Link to this section">#</a></h2>
+<h3 id="e-outbound-rate-limiting-for-agent-sent-chat">E. Outbound rate limiting for agent-sent chat<a class="anchor" href="#e-outbound-rate-limiting-for-agent-sent-chat" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> An agent replying to chat can loop or spam. That damage is public
 and lands on the user&#39;s channel and platform standing.</p>
 <p><strong>Requirement.</strong> Per-token <code>sendChat</code> rate limits with a sane default, and
 ideally a &quot;queue for approval&quot; mode where agent-sent messages wait in the dock
 for a human click. The dock already has the interaction model for this.</p>
-<h2 id="f-document-the-event-vocabulary">F. Document the event vocabulary<a class="anchor" href="#f-document-the-event-vocabulary" aria-label="Link to this section">#</a></h2>
+<h3 id="f-document-the-event-vocabulary">F. Document the event vocabulary<a class="anchor" href="#f-document-the-event-vocabulary" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> <code>event</code> is a free-form string (<code>&quot;follow&quot;</code>, <code>&quot;raid&quot;</code>, …). An agent
 that wants to react to raids has to guess the value per platform.</p>
 <p><strong>Requirement.</strong> Publish the enum and its per-platform mapping. <code>meta</code> already
 carries <code>eventTypeMapping</code>; surfacing that as documentation would do it.</p>
-<h2 id="g-freeze-and-document-the-webrtc-listener-contract">G. Freeze and document the WebRTC listener contract<a class="anchor" href="#g-freeze-and-document-the-webrtc-listener-contract" aria-label="Link to this section">#</a></h2>
+<h3 id="g-freeze-and-document-the-webrtc-listener-contract">G. Freeze and document the WebRTC listener contract<a class="anchor" href="#g-freeze-and-document-the-webrtc-listener-contract" aria-label="Link to this section">#</a></h3>
 <p><strong>Problem.</strong> SSN&#39;s P2P path (room = session id, salt <code>vdo.ninja</code>, the user&#39;s
 password) is an internal detail. Building on it means building on something that
 can change silently.</p>
@@ -477,7 +481,7 @@ from its own overlays. That would let integrations drop the relay entirely and
 run true peer-to-peer.</p>
 <p>Lower priority than A–D, but it is the version with the least infrastructure in
 the path, and it costs SSN nothing to run.</p>
-<h2 id="what-does-not-need-to-change">What does not need to change<a class="anchor" href="#what-does-not-need-to-change" aria-label="Link to this section">#</a></h2>
+<h3 id="what-does-not-need-to-change">What does not need to change<a class="anchor" href="#what-does-not-need-to-change" aria-label="Link to this section">#</a></h3>
 <p>Worth saying: the message schema is genuinely good. <code>chatname</code> / <code>chatmessage</code> /
 <code>type</code> plus optional donation, membership, badges, and event fields covers
 everything the bridge needed, and <code>api.md</code> is unusually thorough for a project
@@ -509,14 +513,15 @@ discoverability</strong>, not about the data model.</p>
 <li><a href="#read-only-mode" style="padding-left:24px">Read-only mode</a></li>
 <li><a href="#safety-live-chat-is-hostile-input">Safety: live chat is hostile input</a></li>
 <li><a href="#two-transport-paths">Two transport paths</a></li>
-<li><a href="#a-scoped-session-tokens-highest-impact-and-a-security-fix">A. Scoped session tokens (highest impact, and a security fix)</a></li>
-<li><a href="#b-a-single-connect-an-app-setup-surface">B. A single &quot;Connect an app&quot; setup surface</a></li>
-<li><a href="#c-a-healthhandshake-response">C. A health/handshake response</a></li>
-<li><a href="#d-standalone-app-host-the-bridge-natively">D. Standalone app: host the bridge natively</a></li>
-<li><a href="#e-outbound-rate-limiting-for-agent-sent-chat">E. Outbound rate limiting for agent-sent chat</a></li>
-<li><a href="#f-document-the-event-vocabulary">F. Document the event vocabulary</a></li>
-<li><a href="#g-freeze-and-document-the-webrtc-listener-contract">G. Freeze and document the WebRTC listener contract</a></li>
-<li><a href="#what-does-not-need-to-change">What does not need to change</a></li>
+<li><a href="#requirements-for-social-stream-ninja">Requirements for Social Stream Ninja</a></li>
+<li><a href="#a-scoped-session-tokens-highest-impact-and-a-security-fix" style="padding-left:24px">A. Scoped session tokens (highest impact, and a security fix)</a></li>
+<li><a href="#b-a-single-connect-an-app-setup-surface" style="padding-left:24px">B. A single &quot;Connect an app&quot; setup surface</a></li>
+<li><a href="#c-a-healthhandshake-response" style="padding-left:24px">C. A health/handshake response</a></li>
+<li><a href="#d-standalone-app-host-the-bridge-natively" style="padding-left:24px">D. Standalone app: host the bridge natively</a></li>
+<li><a href="#e-outbound-rate-limiting-for-agent-sent-chat" style="padding-left:24px">E. Outbound rate limiting for agent-sent chat</a></li>
+<li><a href="#f-document-the-event-vocabulary" style="padding-left:24px">F. Document the event vocabulary</a></li>
+<li><a href="#g-freeze-and-document-the-webrtc-listener-contract" style="padding-left:24px">G. Freeze and document the WebRTC listener contract</a></li>
+<li><a href="#what-does-not-need-to-change" style="padding-left:24px">What does not need to change</a></li>
 <li><a href="#related">Related</a></li></ul></aside>
 </div>
 
@@ -527,7 +532,7 @@ discoverability</strong>, not about the data model.</p>
       <p class="fine">Peer coordination for AI agents over WebRTC. Built on <a href="https://vdo.ninja">VDO.Ninja</a>.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
-    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
+    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
     <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>

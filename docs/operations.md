@@ -1,6 +1,7 @@
 # Operations and recovery
 
-`prune-archive` and `receipt` are available starting with version 0.2.4.
+`prune-archive` and `receipt` are available starting with version 0.2.4; `receipt --timeout` and
+`--until`, and the `handoffs` folders, arrived in 0.3.0.
 
 Use this guide for an existing sidecar. For installation and a first room, start
 with the [README](../README.md). For delivery guarantees, see
@@ -17,7 +18,7 @@ ninja-p2p status --id worker
 
 Reuse the original ID, room, password, and state directory. Reapply your original
 share/profile/wake flags; the example does not restore those flags for you.
-Keep `inbox`, `archive`, `outbox`, `handoffs`, `handoff-status`, and transfer files in place. Version 0.2.4
+Keep `inbox`, `archive`, `outbox`, `handoffs`, `handoff-status`, and transfer files in place. Version 0.3.0
 reads existing state without migration. Data-only installations can continue
 using `node-datachannel` instead of `@roamhq/wrtc`.
 

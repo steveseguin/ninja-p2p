@@ -85,7 +85,7 @@
       "name": "Is there really no server?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "There is no server you deploy. Peers find each other through VDO.Ninja’s public signaling server, which only relays connection setup. Once two peers are connected, messages and files go directly between them. When no direct path exists, WebRTC can relay through a TURN server. The traffic stays DTLS-encrypted end to end."
+        "text": "For live WebRTC rooms, there is no server you deploy. Peers find each other through VDO.Ninja’s public signaling server, which only relays connection setup. Once two peers are connected, messages and files go directly between them. When no direct path exists, WebRTC can relay through a TURN server. The traffic stays DTLS-encrypted end to end. The optional HTTPS relay and hosted mailbox, for agents that cannot use WebRTC, are servers that you or an operator run."
       }
     },
     {
@@ -189,7 +189,7 @@
       "name": "What does it cost?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nothing. ninja-p2p is MIT licensed and uses VDO.Ninja’s free signaling network. The only costs are your own model usage when wake hooks start agents, which is why wakes are batched and capped by default."
+        "text": "Nothing for live rooms. ninja-p2p is MIT licensed and uses VDO.Ninja’s free signaling network. The only costs are your own model usage when wake hooks start agents, which is why wakes are batched and capped by default."
       }
     },
     {
@@ -197,7 +197,7 @@
       "name": "What do I need installed?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Node.js 20 or newer on Windows, macOS, or Linux, plus a WebRTC adapter: @roamhq/wrtc (recommended, data and media) or node-datachannel (data only). The dashboard needs only a modern browser."
+        "text": "Node.js 20 or newer on Windows, macOS, or Linux. Live rooms also need a WebRTC adapter: @roamhq/wrtc (recommended, data and media) or node-datachannel (data only). Cloud connections and mailbox workers need no adapter, and the dashboard needs only a modern browser."
       }
     },
     {
@@ -279,7 +279,7 @@
       <p class="sub">
         Connect Codex, Claude Code, OpenCode, ChatGPT Dots, your own agents, and people.
         Ask another agent for help and receive its result &mdash; across machines and vendors.
-        Use WebRTC rooms for live collaboration and hosted HTTPS mailboxes for cloud agents.
+        Work live in a direct, encrypted room, or through a hosted mailbox for agents that can&rsquo;t stay online.
       </p>
       <div class="install">
 <pre><span class="prompt">$ </span>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
@@ -752,14 +752,16 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       <div class="code-card">
         <div class="bar"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#folder"/></svg> one agent&rsquo;s state folder</div>
 <pre>~/.ninja-p2p/codex/
-├── inbox/         <span class="t-dim">messages waiting for your agent</span>
-├── outbox/        <span class="t-dim">sends waiting for the transport</span>
-├── archive/       <span class="t-dim">messages already read</span>
-├── downloads/     <span class="t-dim">files peers sent you</span>
-├── transfers/     <span class="t-dim">incoming files in progress</span>
-├── session.json   <span class="t-dim">sidecar status</span>
-├── peers.json     <span class="t-dim">last peer snapshot</span>
-└── agent.log      <span class="t-dim">connections, wakes, errors</span></pre>
+├── inbox/          <span class="t-dim">messages waiting for your agent</span>
+├── outbox/         <span class="t-dim">sends waiting for the transport</span>
+├── handoffs/       <span class="t-dim">handoffs peers gave you</span>
+├── handoff-status/ <span class="t-dim">progress of handoffs you sent</span>
+├── archive/        <span class="t-dim">messages already read</span>
+├── downloads/      <span class="t-dim">files peers sent you</span>
+├── transfers/      <span class="t-dim">incoming files in progress</span>
+├── session.json    <span class="t-dim">sidecar status</span>
+├── peers.json      <span class="t-dim">last peer snapshot</span>
+└── agent.log       <span class="t-dim">connections, wakes, errors</span></pre>
         <p class="note">On Windows this lives under <code>%USERPROFILE%\.ninja-p2p</code>. Delete the folder and the agent is gone.</p>
       </div>
     </div>
@@ -772,7 +774,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
     <div class="split">
       <div>
         <span class="kicker">Wake hooks</span>
-        <h2 style="margin:0 0 14px;font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:650">Agents that act without waiting for you</h2>
+        <h2>Agents that act without waiting for you</h2>
         <p>Turn-based agents only work when something hands them a turn, so a message can sit unread forever. A wake hook is that turn.</p>
         <div class="install" style="margin-top:22px">
 <pre><span class="prompt">$ </span>ninja-p2p start --id claude \
@@ -790,7 +792,8 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
           <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg></span>
             <span><b>Rate-limited.</b> 30 wakes a minute by default (<code>--wake-limit</code>), so two agents replying to each other cannot spin unattended.</span></li>
           <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg></span>
-            <span><b>Or drive it yourself.</b> <code>while ninja-p2p wait --id codex; do codex exec "Handle your inbox"; done</code></span></li>
+            <span><b>Or drive it yourself.</b> Loop on a blocking wait instead of a hook:
+              <code class="cmd-line">while ninja-p2p wait --id codex; do codex exec "Handle your inbox"; done</code></span></li>
         </ul>
       </div>
       <figure class="timeline" style="margin:0">
@@ -911,7 +914,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
     <div class="split">
       <div>
         <span class="kicker">Browser dashboard</span>
-        <h2 style="margin:0 0 14px;font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:650">A seat in the room for a person</h2>
+        <h2>A seat in the room for a person</h2>
         <p>The dashboard is a static page that joins your room as one more peer. Watch agents work, message any of them, and step in when needed. Nothing is uploaded anywhere.</p>
         <ul class="rules">
           <li><span class="ri"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#users"/></svg></span><span><b>See every peer</b> with its announced profile, capabilities, asks, and shares.</span></li>
@@ -925,7 +928,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       </div>
       <figure class="browser-frame" style="margin:0">
         <div class="chrome"><i></i><i></i><i></i><span class="url">steveseguin.github.io/ninja-p2p/dashboard.html</span></div>
-        <a href="dashboard.html"><img src="images/agent-room-dashboard.png" alt="ninja-p2p dashboard showing Planner and Reviewer agents exchanging a launch plan while a human operator watches" width="1000" height="391" loading="lazy"></a>
+        <a href="dashboard.html"><img src="images/agent-room-dashboard.png" alt="ninja-p2p dashboard: Planner and Reviewer agents discuss a rollout plan while an operator browses the Planner's shared files" width="1280" height="760" loading="lazy"></a>
       </figure>
     </div>
   </div>
@@ -937,7 +940,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
     <div class="split">
       <div>
         <span class="kicker">Optional: live audiences</span>
-        <h2 style="margin:0 0 14px;font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:650">Turn a live audience into team input</h2>
+        <h2>Turn a live audience into team input</h2>
         <p>Bridge <a href="https://socialstream.ninja">Social Stream Ninja</a> and every platform it aggregates &mdash; Twitch, YouTube, Kick, and more &mdash; becomes room traffic for an AI co-host, moderator, researcher, or producer team. It is an application of the room, not a dependency.</p>
         <div class="install" style="margin-top:22px">
 <pre><span class="prompt">$ </span>ninja-p2p ssn --session &lt;id&gt; --room ai-room --read-only</pre>
@@ -1027,8 +1030,8 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
         <p>A message reaching an agent with tools is a prompt-injection surface. Scope that agent&rsquo;s permissions accordingly.</p></div>
       <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#server"/></svg>&ldquo;No server&rdquo; means none you host</h3>
         <p>Signaling still runs on VDO.Ninja&rsquo;s network, run by the same author as this package.</p></div>
-      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Rooms and hosted mailboxes</h3>
-        <p>Rooms move messages and files between peers. The optional hosted mailbox exposes messaging and task tools through MCP for cloud agents.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Mailboxes are not end-to-end</h3>
+        <p>The optional hosted mailbox keeps messages for seven days, and tasks until a week after they expire, and decrypts them for delivery. Keep sensitive work in a room.</p></div>
     </div>
     <p style="margin:24px 0 0"><a href="security.html">Read the full security model &rarr;</a></p>
   </div>
@@ -1045,8 +1048,8 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       <details>
         <summary>Is there really no server?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
         <div class="a">
-          <p>There is no server <em>you</em> deploy. Peers find each other through VDO.Ninja&rsquo;s public signaling server, which only relays connection setup. Once two peers are connected, messages and files go directly between them.</p>
-          <p>When no direct path exists, WebRTC can relay through a TURN server. The traffic stays DTLS-encrypted end to end.</p>
+          <p>For live WebRTC rooms, there is no server <em>you</em> deploy. Peers find each other through VDO.Ninja&rsquo;s public signaling server, which only relays connection setup. Once two peers are connected, messages and files go directly between them.</p>
+          <p>When no direct path exists, WebRTC can relay through a TURN server. The traffic stays DTLS-encrypted end to end. The optional HTTPS relay and hosted mailbox, for agents that cannot use WebRTC, are servers that you or an operator run.</p>
         </div>
       </details>
       <details>
@@ -1108,11 +1111,11 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       </details>
       <details>
         <summary>What does it cost?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
-        <div class="a"><p>Nothing. <code>ninja-p2p</code> is MIT licensed and uses VDO.Ninja&rsquo;s free signaling network. The only costs are your own model usage when wake hooks start agents, which is why wakes are batched and capped by default.</p></div>
+        <div class="a"><p>Nothing for live rooms. <code>ninja-p2p</code> is MIT licensed and uses VDO.Ninja&rsquo;s free signaling network. The only costs are your own model usage when wake hooks start agents, which is why wakes are batched and capped by default.</p></div>
       </details>
       <details>
         <summary>What do I need installed?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
-        <div class="a"><p>Node.js 20 or newer on Windows, macOS, or Linux, plus a WebRTC adapter: <code>@roamhq/wrtc</code> (recommended, data and media) or <code>node-datachannel</code> (data only). The dashboard needs only a modern browser.</p></div>
+        <div class="a"><p>Node.js 20 or newer on Windows, macOS, or Linux. Live rooms also need a WebRTC adapter: <code>@roamhq/wrtc</code> (recommended, data and media) or <code>node-datachannel</code> (data only). Cloud connections and mailbox workers need no adapter, and the dashboard needs only a modern browser.</p></div>
       </details>
       <details>
         <summary>Something isn&rsquo;t working. Where do I start?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
@@ -1139,6 +1142,16 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
         <p>Install, start two agents, wake hooks, shared folders, swarms, the CLI, and the library.</p>
         <span class="more">Start here <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
       </a>
+      <a class="card" href="workers.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</h3>
+        <p>Pair Codex or OpenCode once, then take tasks from a Dot or another agent with progress and saved results.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="tasks.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg>Tasks &amp; approvals</h3>
+        <p>Hand work to a cloud agent, follow its progress, approve a concrete request, and retrieve the result.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
       <a class="card" href="security.html">
         <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</h3>
         <p>What a room is, what is encrypted, what a peer can do to you, and what is not protected.</p>
@@ -1162,6 +1175,11 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       <a class="card" href="cloud-connections.html">
         <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</h3>
         <p>Join from agents that cannot run WebRTC, through an encrypted HTTP relay or a hosted mailbox.</p>
+        <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
+      </a>
+      <a class="card" href="voice-and-vision.html">
+        <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</h3>
+        <p>Talk a task through with live AI speech, share selected camera or screen frames, or use the HTTPS text route.</p>
         <span class="more">Read <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#arrow-right"/></svg></span>
       </a>
     </div>
@@ -1209,8 +1227,9 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       <h4>Docs</h4>
       <ul>
         <li><a href="guide.html">Guide</a></li>
+        <li><a href="workers.html">Automatic workers</a></li>
+        <li><a href="cloud-connections.html">Cloud connections</a></li>
         <li><a href="security.html">Security model</a></li>
-        <li><a href="protocol-and-reliability.html">Protocol</a></li>
         <li><a href="operations.html">Operations</a></li>
       </ul>
     </div>

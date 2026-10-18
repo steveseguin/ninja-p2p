@@ -104,9 +104,10 @@
     <nav aria-label="Primary">
       <ul class="nav-links">
         <li><a href="./#how">How it works</a></li>
-        <li><a href="./#faq">FAQ</a></li>
-        <li><a href="guide.html">Guide</a></li>
+        <li><a href="./#files">Files</a></li>
         <li><a href="security.html">Security</a></li>
+        <li><a href="./#faq">FAQ</a></li>
+        <li><a href="guide.html">Docs</a></li>
       </ul>
     </nav>
     <div class="nav-actions">
@@ -120,11 +121,13 @@
 
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
+<button class="docs-menu" type="button" aria-expanded="false" aria-controls="docs-groups"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg><span>All guides</span><span class="docs-menu-current">Changelog</span><svg class="icon i-chevron" aria-hidden="true"><use href="assets/icons.svg#chevron-down"/></svg></button>
+<div class="docs-groups" id="docs-groups">
 <h4>Start</h4><ul>
-<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg>Tasks &amp; approvals</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
-<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -142,6 +145,7 @@
 <li><a href="north-star.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Product direction</a></li>
 <li><a href="sdk-wishlist.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg>SDK wishlist</a></li>
 </ul>
+</div>
 </nav>
 <main id="main">
   <header class="docs-head">
@@ -155,6 +159,36 @@
     </div>
   </header>
   <article class="prose">
+<h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Fix Social Stream chat never reaching agent sidecars: sidecars now file the
+bridge&#39;s <code>social</code> topic into their inbox alongside <code>events</code>.</li>
+<li>Fix dashboard security issues: peer-supplied names can no longer inject HTML
+through attributes, a peer cannot take over another peer&#39;s entry, the room
+password is no longer saved in the browser, and the SDK script is pinned with
+a Subresource Integrity hash.</li>
+<li>Fix dashboard reliability: stop an upload as soon as the receiver rejects it,
+show replayed history once and in time order, ignore swarm control traffic,
+tolerate malformed peer profiles, clean up after a failed connect, and treat an
+empty password as no password, matching the CLI.</li>
+<li>Redesign the dashboard with a top bar, light and dark themes, a getting-started
+panel, a separate peer details column, and keyboard-accessible peer list.</li>
+<li><code>start</code> and <code>room</code> no longer suggest joining with the ID the agent already uses.</li>
+<li><code>doctor</code> and <code>status</code> no longer create empty <code>inbox</code>, <code>archive</code>, and <code>outbox</code>
+folders inside state folders that are not sidecars, such as <code>workers/</code>.</li>
+<li>The dashboard supports <code>/task</code>, lists its commands readably under <code>/help</code>, and
+keeps a chosen file and the focused field when peer details refresh.</li>
+<li>Polish the website: fix overflowing command boxes and a clipped demo terminal,
+add a collapsible docs menu on phones, link the worker, task, and voice guides,
+and refresh the dashboard screenshot.</li>
+<li><code>fetch --timeout</code> now ends a download only after that long without a new
+verified chunk, instead of cutting off any transfer longer than five minutes.</li>
+<li>Correct the docs: the raw CLI flow now starts a sidecar so replies arrive,
+the hosted mailbox&#39;s MCP tools are described consistently, <code>NINJA_ROOM</code>
+bypasses the sidecar queue, mailbox credentials no longer share the worker
+config&#39;s file name, and the README lists the remaining flags and helper
+programs.</li>
+</ul>
 <h2 id="030--2026-10-18">0.3.0 — 2026-10-18<a class="anchor" href="#030--2026-10-18" aria-label="Link to this section">#</a></h2>
 <ul>
 <li><p>Fix npm command launchers on Linux and macOS when invoked through symlinks.</p>
@@ -382,7 +416,8 @@ co-host, moderation, research, and live-production use case.</li>
 <a class="next" href="recovery-validation.html"><small>Next</small>Recovery validation</a>
 </nav>
 </main>
-<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#030--2026-10-18">0.3.0 — 2026-10-18</a></li>
+<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#unreleased">Unreleased</a></li>
+<li><a href="#030--2026-10-18">0.3.0 — 2026-10-18</a></li>
 <li><a href="#024--2026-09-05">0.2.4 — 2026-09-05</a></li>
 <li><a href="#023--2026-09-05">0.2.3 — 2026-09-05</a></li>
 <li><a href="#sidecar-delivery-and-inboxes" style="padding-left:24px">Sidecar delivery and inboxes</a></li>
@@ -409,7 +444,7 @@ co-host, moderation, research, and live-production use case.</li>
       <p class="fine">Peer coordination for AI agents over WebRTC. Built on <a href="https://vdo.ninja">VDO.Ninja</a>.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
-    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
+    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
     <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>

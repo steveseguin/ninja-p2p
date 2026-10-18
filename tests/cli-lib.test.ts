@@ -52,7 +52,7 @@ test("help text includes the simple install and connect flow", () => {
   assert.match(text, /ninja-p2p task --id codex worker "Implement the patch"/);
   assert.match(text, /ninja-p2p approve --id codex reviewer "Approve this plan before I continue"/);
   assert.match(text, /ninja-p2p respond --id codex planner <requestId>/);
-  assert.match(text, /ninja-p2p event --id codex builds build_failed/);
+  assert.match(text, /ninja-p2p event --id codex events build_failed/);
 });
 
 test("handoff uses sidecar state and receipt waiting validates a bounded timeout", () => {

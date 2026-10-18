@@ -207,7 +207,7 @@ export function checkStateRoot(stateRoot: string): DiagnosticCheck {
       name: "state",
       status: "fail",
       detail: `cannot write ${stateRoot}: ${errorMessage(error)}`,
-      hint: "set NINJA_STATE_DIR to a writable folder",
+      hint: "make that folder writable, or give each agent --state-dir <writable folder> (check it with doctor --state-root)",
     };
   }
 }

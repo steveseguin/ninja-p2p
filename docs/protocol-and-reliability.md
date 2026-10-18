@@ -147,7 +147,7 @@ Chunks are occasionally dropped with nothing wrong anywhere: measured on an idle
 machine with three downloaders, one lost a chunk in roughly one run in three.
 The only thing that notices is the request timeout, so its length is the whole
 cost of a loss — a flat 15s turned a 2s transfer into 17s, which is where the
-worst outliers in the table above come from.
+worst outliers in the [measured-speed table](../README.md#swarm-file-transfer) come from.
 
 The timeout is therefore scaled to the peer's measured round-trip time, with a
 3s floor and the 15s ceiling kept for any peer we have not timed yet. The floor

@@ -64,7 +64,7 @@ connection fails:
 ```
 
 ```sh
-ninja-p2p mailbox --config /private/worker.json task update --file update.json
+ninja-p2p mailbox --config /private/worker-mailbox.json task update --file update.json
 ```
 
 | Action | When to use it |

@@ -191,7 +191,8 @@ For a throwaway local demo, defaults are fine.
 
 For anything else:
 
-1. Let `ninja-p2p` generate the room name. Do not invent one.
+1. Let `ninja-p2p` generate the room name. Do not invent one; short names like
+   `ai-room` in the examples are for throwaway tests only.
 2. Set `--password` on any room that carries real work.
 3. Share only directories you would hand over in full.
 4. Leave `--wake-limit` at its default.

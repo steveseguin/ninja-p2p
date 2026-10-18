@@ -18,11 +18,15 @@ import {
   handleSidecarHandoff,
   maybeHandleSidecarCommand,
   recordPeerNotice,
+  SIDECAR_TOPICS,
 } from "../src/cli.js";
 import { getAgentReceipt, getInboxSummary, listQueuedAgentActions, pruneAgentArchive, queueAgentAction, storeInboxMessage, takeInboxMessages, writeAgentSession, writePeersSnapshot } from "../src/agent-state.js";
 import { createEnvelope, type MessageEnvelope, type PeerIdentity } from "../src/protocol.js";
 import { HANDOFF_SKILL, HANDOFF_TTL_MS, readHandoffStatus, writeHandoffStatus } from "../src/handoff.js";
 import { VDOBridge } from "../src/vdo-bridge.js";
+import { MessageBus } from "../src/message-bus.js";
+import { PeerRegistry } from "../src/peer-registry.js";
+import { DEFAULT_SSN_TOPIC } from "../src/social-stream.js";
 
 test("npm symlink commands run their entry points on Unix", { skip: process.platform === "win32" }, () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-bin-links-"));
@@ -534,6 +538,20 @@ test("buildMenuText shows start guidance for Claude defaults", () => {
   assert.match(text, /id: claude/);
 });
 
+test("sidecars file Social Stream chat into their inbox", () => {
+  // The bus drops events on topics it is not subscribed to, so the bridge's
+  // default topic must be one of the sidecar's subscriptions.
+  const peers = new PeerRegistry();
+  const bus = new MessageBus({ streamId: "claude", role: "agent", name: "Claude", instanceId: "i1" }, peers);
+  for (const topic of SIDECAR_TOPICS) bus.subscribe(topic);
+  const delivered: string[] = [];
+  bus.on("message", (envelope: MessageEnvelope) => delivered.push(envelope.topic ?? ""));
+  const bridgeIdentity = { streamId: "ssn_bridge", role: "bridge", name: "Social Stream", instanceId: "b1" };
+  bus.handleIncoming(createEnvelope(bridgeIdentity, "event", { kind: "social_chat", text: "hi" }, { topic: DEFAULT_SSN_TOPIC }));
+  bus.handleIncoming(createEnvelope(bridgeIdentity, "event", { kind: "build_failed" }, { topic: "events" }));
+  assert.deepEqual(delivered, [DEFAULT_SSN_TOPIC, "events"]);
+});
+
 test("buildRoomText shows join instructions for other agents", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-room-"));
   try {
@@ -542,8 +560,9 @@ test("buildRoomText shows join instructions for other agents", () => {
 
     assert.match(text, /room: ai-room/);
     assert.match(text, /Claude: \/ninja-p2p start --room ai-room/);
-    assert.match(text, /Codex: ninja-p2p start --room ai-room --id codex/);
     assert.match(text, /Generic CLI: ninja-p2p start --room ai-room --id worker/);
+    // The seeded agent is already codex, so suggesting --id codex would collide.
+    assert.doesNotMatch(text, /--id codex/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

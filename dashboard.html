@@ -6,160 +6,277 @@
 <title>ninja-p2p Dashboard | WebRTC Agent Rooms</title>
 <meta name="description" content="Join a ninja-p2p room to chat with agents, inspect capabilities, and exchange files over WebRTC.">
 <meta name="robots" content="noindex, follow">
-<meta name="theme-color" content="#0d1117">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232b59c3'/%3E%3Cpath d='M32 18.1 16 45.9h32Z' fill='none' stroke='%23fff' stroke-width='4.9' stroke-linejoin='round'/%3E%3Cg fill='%23fff'%3E%3Ccircle cx='32' cy='18.1' r='6.6'/%3E%3Ccircle cx='16' cy='45.9' r='6.6'/%3E%3Ccircle cx='48' cy='45.9' r='6.6'/%3E%3C/g%3E%3C/svg%3E">
+<script>
+  // Share the website's light/dark choice; apply it before first paint.
+  try {
+    var savedTheme = localStorage.getItem('ninja-p2p-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.setAttribute('data-theme', savedTheme);
+  } catch (e) {}
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
-  --fg:#e6edf3;--fg2:#8b949e;--accent:#58a6ff;--green:#3fb950;
-  --red:#f85149;--yellow:#d29922;--purple:#bc8cff;
-  --font:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  color-scheme:light;
+  --bg:#f6f5f1;--bg2:#ffffff;--bg3:#f3f2ed;--border:#e2e0d8;--border2:#cfccc2;
+  --fg:#15161a;--fg2:#6a6963;--accent:#2b59c3;--accent-soft:#e4ebfa;--accent-fg:#ffffff;
+  --green:#23804f;--red:#c2453b;--yellow:#9a6414;--purple:#7a4fc7;
+  --shadow:0 1px 2px rgba(20,20,18,.04),0 8px 24px rgba(20,20,18,.06);
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --font:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
 }
-body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:13px;line-height:1.5;display:flex;height:100vh;overflow:hidden}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0e0f12;--bg2:#16181d;--bg3:#1c1f25;--border:#262a31;--border2:#353a43;
+    --fg:#e9eaed;--fg2:#9b9fa9;--accent:#7ea2ff;--accent-soft:#1b2440;--accent-fg:#0b0d12;
+    --green:#5cc28a;--red:#ec7b70;--yellow:#e2b05a;--purple:#b99cff;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0e0f12;--bg2:#16181d;--bg3:#1c1f25;--border:#262a31;--border2:#353a43;
+  --fg:#e9eaed;--fg2:#9b9fa9;--accent:#7ea2ff;--accent-soft:#1b2440;--accent-fg:#0b0d12;
+  --green:#5cc28a;--red:#ec7b70;--yellow:#e2b05a;--purple:#b99cff;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;display:grid;grid-template-columns:260px minmax(0,1fr) 300px;grid-template-rows:52px minmax(0,1fr);grid-template-areas:"top top top" "side main details";height:100vh;height:100dvh;overflow:hidden}
 a{color:var(--accent);text-decoration:none}
-button{font-family:var(--font);cursor:pointer;font-size:12px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);border-radius:6px;padding:4px 12px;transition:background .15s}
-button:hover{background:var(--border)}
-button.primary{background:var(--accent);color:#000;border-color:var(--accent)}
-button.primary:hover{opacity:.85}
-input,select{font-family:var(--font);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;outline:none}
-input:focus,select:focus{border-color:var(--accent)}
+a:hover{text-decoration:underline}
+code{font-family:var(--font);font-size:.92em;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+button{font-family:var(--sans);cursor:pointer;font-size:13px;font-weight:500;border:1px solid var(--border2);background:var(--bg2);color:var(--fg);border-radius:6px;padding:6px 12px;transition:background .15s,border-color .15s}
+button:hover{background:var(--bg3)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.primary:hover{opacity:.88;background:var(--accent)}
+input,select{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:6px;padding:7px 9px;outline:none}
+input::placeholder{color:var(--fg2);opacity:.8}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input:disabled{opacity:.6}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input:focus-visible,select:focus-visible{outline:none}
+
+/* Top bar */
+#topbar{grid-area:top;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.brand{display:inline-flex;align-items:center;gap:9px;color:var(--fg);font-weight:650;font-size:15px;letter-spacing:-.01em}
+.brand:hover{text-decoration:none}
+.brand svg{width:24px;height:24px;flex:none}
+.brand-sep{color:var(--border2)}
+.brand-sub{color:var(--fg2);font-weight:500;font-size:14px}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+.top-actions a{display:inline-flex;align-items:center;height:32px;padding:0 10px;border-radius:6px;color:var(--fg2);font-size:13px}
+.top-actions a:hover{color:var(--fg);background:var(--bg3);text-decoration:none}
+.icon-btn{display:inline-grid;place-items:center;width:32px;height:32px;padding:0;color:var(--fg2)}
+.icon-btn svg{width:16px;height:16px}
+.theme-toggle .i-sun{display:none}
+:root[data-theme="dark"] .theme-toggle .i-sun{display:block}
+:root[data-theme="dark"] .theme-toggle .i-moon{display:none}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .theme-toggle .i-sun{display:block}
+  :root:not([data-theme="light"]) .theme-toggle .i-moon{display:none}
+}
 
 /* Layout */
-#sidebar{width:240px;min-width:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-#sidebar h1{font-size:14px;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
-#sidebar h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0}
-#sidebar h1 .dot.on{background:var(--green)}
-#main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+#sidebar{grid-area:side;min-width:0;min-height:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column}
+#main{grid-area:main;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.panel-title{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.06em}
+.panel-title .count{min-width:20px;padding:0 6px;border-radius:999px;background:var(--bg3);border:1px solid var(--border);color:var(--fg2);font:600 11px/18px var(--font);text-align:center;letter-spacing:0}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--fg2);opacity:.6;flex-shrink:0}
+.dot.on{background:var(--green);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
 
 /* Connection Panel */
-#conn-panel{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg2)}
-#conn-panel label{display:block;font-size:11px;color:var(--fg2);margin-bottom:2px;margin-top:8px}
-#conn-panel label:first-child{margin-top:0}
-#conn-panel input{width:100%;margin-bottom:2px}
-#conn-panel .row{display:flex;gap:6px;margin-top:10px}
+#conn-panel{padding:16px;border-bottom:1px solid var(--border)}
+#conn-panel label{display:block;font-size:12px;font-weight:500;color:var(--fg2);margin:12px 0 4px}
+#conn-panel input{width:100%}
+#conn-panel .row{display:flex;gap:8px;margin-top:14px}
 #conn-panel .row button{flex:1;min-width:0}
-#conn-panel .status{font-size:11px;color:var(--fg2);margin-top:6px;text-align:center}
+#conn-panel .status{font-size:12px;color:var(--fg2);margin-top:10px;overflow-wrap:anywhere}
+.hint{font-size:11px;color:var(--fg2);margin-top:4px}
 
 /* Peer List */
-#peer-section{flex:1;overflow-y:auto;padding:8px 0}
-#peer-section h2{font-size:11px;color:var(--fg2);padding:4px 16px;text-transform:uppercase;letter-spacing:.5px}
-.peer-item{padding:6px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+#peer-section{flex:1;min-height:0;overflow-y:auto;padding:14px 8px}
+#peer-section .panel-title{padding:0 8px 8px}
+#peer-list{display:grid;gap:2px}
+#peer-list:empty::after{content:'No peers yet. Agents in the room appear here.';display:block;padding:4px 8px;color:var(--fg2);font-size:12px}
+.peer-item{width:100%;padding:7px 8px;border:0;border-radius:6px;background:transparent;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:400}
 .peer-item:hover{background:var(--bg3)}
-.peer-item.selected{background:var(--bg3);border-left:2px solid var(--accent)}
-.peer-item .indicator{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.peer-item.selected{background:var(--accent-soft);outline:1px solid color-mix(in srgb,var(--accent) 45%,transparent)}
+.peer-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.peer-item .indicator{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .peer-item .indicator.online{background:var(--green)}
-.peer-item .indicator.offline{background:var(--fg2)}
+.peer-item .indicator.offline{background:var(--fg2);opacity:.5}
 .peer-item .info{min-width:0}
-.peer-item .name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.peer-item .role{font-size:10px;color:var(--fg2)}
+.peer-item .name{display:block;font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.peer-item .role{display:block;font-size:11px;color:var(--fg2);font-family:var(--font)}
 
 /* Main content */
-#messages{flex:1;min-width:0;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
-.msg{padding:2px 0;word-break:break-word}
-.msg .ts{color:var(--fg2);font-size:11px;margin-right:6px}
-.msg .sender{font-weight:600;margin-right:4px}
+#feed{position:relative;flex:1;min-height:0}
+#messages{position:absolute;inset:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:2px}
+#messages:not(:empty)+#empty-state{display:none}
+#empty-state{position:absolute;inset:0;display:grid;place-items:center;padding:24px;overflow-y:auto}
+.empty-card{max-width:460px;padding:26px 28px;border:1px solid var(--border);border-radius:12px;background:var(--bg2);box-shadow:var(--shadow)}
+.empty-card h2{font-size:18px;font-weight:650;letter-spacing:-.01em;margin-bottom:6px}
+.empty-card p{color:var(--fg2);margin-bottom:14px}
+.empty-card ol{margin:0 0 14px 18px;color:var(--fg2);display:grid;gap:6px}
+.empty-card li::marker{color:var(--fg2)}
+.empty-card li b{color:var(--fg);font-weight:600}
+.empty-card .fine{font-size:12px;margin:0}
+.msg{display:grid;grid-template-columns:70px minmax(0,1fr);gap:10px;padding:5px 8px;border-radius:6px;word-break:break-word}
+.msg:hover{background:var(--bg3)}
+.msg .ts{color:var(--fg2);font:11px/20px var(--font)}
+.msg .line{min-width:0}
+.msg .sender{font-weight:600;margin-right:6px}
 .msg.type-chat .sender{color:var(--accent)}
 .msg.type-announce .sender{color:var(--green)}
 .msg.type-event .sender{color:var(--purple)}
 .msg.type-command .sender{color:var(--yellow)}
 .msg.type-command_response .sender{color:var(--yellow)}
-.msg.type-system{color:var(--fg2);font-style:italic}
-.msg.type-system .sender{color:var(--fg2)}
-.msg .body{color:var(--fg);overflow-wrap:anywhere}
-.msg .meta{color:var(--fg2);font-size:11px;overflow-wrap:anywhere}
+.msg.type-system{color:var(--fg2)}
+.msg.type-system .sender{color:var(--fg2);font-weight:500}
+.msg.type-system .body{color:var(--fg2)}
+.msg .body{color:var(--fg);overflow-wrap:anywhere;white-space:pre-wrap}
+.msg.type-command .body,.msg.type-command_response .body{font:12px/1.55 var(--font)}
+.msg .meta{color:var(--fg2);font-size:12px;overflow-wrap:anywhere}
 
 /* Chat Input */
-#chat-bar{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:6px;align-items:center}
+#chat-bar{padding:10px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:8px;align-items:center}
 #chat-bar input{flex:1;min-width:0}
-#chat-bar select{width:auto;min-width:100px;max-width:100%}
+#chat-bar select{width:auto;min-width:120px;max-width:40%}
 
 /* Peer details panel */
-#details-panel{padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--fg2);max-height:280px;min-width:0;overflow-y:auto;overflow-x:hidden}
-.details-title{font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.details-block{margin-bottom:8px}
-.details-label{color:var(--fg2);display:block;margin-bottom:2px}
-.details-value{color:var(--fg);word-break:break-word;overflow-wrap:anywhere}
-.skill-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
-.share-tag{display:inline-flex;max-width:100%;align-items:center;gap:4px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin:1px 2px;font-size:10px}
-.share-tag button{padding:1px 6px;font-size:10px}
-.ask-item{margin:3px 0;padding-left:10px;position:relative}
-.ask-item::before{content:'>';position:absolute;left:0;color:var(--fg2)}
-.details-actions,.share-browser-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.details-actions button,.share-browser-actions button{padding:3px 8px;flex:1 1 calc(50% - 3px);min-width:0}
-.share-browser{border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--bg)}
+#details-panel{grid-area:details;min-width:0;min-height:0;padding:16px;border-left:1px solid var(--border);background:var(--bg2);font-size:12px;color:var(--fg2);overflow-y:auto;overflow-x:hidden}
+.details-title{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.details-block{margin-bottom:12px}
+.details-label{color:var(--fg2);display:block;margin-bottom:3px;font-size:11px;font-weight:500}
+.details-value{color:var(--fg);font-size:13px;word-break:break-word;overflow-wrap:anywhere}
+.details-empty{color:var(--fg2);font-size:13px}
+.skill-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:999px;padding:1px 8px;margin:2px 2px 2px 0;font-size:11px;font-family:var(--font)}
+.share-tag{display:inline-flex;max-width:100%;align-items:center;gap:6px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 4px 2px 8px;margin:2px 2px 2px 0;font-size:12px;font-family:var(--font)}
+.share-tag button{padding:2px 8px;font-size:11px}
+details.asks summary{cursor:pointer;width:max-content}
+details.asks summary:hover{color:var(--fg)}
+.ask-item{margin:4px 0;padding-left:12px;position:relative}
+.ask-item::before{content:'›';position:absolute;left:0;color:var(--fg2)}
+.details-actions,.share-browser-actions{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 14px}
+.details-actions button,.share-browser-actions button{padding:5px 8px;font-size:12px;flex:1 1 calc(50% - 3px);min-width:0}
+.share-browser{border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg)}
+.share-browser .share-browser-actions{margin-bottom:0}
 .share-browser .row{display:flex;gap:6px;align-items:center;margin-top:6px}
 .share-browser .row:first-child{margin-top:0}
 .share-browser .row input,.share-browser .row select{flex:1;min-width:0}
-.share-list{margin-top:8px;border-top:1px solid var(--border);padding-top:6px}
+.share-browser input[type=file]{font-size:12px;padding:5px;width:100%}
+.share-list{margin-top:10px;border-top:1px solid var(--border);padding-top:6px}
 .share-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:4px 0}
-.share-entry .path{flex:1;color:var(--fg);word-break:break-word}
-.share-entry .meta{color:var(--fg2);font-size:10px;white-space:nowrap}
-.share-empty{color:var(--fg2)}
+.share-entry .path{flex:1;color:var(--fg);word-break:break-word;font-family:var(--font)}
+.share-entry .meta{color:var(--fg2);font-size:11px;white-space:nowrap}
+.share-entry button{padding:2px 8px;font-size:11px}
+.share-empty{color:var(--fg2);margin-top:6px}
 
 /* Responsive */
-@media(max-width:960px){
-  body{flex-direction:column;height:auto;min-height:100vh;overflow:auto}
-  #sidebar{width:100%;height:auto;max-height:none;border-right:none;border-bottom:1px solid var(--border)}
-  #main{overflow:visible}
-  #messages{overflow:visible;padding-bottom:72px}
-  #peer-section{flex:none;max-height:180px}
-  #details-panel{max-height:220px}
-  #chat-bar{position:fixed;z-index:10;left:0;right:0;bottom:0;flex-wrap:wrap;align-items:stretch;box-shadow:0 -4px 16px rgba(0,0,0,.35)}
-  #chat-bar select{flex:1 1 160px;min-width:0}
-  #chat-bar input{flex:1 1 100%}
-  #chat-bar button{flex:0 0 auto}
+@media(max-width:1180px){
+  body{grid-template-columns:230px minmax(0,1fr) 260px}
 }
 
-@media(max-width:700px){
-  #messages{padding-bottom:124px}
-  #conn-panel .row,
-  .share-browser .row{flex-direction:column;align-items:stretch}
-  .details-actions button,
-  .share-browser-actions button,
+@media(max-width:900px){
+  body{display:flex;flex-direction:column;height:auto;min-height:100vh;overflow:auto}
+  #details-panel{order:1}
+  #main{order:2}
+  #topbar{position:sticky;top:0;z-index:20;height:52px}
+  .brand-sep,.brand-sub,.top-actions a{display:none}
+  #sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border)}
+  #peer-section{flex:none;max-height:200px}
+  #details-panel{border-left:0;border-bottom:1px solid var(--border);max-height:none}
+  #main{overflow:visible}
+  #feed{position:static}
+  #messages{position:static;overflow:visible;padding:12px 12px 124px}
+  #empty-state{position:static;padding:16px 12px 132px}
+  #chat-bar{position:fixed;z-index:10;left:0;right:0;bottom:0;box-shadow:0 -4px 16px rgba(0,0,0,.18)}
+}
+
+@media(max-width:600px){
+  #chat-bar{flex-wrap:wrap;align-items:stretch}
+  #chat-bar select{flex:1 1 140px;min-width:0;max-width:none}
+  #chat-bar input{flex:1 1 100%}
   #chat-bar button{flex:1 1 100%}
+  .msg{grid-template-columns:minmax(0,1fr);gap:0}
+  .msg .ts{line-height:1.4}
 }
 </style>
 </head>
 <body>
 
-<div id="sidebar">
-  <h1><span class="dot" id="conn-dot"></span> Ninja P2P</h1>
+<header id="topbar">
+  <a class="brand" href="https://steveseguin.github.io/ninja-p2p/" title="ninja-p2p home">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#2b59c3"/><path d="M32 18.1 16 45.9h32Z" fill="none" stroke="#fff" stroke-width="4.9" stroke-linejoin="round"/><g fill="#fff"><circle cx="32" cy="18.1" r="6.6"/><circle cx="16" cy="45.9" r="6.6"/><circle cx="48" cy="45.9" r="6.6"/></g></svg>
+    ninja-p2p
+  </a>
+  <span class="brand-sep" aria-hidden="true">/</span>
+  <span class="brand-sub">Dashboard</span>
+  <div class="top-actions">
+    <a href="https://steveseguin.github.io/ninja-p2p/guide.html">Docs</a>
+    <a href="https://github.com/steveseguin/ninja-p2p">GitHub</a>
+    <button class="icon-btn theme-toggle" id="btn-theme" type="button" aria-label="Toggle dark mode">
+      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+    </button>
+  </div>
+</header>
 
+<aside id="sidebar" aria-label="Room and peers">
   <div id="conn-panel">
-    <label>Room</label>
-    <input id="inp-room" placeholder="clawd_..." autocomplete="off">
-    <label>Password</label>
-    <input id="inp-password" placeholder="false = no encryption" autocomplete="off">
-    <label>Your Name</label>
-    <input id="inp-name" value="Dashboard" autocomplete="off">
+    <h2 class="panel-title"><span class="dot" id="conn-dot"></span> Room</h2>
+    <label for="inp-room">Room name</label>
+    <input id="inp-room" placeholder="clawd_..." autocomplete="off" spellcheck="false">
+    <label for="inp-password">Password</label>
+    <input id="inp-password" type="password" placeholder="None" autocomplete="off" spellcheck="false">
+    <div class="hint">Use the same password as the agents, or leave it empty. It is not saved.</div>
+    <label for="inp-name">Your name</label>
+    <input id="inp-name" value="Dashboard" maxlength="64" autocomplete="off">
     <div class="row">
       <button class="primary" id="btn-connect">Connect</button>
       <button id="btn-disconnect" disabled>Disconnect</button>
     </div>
-    <div class="status" id="conn-status">Disconnected</div>
+    <div class="status" id="conn-status" role="status">Disconnected</div>
   </div>
 
   <div id="peer-section">
-    <h2>Peers (<span id="peer-count">0</span>)</h2>
+    <h2 class="panel-title">Peers <span class="count" id="peer-count">0</span></h2>
     <div id="peer-list"></div>
   </div>
+</aside>
 
-  <div id="details-panel"></div>
-</div>
-
-<div id="main">
-  <div id="messages"></div>
+<main id="main">
+  <div id="feed">
+    <div id="messages" role="log" aria-live="polite" aria-label="Room messages"></div>
+    <div id="empty-state">
+      <div class="empty-card">
+        <h2>Join your agents&rsquo; room</h2>
+        <p>The dashboard is one more peer in a ninja-p2p room. Messages and files go directly between browsers and agents.</p>
+        <ol>
+          <li>Start an agent with <code>ninja-p2p start --id &lt;name&gt;</code> and copy the <b>room</b> it prints.</li>
+          <li>Paste the room name on the left, plus its password if the agents use one.</li>
+          <li>Press <b>Connect</b>, then pick a peer to message it, browse its shares, or send a file.</li>
+        </ol>
+        <p class="fine">Type <code>/help</code> for commands. No agents yet? Run <code>ninja-p2p demo --keep</code> and open the link it prints. <a href="https://steveseguin.github.io/ninja-p2p/guide.html">Read the guide</a></p>
+      </div>
+    </div>
+  </div>
   <div id="chat-bar">
-    <select id="chat-target">
+    <select id="chat-target" aria-label="Send to">
       <option value="">Broadcast</option>
     </select>
-    <input id="chat-input" placeholder="Type a message... (/help for commands)" autocomplete="off">
+    <input id="chat-input" placeholder="Message the room, or /help for commands" autocomplete="off" aria-label="Message">
     <button class="primary" id="btn-send">Send</button>
   </div>
-</div>
+</main>
 
-<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.min.js"></script>
+<aside id="details-panel" aria-label="Peer details"></aside>
+
+<script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.min.js" integrity="sha384-1sqG7ZGnmcB9z5Dp8nh3jGB/86lkte79JjCJcLTYjO+Il27JP856VZAa+VpyLNGw" crossorigin="anonymous"></script>
 <script>
 (function() {
   'use strict';
@@ -207,14 +324,23 @@ input:focus,select:focus{border-color:var(--accent)}
 
   // ── URL params ─────────────────────────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
+  const urlPassword = params.get('password');
   if (params.get('room')) inpRoom.value = params.get('room');
-  if (params.get('password')) inpPassword.value = params.get('password');
+  if (urlPassword) inpPassword.value = urlPassword === 'false' ? '' : urlPassword;
   if (params.get('name')) inpName.value = params.get('name');
 
-  // Restore from localStorage
-  if (!inpRoom.value) inpRoom.value = localStorage.getItem('ninja_room') || '';
-  if (!inpPassword.value) inpPassword.value = localStorage.getItem('ninja_password') || 'false';
-  if (!inpName.value || inpName.value === 'Dashboard') inpName.value = localStorage.getItem('ninja_name') || 'Dashboard';
+  // Restore from localStorage, which can be unavailable in private windows.
+  function loadSetting(key) {
+    try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+  }
+  function saveSetting(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
+  }
+  if (!inpRoom.value) inpRoom.value = loadSetting('ninja_room');
+  // The room password is never stored: this origin is shared with other
+  // pages. Remove the copy that older builds saved.
+  try { localStorage.removeItem('ninja_password'); } catch (e) { /* storage unavailable */ }
+  if (!inpName.value || inpName.value === 'Dashboard') inpName.value = loadSetting('ninja_name') || 'Dashboard';
 
   // ── Helpers ────────────────────────────────────────────────────────────
   function randomId() {
@@ -232,10 +358,40 @@ input:focus,select:focus{border-color:var(--accent)}
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
+  // Safe in text and in quoted attribute values. Peer strings are untrusted.
   function escHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
+    return String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+  const textOr = (value, fallback) => typeof value === 'string' ? value : fallback;
+  const textList = (value) => Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
+  const namedList = (value) => Array.isArray(value)
+    ? value.filter((item) => isRecord(item) && typeof item.name === 'string')
+      .map((item) => ({ name: item.name, description: textOr(item.description, '') }))
+    : [];
+
+  // Keep only well-formed profile fields so a malformed announce cannot break rendering.
+  function cleanAgentProfile(agent) {
+    if (!isRecord(agent)) return null;
+    return {
+      runtime: textOr(agent.runtime, ''),
+      provider: textOr(agent.provider, ''),
+      model: textOr(agent.model, ''),
+      summary: textOr(agent.summary, ''),
+      workspace: textOr(agent.workspace, ''),
+      can: textList(agent.can),
+      asks: namedList(agent.asks),
+      shares: namedList(agent.shares),
+    };
+  }
+
+  function cleanShareEntries(entries) {
+    return Array.isArray(entries)
+      ? entries.filter((entry) => isRecord(entry) && typeof entry.path === 'string')
+      : [];
   }
 
   function bytesFromBase64(value) {
@@ -331,37 +487,66 @@ input:focus,select:focus{border-color:var(--accent)}
   // ── Message Display ────────────────────────────────────────────────────
   function addMessage(type, sender, body, ts, meta, extra) {
     const msg = Object.assign({ type, sender, body, ts: ts || Date.now(), meta }, extra || {});
-    messages.push(msg);
+    // Replayed history can arrive after newer messages; keep the log in time order.
+    let index = messages.length;
+    if (msg.replay) {
+      while (index > 0 && messages[index - 1].ts > msg.ts) index -= 1;
+    }
+    messages.splice(index, 0, msg);
+    renderMessage(msg, messagesEl.children[index] || null);
     if (messages.length > MAX_MESSAGES) {
       const removed = messages.shift();
       if (removed && removed.downloadUrl) URL.revokeObjectURL(removed.downloadUrl);
       messagesEl.firstElementChild?.remove();
     }
-    renderMessage(msg);
   }
 
-  function renderMessage(msg) {
+  // Every peer answers a history request, so the same broadcast can arrive
+  // several times. Show each message ID once.
+  const seenMessageIds = new Set();
+  function firstSighting(id) {
+    if (typeof id !== 'string' || !id) return true;
+    if (seenMessageIds.has(id)) return false;
+    seenMessageIds.add(id);
+    if (seenMessageIds.size > 2000) seenMessageIds.delete(seenMessageIds.values().next().value);
+    return true;
+  }
+
+  function clearMessages() {
+    for (const msg of messages) {
+      if (msg.downloadUrl) URL.revokeObjectURL(msg.downloadUrl);
+    }
+    messages.length = 0;
+    messagesEl.innerHTML = '';
+    seenMessageIds.clear();
+  }
+
+  function renderMessage(msg, before) {
     const div = document.createElement('div');
     div.className = 'msg type-' + msg.type;
-    let html = '<span class="ts">' + fmtTime(msg.ts) + '</span>';
+    let html = '<span class="ts">' + fmtTime(msg.ts) + '</span><div class="line">';
     html += '<span class="sender">' + escHtml(msg.sender) + '</span> ';
     html += '<span class="body">' + escHtml(String(msg.body)) + '</span>';
     if (msg.meta) html += ' <span class="meta">' + escHtml(msg.meta) + '</span>';
-    div.innerHTML = html;
+    div.innerHTML = html + '</div>';
     if (msg.downloadUrl) {
       const link = document.createElement('a');
       link.href = msg.downloadUrl;
       link.download = msg.downloadName || 'download';
       link.textContent = ' download';
       link.className = 'meta';
-      div.appendChild(link);
+      div.querySelector('.line').appendChild(link);
     }
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    // Follow new messages only when the reader is already at the bottom.
+    const pinned = !before && messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 48;
+    messagesEl.insertBefore(div, before || null);
+    if (pinned) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   // ── Peer List ──────────────────────────────────────────────────────────
   function renderPeers() {
+    const focusedSid = document.activeElement && document.activeElement.classList.contains('peer-item')
+      ? document.activeElement.dataset.sid : '';
     peerListEl.innerHTML = '';
     peerCountEl.textContent = peers.size;
     // Update chat target dropdown
@@ -370,16 +555,19 @@ input:focus,select:focus{border-color:var(--accent)}
 
     for (const [sid, p] of peers) {
       // Peer list item
-      const div = document.createElement('div');
+      const div = document.createElement('button');
+      div.type = 'button';
       div.className = 'peer-item' + (sid === selectedPeer ? ' selected' : '');
+      div.setAttribute('aria-pressed', sid === selectedPeer ? 'true' : 'false');
+      div.dataset.sid = sid;
       const name = p.identity?.name || sid;
       const role = p.identity?.role || 'unknown';
       div.innerHTML = `
-        <div class="indicator ${p.connected ? 'online' : 'offline'}"></div>
-        <div class="info">
-          <div class="name">${escHtml(name)}</div>
-          <div class="role">${escHtml(role)}${p.status && p.status !== 'online' ? ' - ' + escHtml(p.status) : ''}</div>
-        </div>`;
+        <span class="indicator ${p.connected ? 'online' : 'offline'}" title="${p.connected ? 'online' : 'offline'}"></span>
+        <span class="info">
+          <span class="name">${escHtml(name)}</span>
+          <span class="role">${escHtml(role)}${p.status && p.status !== 'online' ? ' · ' + escHtml(p.status) : ''}${p.connected ? '' : ' · offline'}</span>
+        </span>`;
       div.addEventListener('click', () => {
         selectedPeer = selectedPeer === sid ? '' : sid;
         chatTarget.value = selectedPeer;
@@ -395,16 +583,29 @@ input:focus,select:focus{border-color:var(--accent)}
       chatTarget.appendChild(opt);
     }
     chatTarget.value = curVal || '';
+    if (focusedSid) {
+      for (const button of peerListEl.children) {
+        if (button.dataset.sid === focusedSid) button.focus();
+      }
+    }
   }
 
   function renderDetails() {
+    // A rebuild must not drop what the operator was doing for the same peer:
+    // the chosen file, the upload status, or the focused field.
+    const samePeer = detailsPanel.dataset.peer === selectedPeer;
+    const oldUpload = detailsPanel.querySelector('#upload-file');
+    const keptFiles = samePeer && oldUpload && oldUpload.files && oldUpload.files.length ? oldUpload.files : null;
+    const keptStatus = samePeer ? (detailsPanel.querySelector('#upload-status')?.textContent || '') : '';
+    const focusedId = samePeer && detailsPanel.contains(document.activeElement) ? document.activeElement.id : '';
+    detailsPanel.dataset.peer = selectedPeer;
     if (!selectedPeer) {
-      detailsPanel.innerHTML = '<div class="details-title">Peer Details</div><div class="details-value">Select a bot to see its profile, capabilities, shares, and quick actions.</div>';
+      detailsPanel.innerHTML = '<div class="details-title">Peer details</div><div class="details-empty">Select a peer to see its profile, capabilities, and shared folders, or to send it a file.</div>';
       return;
     }
     const p = peers.get(selectedPeer);
     if (!p) {
-      detailsPanel.innerHTML = '<div class="details-title">Peer Details</div><div class="details-value">Peer not found.</div>';
+      detailsPanel.innerHTML = '<div class="details-title">Peer details</div><div class="details-empty">Peer not found.</div>';
       return;
     }
     const agent = p.agentProfile || {};
@@ -443,7 +644,7 @@ input:focus,select:focus{border-color:var(--accent)}
     ).join('');
 
     detailsPanel.innerHTML = [
-      '<div class="details-title">Peer Details</div>',
+      '<div class="details-title">Peer details</div>',
       '<div class="details-block"><span class="details-label">Name</span><div class="details-value">' + escHtml(p.identity?.name || selectedPeer) + '</div></div>',
       '<div class="details-block"><span class="details-label">Role</span><div class="details-value">' + escHtml(p.identity?.role || 'unknown') + '</div></div>',
       '<div class="details-block"><span class="details-label">Status</span><div class="details-value">' + escHtml(p.status || 'online') + (p.statusDetail ? ' - ' + escHtml(p.statusDetail) : '') + '</div></div>',
@@ -460,18 +661,18 @@ input:focus,select:focus{border-color:var(--accent)}
       agent.workspace ? '<div class="details-block"><span class="details-label">Workspace</span><div class="details-value">' + escHtml(agent.workspace) + '</div></div>' : '',
       skills ? '<div class="details-block"><span class="details-label">Skills</span><div class="details-value">' + skills + '</div></div>' : '',
       can ? '<div class="details-block"><span class="details-label">Can</span><div class="details-value">' + can + '</div></div>' : '',
-      asks ? '<div class="details-block"><span class="details-label">Asks</span><div class="details-value">' + asks + '</div></div>' : '',
-      shareTags ? '<div class="details-block"><span class="details-label">Shared Folders</span><div class="details-value">' + shareTags + '</div></div>' : '',
-      shares.length ? '<div class="details-block"><span class="details-label">Browse Shared Files</span><div class="share-browser">' +
+      asks ? '<details class="details-block asks"><summary class="details-label">Asks (' + (agent.asks || []).length + ')</summary><div class="details-value">' + asks + '</div></details>' : '',
+      shareTags ? '<div class="details-block"><span class="details-label">Shared folders</span><div class="details-value">' + shareTags + '</div></div>' : '',
+      shares.length ? '<div class="details-block"><span class="details-label">Browse shared files</span><div class="share-browser">' +
         '<div class="row"><select id="share-select">' + shareOptions + '</select><input id="share-path" placeholder="folder or file path" value="' + escHtml(shareBrowser.path || '') + '" autocomplete="off"></div>' +
-        '<div class="share-browser-actions"><button type="button" id="btn-share-list">List</button><button type="button" id="btn-share-get">Get File</button></div>' +
+        '<div class="share-browser-actions"><button type="button" id="btn-share-list">List</button><button type="button" id="btn-share-get">Get file</button></div>' +
         '<div class="share-list">' +
           (shareBrowser.entries.length
             ? shareEntries + (shareBrowser.truncated ? '<div class="share-empty">Showing the first entries only.</div>' : '')
             : '<div class="share-empty">' + escHtml(shareBrowser.share ? 'No listing loaded yet. Click Browse or List.' : 'Select a shared folder first.') + '</div>') +
         '</div>' +
       '</div></div>' : '',
-      '<div class="details-block"><span class="details-label">Send a File</span><div class="share-browser">' +
+      '<div class="details-block"><span class="details-label">Send a file</span><div class="share-browser">' +
         '<div class="row"><input type="file" id="upload-file"></div>' +
         '<div class="share-browser-actions"><button type="button" id="btn-upload">Send to ' + escHtml(p.identity?.name || selectedPeer) + '</button></div>' +
         '<div class="share-empty" id="upload-status"></div>' +
@@ -479,6 +680,14 @@ input:focus,select:focus{border-color:var(--accent)}
       p.topics?.length ? '<div class="details-block"><span class="details-label">Topics</span><div class="details-value">' + escHtml(p.topics.join(', ')) + '</div></div>' : '',
       p.version ? '<div class="details-block"><span class="details-label">Version</span><div class="details-value">' + escHtml(p.version) + '</div></div>' : ''
     ].join('');
+
+    const newUpload = detailsPanel.querySelector('#upload-file');
+    if (keptFiles && newUpload) {
+      try { newUpload.files = keptFiles; } catch (e) { /* older browsers cannot restore a file choice */ }
+    }
+    if (keptStatus) setUploadStatus(keptStatus);
+    const refocus = focusedId ? document.getElementById(focusedId) : null;
+    if (refocus && detailsPanel.contains(refocus)) refocus.focus();
 
     detailsPanel.querySelectorAll('[data-peer-command]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -566,7 +775,7 @@ input:focus,select:focus{border-color:var(--accent)}
       return;
     }
     sendEnvelope('command', { command, args }, { to: target });
-    addMessage('command', myIdentity.name + ' -> ' + target, 'CMD: ' + command + (args !== undefined ? ' ' + JSON.stringify(args) : ''), Date.now());
+    addMessage('command', myIdentity.name + ' → ' + target, 'CMD: ' + command + (args !== undefined ? ' ' + JSON.stringify(args) : ''), Date.now());
   }
 
   function requestShareListing(target, share, folderPath) {
@@ -628,36 +837,38 @@ input:focus,select:focus{border-color:var(--accent)}
     const payload = env.payload || {};
     const requestId = payload.requestId;
     const pending = requestId ? pendingRequests.get(requestId) : null;
-    const result = payload.result || null;
+    if (requestId) pendingRequests.delete(requestId);
+    const result = isRecord(payload.result) ? payload.result : null;
 
     if (pending && pending.command === 'shares' && result && Array.isArray(result.shares)) {
+      const shares = namedList(result.shares);
       const peer = peers.get(env.from.streamId);
       if (peer) {
-        peer.agentProfile = peer.agentProfile || {};
-        peer.agentProfile.shares = result.shares;
+        peer.agentProfile = peer.agentProfile || cleanAgentProfile({});
+        peer.agentProfile.shares = shares;
       }
       if (selectedPeer === env.from.streamId) {
         shareBrowser.peer = env.from.streamId;
-        shareBrowser.share = result.shares[0] && result.shares[0].name ? result.shares[0].name : '';
+        shareBrowser.share = shares[0] ? shares[0].name : '';
         shareBrowser.path = '';
         shareBrowser.entries = [];
         shareBrowser.truncated = false;
         renderDetails();
       }
-      addMessage('command_response', env.from.name || env.from.streamId, 'shares: ' + (result.shares.map((share) => share.name).join(', ') || 'none'), env.ts);
+      addMessage('command_response', env.from.name || env.from.streamId, 'shares: ' + (shares.map((share) => share.name).join(', ') || 'none'), env.ts);
       return true;
     }
 
     if (pending && pending.command === 'list-files' && result && Array.isArray(result.entries)) {
       shareBrowser.peer = env.from.streamId;
-      shareBrowser.share = result.share || (pending.args && pending.args.share) || '';
-      shareBrowser.path = result.path || '';
-      shareBrowser.entries = result.entries;
+      shareBrowser.share = textOr(result.share, '') || (pending.args && pending.args.share) || '';
+      shareBrowser.path = textOr(result.path, '');
+      shareBrowser.entries = cleanShareEntries(result.entries);
       shareBrowser.truncated = Boolean(result.truncated);
       if (selectedPeer === env.from.streamId) {
         renderDetails();
       }
-      addMessage('command_response', env.from.name || env.from.streamId, 'listed ' + result.share + (result.path ? '/' + result.path : '') + ' (' + result.entries.length + ' entries)', env.ts);
+      addMessage('command_response', env.from.name || env.from.streamId, 'listed ' + shareBrowser.share + (shareBrowser.path ? '/' + shareBrowser.path : '') + ' (' + shareBrowser.entries.length + ' entries)', env.ts);
       return true;
     }
 
@@ -806,16 +1017,18 @@ input:focus,select:focus{border-color:var(--accent)}
   function handleIncomingFileAck(env) {
     const payload = env.payload || {};
     const pending = pendingUploads.get(payload.transferId);
-    if (pending && pending.target === env.from.streamId) {
-      clearTimeout(pending.timer);
-      pendingUploads.delete(payload.transferId);
-      setUploadStatus(
-        payload.ok
-          ? 'Delivered ' + pending.name + ' to ' + pending.target + '.'
-          : 'Delivery failed for ' + pending.name + ': ' + (payload.error || 'receiver rejected it'),
-      );
-    }
-    addMessage('event', env.from.name || env.from.streamId, (payload.ok ? 'delivery confirmed for ' : 'delivery failed for ') + (payload.name || payload.transferId), env.ts);
+    // Only our own uploads matter. A receiver that rejected a file can answer
+    // every remaining chunk, so each transfer is reported once.
+    if (!pending || pending.target !== env.from.streamId) return true;
+    clearTimeout(pending.timer);
+    pendingUploads.delete(payload.transferId);
+    if (!payload.ok) pending.failed = textOr(payload.error, '') || 'receiver rejected it';
+    setUploadStatus(
+      payload.ok
+        ? 'Delivered ' + pending.name + ' to ' + pending.target + '.'
+        : 'Delivery failed for ' + pending.name + ': ' + pending.failed,
+    );
+    addMessage('event', env.from.name || env.from.streamId, (payload.ok ? 'delivery confirmed for ' : 'delivery failed for ') + pending.name, env.ts);
     return true;
   }
 
@@ -873,11 +1086,17 @@ input:focus,select:focus{border-color:var(--accent)}
   // ── Connection ─────────────────────────────────────────────────────────
   async function doConnect() {
     const room = inpRoom.value.trim();
-    if (!room) { alert('Room name is required'); return; }
+    if (!room) {
+      statusEl.textContent = 'Enter the room name your agents use.';
+      inpRoom.focus();
+      return;
+    }
 
+    // Match the CLI: no password (or "false") joins without encryption.
     const pw = inpPassword.value.trim();
-    const password = pw === 'false' ? false : (pw || undefined);
-    const name = inpName.value.trim() || 'Dashboard';
+    const password = pw === 'false' ? false : (pw || false);
+    // Node peers drop envelopes whose sender name is over 256 characters.
+    const name = inpName.value.trim().slice(0, 64) || 'Dashboard';
     myStreamId = 'dashboard_' + randomId().slice(0, 8);
     myIdentity = {
       streamId: myStreamId,
@@ -887,9 +1106,8 @@ input:focus,select:focus{border-color:var(--accent)}
     };
 
     // Save to localStorage
-    localStorage.setItem('ninja_room', room);
-    localStorage.setItem('ninja_password', inpPassword.value.trim());
-    localStorage.setItem('ninja_name', name);
+    saveSetting('ninja_room', room);
+    saveSetting('ninja_name', name);
 
     statusEl.textContent = 'Connecting...';
     btnConnect.disabled = true;
@@ -903,6 +1121,7 @@ input:focus,select:focus{border-color:var(--accent)}
 
       // Wire events
       sdk.addEventListener('peerConnected', (e) => {
+        if (sdk !== connectionSdk) return;
         const uuid = e.detail?.uuid || 'unknown';
         const sid = e.detail?.streamID || uuid;
         upsertPeer(sid, uuid, null);
@@ -910,6 +1129,7 @@ input:focus,select:focus{border-color:var(--accent)}
       });
 
       sdk.addEventListener('dataChannelOpen', (e) => {
+        if (sdk !== connectionSdk) return;
         const uuid = e.detail?.uuid;
         if (uuid) readyUuids.add(uuid);
         // Send our announce
@@ -934,6 +1154,7 @@ input:focus,select:focus{border-color:var(--accent)}
       });
 
       sdk.addEventListener('dataReceived', (e) => {
+        if (sdk !== connectionSdk) return;
         const raw = e.detail?.data;
         const uuid = e.detail?.uuid || '';
         const env = parseEnvelope(raw);
@@ -942,41 +1163,58 @@ input:focus,select:focus{border-color:var(--accent)}
         const sender = env.from.streamId;
         if (!sender || sender === myStreamId) return;
         if (env.to && env.to !== myStreamId) return;
+        // As in the Node bridge: a connection keeps the stream ID it first
+        // used, and a connected peer's ID cannot move to another connection.
+        if (uuid) {
+          const mappedSender = getPeerKeyByUuid(uuid);
+          const claimedPeer = peers.get(sender);
+          if ((mappedSender && mappedSender !== uuid && mappedSender !== sender) ||
+              (claimedPeer && claimedPeer.uuid && claimedPeer.uuid !== uuid && claimedPeer.connected)) {
+            return;
+          }
+        }
         // Update peer info
         upsertPeer(sender, uuid, env.from);
+        if (['chat', 'event', 'command', 'command_response'].includes(env.type)) firstSighting(env.id);
 
         switch (env.type) {
           case 'announce': {
             const p = peers.get(sender);
+            const payload = isRecord(env.payload) ? env.payload : {};
             if (p) {
+              // Peers announce again on every channel; report the first one.
+              if (!p.announced) {
+                addMessage('announce', env.from.name || sender,
+                  `joined as ${env.from.role || '?'} with skills: ${textList(payload.skills).join(', ')}`,
+                  env.ts);
+              }
+              p.announced = true;
               p.identity = env.from;
-              p.skills = env.payload?.skills || [];
-              p.status = env.payload?.status || 'online';
-              p.statusDetail = env.payload?.statusDetail || '';
-              p.topics = env.payload?.topics || [];
-              p.version = env.payload?.version || '';
-              p.agentProfile = env.payload?.agent || null;
+              p.skills = textList(payload.skills);
+              p.status = textOr(payload.status, 'online');
+              p.statusDetail = textOr(payload.statusDetail, '');
+              p.topics = textList(payload.topics);
+              p.version = textOr(payload.version, '');
+              p.agentProfile = cleanAgentProfile(payload.agent);
             }
-            addMessage('announce', env.from.name || sender,
-              `joined as ${env.from.role || '?'} with skills: ${(env.payload?.skills || []).join(', ')}`,
-              env.ts);
             renderPeers();
-            renderDetails();
+            if (sender === selectedPeer) renderDetails();
             break;
           }
           case 'skill_update': {
             const p = peers.get(sender);
+            const payload = isRecord(env.payload) ? env.payload : {};
             if (p) {
-              p.skills = env.payload?.skills || p.skills;
-              p.status = env.payload?.status || p.status;
-              p.statusDetail = env.payload?.statusDetail || p.statusDetail || '';
-              p.agentProfile = env.payload?.agent || p.agentProfile || null;
+              if (Array.isArray(payload.skills)) p.skills = textList(payload.skills);
+              p.status = textOr(payload.status, p.status);
+              p.statusDetail = textOr(payload.statusDetail, p.statusDetail || '');
+              if (payload.agent) p.agentProfile = cleanAgentProfile(payload.agent);
             }
             addMessage('event', env.from.name || sender,
-              `status: ${env.payload?.status || '?'}${env.payload?.statusDetail ? ' - ' + env.payload.statusDetail : ''}`,
+              `status: ${textOr(payload.status, '?')}${textOr(payload.statusDetail, '') ? ' - ' + payload.statusDetail : ''}`,
               env.ts);
             renderPeers();
-            renderDetails();
+            if (sender === selectedPeer) renderDetails();
             break;
           }
           case 'chat':
@@ -1031,13 +1269,18 @@ input:focus,select:focus{border-color:var(--accent)}
             if (orig.from.streamId === myStreamId) break;
             if (orig.to && orig.to !== myStreamId) break;
             if (!['chat', 'event', 'command', 'command_response'].includes(orig.type)) break;
+            if (!firstSighting(orig.id)) break;
             addMessage(orig.type, (orig.from.name || orig.from.streamId || 'replay'),
               orig.payload?.text || orig.payload?.message || JSON.stringify(orig.payload),
-              orig.ts,
-              '[replay]');
+              Number.isFinite(orig.ts) ? orig.ts : Date.now(),
+              'earlier',
+              { replay: true });
             break;
           }
           default:
+            // Swarm control traffic and protocol acks are not for people, and
+            // seeders repeat them every few seconds.
+            if (env.type.startsWith('swarm_') || env.type === 'pong' || env.type === 'ack') break;
             addMessage(env.type, env.from.name || sender,
               JSON.stringify(env.payload),
               env.ts);
@@ -1045,6 +1288,7 @@ input:focus,select:focus{border-color:var(--accent)}
       });
 
       sdk.addEventListener('peerDisconnected', (e) => {
+        if (sdk !== connectionSdk) return;
         const uuid = e.detail?.uuid || '';
         if (uuid) readyUuids.delete(uuid);
         const sid = e.detail?.streamID || '';
@@ -1056,26 +1300,37 @@ input:focus,select:focus{border-color:var(--accent)}
         if (key && peers.has(key)) {
           const p = peers.get(key);
           if (!p.connected) return;
+          // A replacement connection can open before the old one's close arrives.
+          if (uuid && p.uuid && p.uuid !== uuid) return;
           const name = p.identity?.name || key;
           p.connected = false;
+          p.announced = false;
           addMessage('system', name, 'disconnected', Date.now());
           renderPeers();
-          renderDetails();
+          if (key === selectedPeer) renderDetails();
         }
       });
 
       sdk.addEventListener('listing', (e) => {
+        if (sdk !== connectionSdk) return;
         const list = e.detail?.list || [];
         for (const entry of list) {
           if (entry.streamID && entry.streamID !== myStreamId) {
-            sdk.view(entry.streamID, { audio: false, video: false });
+            Promise.resolve()
+              .then(() => connectionSdk.view(entry.streamID, { audio: false, video: false }))
+              .catch((err) => console.warn('Could not view ' + entry.streamID + ':', err));
           }
         }
       });
 
-      sdk.addEventListener('disconnected', () => {
+      sdk.addEventListener('disconnected', (e) => {
         if (sdk !== connectionSdk) return;
-        statusEl.textContent = 'WebSocket lost, reconnecting...';
+        if (e.detail && e.detail.willReconnect === false) {
+          doDisconnect();
+          statusEl.textContent = 'Connection lost. Press Connect to rejoin.';
+          return;
+        }
+        statusEl.textContent = 'Signaling connection lost, reconnecting...';
         dot.classList.remove('on');
       });
 
@@ -1087,9 +1342,7 @@ input:focus,select:focus{border-color:var(--accent)}
 
       // Connect
       await sdk.connect();
-      const joinOpts = { room: room };
-      if (password !== undefined) joinOpts.password = password;
-      await sdk.joinRoom(joinOpts);
+      await sdk.joinRoom({ room: room, password: password });
       await sdk.announce({ streamID: myStreamId });
 
       connected = true;
@@ -1111,8 +1364,21 @@ input:focus,select:focus{border-color:var(--accent)}
       }, 2000);
 
     } catch(err) {
-      statusEl.textContent = 'Error: ' + err.message;
+      // Tear down the half-started session so its listeners cannot touch the
+      // next attempt.
+      const failedSdk = sdk;
+      sdk = null;
+      connected = false;
+      if (failedSdk) {
+        try { failedSdk.disconnect(); } catch (e) { /* already closed */ }
+      }
+      readyUuids.clear();
+      peers.clear();
+      renderPeers();
+      renderDetails();
+      statusEl.textContent = 'Could not connect: ' + (err && err.message ? err.message : String(err));
       btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
       console.error('Connection error:', err);
     }
   }
@@ -1131,6 +1397,7 @@ input:focus,select:focus{border-color:var(--accent)}
     incomingTransfers.clear();
     readyUuids.clear();
     peers.clear();
+    pendingRequests.clear();
     dot.classList.remove('on');
     statusEl.textContent = 'Disconnected';
     btnConnect.disabled = false;
@@ -1152,11 +1419,24 @@ input:focus,select:focus{border-color:var(--accent)}
     if (text.startsWith('/')) {
       const parts = text.slice(1).split(' ');
       const cmd = parts[0].toLowerCase();
+      // Commands that send something need a room; the rest work offline.
+      if (!connected && !['help', 'clear'].includes(cmd)) {
+        addMessage('system', 'System', 'Not connected. Join a room first.', Date.now());
+        return;
+      }
       switch (cmd) {
         case 'help':
-          addMessage('system', 'System',
-            'Commands: /help, /peers, /status, /history [n], /health, /clear, /dm <peer> <msg>, /cmd <peer> <command> [json], /plan <peer> <request>, /review <peer> <request>, /approve <peer> <request>, /respond <peer> <requestId> [json], /profile [peer], /capabilities [peer], /inbox [peer], /shares [peer], /ls <peer> <share> [path], /get <peer> <share> <path>',
-            Date.now());
+          addMessage('system', 'System', [
+            'Commands (a peer is its ID, as shown in the peer list):',
+            '  /dm <peer> <message>  ·  private message',
+            '  /plan, /task, /review, /approve <peer> <request>  ·  structured requests',
+            '  /respond <peer> <requestId> [json]  ·  answer a request',
+            '  /profile, /capabilities, /inbox, /shares [peer]  ·  ask about a peer',
+            '  /ls <peer> <share> [path], /get <peer> <share> <path>  ·  shared files',
+            '  /cmd <peer> <command> [json]  ·  any other command',
+            '  /peers, /status, /health, /history [n]  ·  ask every peer',
+            '  /clear  ·  clear this log',
+          ].join('\n'), Date.now());
           return;
         case 'peers':
           if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
@@ -1176,15 +1456,14 @@ input:focus,select:focus{border-color:var(--accent)}
           sendEnvelope('command', { command: 'health' });
           return;
         case 'clear':
-          messagesEl.innerHTML = '';
-          messages.length = 0;
+          clearMessages();
           return;
         case 'dm': {
           if (parts.length < 3) { addMessage('system', 'System', 'Usage: /dm <peer_stream_id> <message>', Date.now()); return; }
           const target = parts[1];
           const msg = parts.slice(2).join(' ');
           sendEnvelope('chat', { text: msg }, { to: target });
-          addMessage('chat', myIdentity.name + ' -> ' + target, msg, Date.now());
+          addMessage('chat', myIdentity.name + ' → ' + target, msg, Date.now());
           return;
         }
         case 'cmd': {
@@ -1200,7 +1479,7 @@ input:focus,select:focus{border-color:var(--accent)}
             try { args = JSON.parse(raw); } catch(_err) { args = raw; }
           }
           sendEnvelope('command', { command, args }, { to: target });
-          addMessage('command', myIdentity.name + ' -> ' + target, 'CMD: ' + command + (args !== undefined ? ' ' + JSON.stringify(args) : ''), Date.now());
+          addMessage('command', myIdentity.name + ' → ' + target, 'CMD: ' + command + (args !== undefined ? ' ' + JSON.stringify(args) : ''), Date.now());
           return;
         }
         case 'shares': {
@@ -1231,6 +1510,7 @@ input:focus,select:focus{border-color:var(--accent)}
           return;
         }
         case 'plan':
+        case 'task':
         case 'review':
         case 'approve': {
           const target = parts[1] || selectedPeer;
@@ -1255,7 +1535,7 @@ input:focus,select:focus{border-color:var(--accent)}
             try { result = JSON.parse(raw); } catch (_err) { result = raw; }
           }
           sendEnvelope('command_response', { requestId, ok: true, result }, { to: target });
-          addMessage('command', myIdentity.name + ' -> ' + target, 'RESP: ' + requestId + ' ' + JSON.stringify(result), Date.now());
+          addMessage('command', myIdentity.name + ' → ' + target, 'RESP: ' + requestId + ' ' + JSON.stringify(result), Date.now());
           return;
         }
         case 'profile':
@@ -1280,7 +1560,7 @@ input:focus,select:focus{border-color:var(--accent)}
     if (!connected) { addMessage('system', 'System', 'Not connected', Date.now()); return; }
     const broadcastTarget = chatTarget.value || null;
     sendEnvelope('chat', { text: text }, broadcastTarget ? { to: broadcastTarget } : undefined);
-    addMessage('chat', myIdentity.name + (broadcastTarget ? ' -> ' + broadcastTarget : ''), text, Date.now());
+    addMessage('chat', myIdentity.name + (broadcastTarget ? ' → ' + broadcastTarget : ''), text, Date.now());
   }
 
   // Matches the CLI's default. The receiver rebuilds the file by appending
@@ -1325,6 +1605,9 @@ input:focus,select:focus{border-color:var(--accent)}
       transferId = randomId();
       const totalChunks = bytes.length === 0 ? 0 : Math.ceil(bytes.length / UPLOAD_CHUNK_SIZE);
       const kind = (file.type || '').startsWith('image/') ? 'image' : 'file';
+      // Registered before the offer so a rejection stops the chunk loop.
+      const upload = { name: file.name, target: target, timer: null, failed: '' };
+      pendingUploads.set(transferId, upload);
 
       await sendEnvelopeReliably('file_offer', {
         transferId: transferId,
@@ -1338,6 +1621,7 @@ input:focus,select:focus{border-color:var(--accent)}
       }, { to: target });
 
       for (let index = 0; index < totalChunks; index += 1) {
+        if (upload.failed) throw new Error(upload.failed);
         const start = index * UPLOAD_CHUNK_SIZE;
         const slice = bytes.subarray(start, Math.min(start + UPLOAD_CHUNK_SIZE, bytes.length));
         await sendEnvelopeReliably('file_chunk', {
@@ -1357,11 +1641,11 @@ input:focus,select:focus{border-color:var(--accent)}
         }
       }
 
-      const ackTimer = setTimeout(() => {
+      if (upload.failed) throw new Error(upload.failed);
+      upload.timer = setTimeout(() => {
         if (!pendingUploads.delete(transferId)) return;
         setUploadStatus('Sent ' + file.name + ', but no confirmation arrived from ' + target + '.');
       }, UPLOAD_ACK_TIMEOUT_MS);
-      pendingUploads.set(transferId, { name: file.name, target: target, timer: ackTimer });
 
       await sendEnvelopeReliably('file_complete', {
         transferId: transferId,
@@ -1417,6 +1701,8 @@ input:focus,select:focus{border-color:var(--accent)}
     const env = createEnvelope(type, payload, opts);
     const sent = sendCreatedEnvelope(env, opts, true);
     if (sent && type === 'command') {
+      // Broadcast commands can go unanswered; keep the map bounded.
+      if (pendingRequests.size >= 200) pendingRequests.delete(pendingRequests.keys().next().value);
       pendingRequests.set(env.id, {
         command: payload && payload.command,
         target: opts && opts.to ? opts.to : null,
@@ -1467,9 +1753,17 @@ input:focus,select:focus{border-color:var(--accent)}
   btnDisconnect.addEventListener('click', doDisconnect);
   btnSend.addEventListener('click', handleInput);
   chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleInput(); }
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); handleInput(); }
   });
   chatTarget.addEventListener('change', () => { selectedPeer = chatTarget.value; renderPeers(); renderDetails(); });
+  $('btn-theme').addEventListener('click', () => {
+    const root = document.documentElement;
+    const current = root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = current === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    saveSetting('ninja-p2p-theme', next);
+  });
   renderDetails();
 
   // Auto-connect if room is provided via URL params

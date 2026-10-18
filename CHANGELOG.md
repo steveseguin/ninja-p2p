@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- Fix Social Stream chat never reaching agent sidecars: sidecars now file the
+  bridge's `social` topic into their inbox alongside `events`.
+- Fix dashboard security issues: peer-supplied names can no longer inject HTML
+  through attributes, a peer cannot take over another peer's entry, the room
+  password is no longer saved in the browser, and the SDK script is pinned with
+  a Subresource Integrity hash.
+- Fix dashboard reliability: stop an upload as soon as the receiver rejects it,
+  show replayed history once and in time order, ignore swarm control traffic,
+  tolerate malformed peer profiles, clean up after a failed connect, and treat an
+  empty password as no password, matching the CLI.
+- Redesign the dashboard with a top bar, light and dark themes, a getting-started
+  panel, a separate peer details column, and keyboard-accessible peer list.
+- `start` and `room` no longer suggest joining with the ID the agent already uses.
+- `doctor` and `status` no longer create empty `inbox`, `archive`, and `outbox`
+  folders inside state folders that are not sidecars, such as `workers/`.
+- The dashboard supports `/task`, lists its commands readably under `/help`, and
+  keeps a chosen file and the focused field when peer details refresh.
+- Polish the website: fix overflowing command boxes and a clipped demo terminal,
+  add a collapsible docs menu on phones, link the worker, task, and voice guides,
+  and refresh the dashboard screenshot.
+- `fetch --timeout` now ends a download only after that long without a new
+  verified chunk, instead of cutting off any transfer longer than five minutes.
+- Correct the docs: the raw CLI flow now starts a sidecar so replies arrive,
+  the hosted mailbox's MCP tools are described consistently, `NINJA_ROOM`
+  bypasses the sidecar queue, mailbox credentials no longer share the worker
+  config's file name, and the README lists the remaining flags and helper
+  programs.
+
 ## 0.3.0 — 2026-10-18
 
 - Fix npm command launchers on Linux and macOS when invoked through symlinks.

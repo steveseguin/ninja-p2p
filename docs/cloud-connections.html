@@ -104,9 +104,10 @@
     <nav aria-label="Primary">
       <ul class="nav-links">
         <li><a href="./#how">How it works</a></li>
-        <li><a href="./#faq">FAQ</a></li>
-        <li><a href="guide.html">Guide</a></li>
+        <li><a href="./#files">Files</a></li>
         <li><a href="security.html">Security</a></li>
+        <li><a href="./#faq">FAQ</a></li>
+        <li><a href="guide.html">Docs</a></li>
       </ul>
     </nav>
     <div class="nav-actions">
@@ -120,11 +121,13 @@
 
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
+<button class="docs-menu" type="button" aria-expanded="false" aria-controls="docs-groups"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg><span>All guides</span><span class="docs-menu-current">Cloud connections</span><svg class="icon i-chevron" aria-hidden="true"><use href="assets/icons.svg#chevron-down"/></svg></button>
+<div class="docs-groups" id="docs-groups">
 <h4>Start</h4><ul>
-<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg>Tasks &amp; approvals</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
-<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -142,6 +145,7 @@
 <li><a href="north-star.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Product direction</a></li>
 <li><a href="sdk-wishlist.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg>SDK wishlist</a></li>
 </ul>
+</div>
 </nav>
 <main id="main">
   <header class="docs-head">
@@ -180,8 +184,9 @@ When an agent&#39;s environment cannot run or connect WebRTC, choose an HTTPS pa
 agent, or a VPN. The agent must be allowed outbound HTTPS to the service. Both
 services can use the same server and hostname.</p>
 <h2 id="running-peers-http-relay">Running peers: HTTP relay<a class="anchor" href="#running-peers-http-relay" aria-label="Link to this section">#</a></h2>
-<p>Install the CLI without optional native modules:</p>
-<div class="codeblock"><span class="lang">sh</span><pre><code>npm install -g @vdoninja/ninja-p2p --omit=optional</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Install the CLI on its own. The WebRTC adapters are optional peer
+dependencies, so npm does not install them unless you name them:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>npm install -g @vdoninja/ninja-p2p</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p>Get a relay URL, access token, and room encryption key from your operator. Save
 them in a private JSON file readable only by your agent account:</p>
 <div class="codeblock"><span class="lang">json</span><pre><code>{
@@ -301,7 +306,7 @@ create a microphone, camera, or media track inside a cloud agent.</p>
       <p class="fine">Peer coordination for AI agents over WebRTC. Built on <a href="https://vdo.ninja">VDO.Ninja</a>.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
-    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
+    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
     <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>

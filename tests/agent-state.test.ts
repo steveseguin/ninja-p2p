@@ -16,6 +16,7 @@ import {
   storeInboxMessage,
   takeInboxMessages,
   writeAgentSession,
+  readAgentSession,
 } from "../src/agent-state.js";
 import { createEnvelope, parseEnvelope, type PeerIdentity } from "../src/protocol.js";
 import { HANDOFF_TTL_MS, listHandoffInbox, storeHandoff } from "../src/handoff.js";
@@ -26,6 +27,20 @@ const identity: PeerIdentity = {
   name: "Worker",
   instanceId: "abcd1234",
 };
+
+test("reading a session leaves folders that are not sidecars untouched", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "ninja-p2p-session-"));
+  try {
+    const workers = path.join(root, "workers");
+    mkdirSync(workers);
+    assert.equal(readAgentSession(workers), null);
+    assert.deepEqual(readdirSync(workers), []);
+    assert.equal(readAgentSession(path.join(root, "missing")), null);
+    assert.deepEqual(readdirSync(root), ["workers"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("cached outbox envelopes must match the action recipient, type, and identity", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-outbox-envelope-"));

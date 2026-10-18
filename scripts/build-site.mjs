@@ -25,20 +25,20 @@ const SITE = "https://steveseguin.github.io/ninja-p2p/";
 
 const PAGES = [
   {
-    src: "docs/workers.md", out: "workers.html", title: "Automatic workers", group: "Start", icon: "terminal",
-    description: "Keep Codex or OpenCode available for tasks from Dots and other agents, with progress, approvals and saved results.",
-  },
-  {
     src: "README.md", out: "guide.html", title: "Guide", group: "Start", icon: "book",
     description: "Install ninja-p2p, start two agents, and learn the whole CLI: wake hooks, shared folders, swarms, the dashboard, and the library.",
   },
   {
-    src: "docs/operations.md", out: "operations.html", title: "Operations & recovery", group: "Start", icon: "wrench",
-    description: "Upgrade without losing local work, inspect mail before consuming it, recover files, and diagnose wake hooks.",
+    src: "docs/workers.md", out: "workers.html", title: "Automatic workers", group: "Start", icon: "terminal",
+    description: "Keep Codex or OpenCode available for tasks from Dots and other agents, with progress, approvals and saved results.",
   },
   {
-    src: "docs/tasks.md", out: "tasks.html", title: "Tasks & approvals", group: "Start", icon: "book",
+    src: "docs/tasks.md", out: "tasks.html", title: "Tasks & approvals", group: "Start", icon: "inbox",
     description: "Hand work to a cloud agent, follow progress, approve a concrete request, and retrieve its result.",
+  },
+  {
+    src: "docs/operations.md", out: "operations.html", title: "Operations & recovery", group: "Start", icon: "wrench",
+    description: "Upgrade without losing local work, inspect mail before consuming it, recover files, and diagnose wake hooks.",
   },
   {
     src: "docs/security.md", out: "security.html", title: "Security model", group: "Concepts", icon: "shield",
@@ -130,7 +130,7 @@ function highlight(code, lang) {
 
 function renderMarkdown(source, page) {
   const headings = [];
-  const used = new Map();
+  const used = new Set();
   const marked = new Marked({ gfm: true });
 
   marked.use({
@@ -141,12 +141,15 @@ function renderMarkdown(source, page) {
       }
     },
     renderer: {
-      heading({ tokens, depth, text }) {
+      heading({ tokens, depth }) {
         const inner = this.parser.parseInline(tokens);
-        let id = slugify(text);
-        const seen = used.get(id) ?? 0;
-        used.set(id, seen + 1);
-        if (seen) id = `${id}-${seen}`;
+        // Slug the rendered text, as GitHub does, so a link or <placeholder>
+        // in a heading does not leak into its anchor. Suffixes skip any id
+        // that is already taken.
+        const base = slugify(htmlToText(inner));
+        let id = base;
+        for (let n = 1; used.has(id); n += 1) id = `${base}-${n}`;
+        used.add(id);
         if (depth === 2 || depth === 3) headings.push({ id, depth, html: inner.replace(/<[^>]+>/g, "") });
         const anchor = depth <= 3 ? `<a class="anchor" href="#${id}" aria-label="Link to this section">#</a>` : "";
         return `<h${depth} id="${id}">${inner}${anchor}</h${depth}>\n`;
@@ -188,10 +191,15 @@ function renderSidebar(current) {
     if (!group) groups.push(group = { name: page.group, pages: [] });
     group.pages.push(page);
   }
+  // On narrow screens the list collapses behind the toggle so the page itself
+  // comes first; site.js opens it. Without scripts the list stays visible.
   return `<nav class="docs-side" aria-label="Documentation">
+<button class="docs-menu" type="button" aria-expanded="false" aria-controls="docs-groups">${icon("list")}<span>All guides</span><span class="docs-menu-current">${escapeHtml(current.title)}</span>${icon("chevron-down", "i-chevron")}</button>
+<div class="docs-groups" id="docs-groups">
 ${groups.map((group) => `<h4>${escapeHtml(group.name)}</h4><ul>
 ${group.pages.map((page) => `<li><a href="${page.out}"${page === current ? ' aria-current="page"' : ""}>${icon(page.icon)}${escapeHtml(page.title)}</a></li>`).join("\n")}
 </ul>`).join("\n")}
+</div>
 </nav>`;
 }
 
@@ -261,9 +269,10 @@ function renderNav(current) {
     <nav aria-label="Primary">
       <ul class="nav-links">
         <li><a href="./#how">How it works</a></li>
-        <li><a href="./#faq">FAQ</a></li>
-        <li><a href="guide.html"${here("guide.html")}>Guide</a></li>
+        <li><a href="./#files">Files</a></li>
         <li><a href="security.html"${here("security.html")}>Security</a></li>
+        <li><a href="./#faq">FAQ</a></li>
+        <li><a href="guide.html"${here("guide.html")}>Docs</a></li>
       </ul>
     </nav>
     <div class="nav-actions">
@@ -284,7 +293,7 @@ function renderFooter() {
       <p class="fine">Peer coordination for AI agents over WebRTC. Built on <a href="https://vdo.ninja">VDO.Ninja</a>.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
-    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
+    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
     <div><h4>Community</h4><ul><li><a href="${REPO}">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release ${escapeHtml(pkg.version)}</a></li><li><a href="${REPO}/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>${COPYRIGHT} &middot; <a href="${REPO}/blob/main/LICENSE">MIT License</a></span>

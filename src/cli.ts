@@ -77,7 +77,7 @@ import {
   acceptHandoffReceipt, HANDOFF_SKILL, HANDOFF_TTL_MS, initialHandoffStatus, isHandoff,
   isHandoffReceipt, readHandoffStatus, storeHandoff, writeHandoffStatus,
 } from "./handoff.js";
-import { describeSocialMessage, SocialStreamBridge } from "./social-stream.js";
+import { DEFAULT_SSN_TOPIC, describeSocialMessage, SocialStreamBridge } from "./social-stream.js";
 import { SwarmManager, type SwarmCompletion } from "./swarm-manager.js";
 import {
   checkNodeVersion,
@@ -91,6 +91,18 @@ import {
 } from "./doctor.js";
 
 const SIDECAR_SKILLS = ["cli", "chat", "command", "sidecar", "discovery", HANDOFF_SKILL];
+// Topics a sidecar files into its inbox. The bus drops events on any other
+// topic, so this must include the Social Stream bridge's default topic.
+export const SIDECAR_TOPICS = ["events", DEFAULT_SSN_TOPIC];
+
+// How a second agent joins; never suggest the ID this agent already uses.
+function joinHints(room: string, currentId: string): Array<{ label: string; command: string }> {
+  return [
+    { label: "Claude", id: "claude", command: `/ninja-p2p start --room ${room}` },
+    { label: "Codex", id: "codex", command: `ninja-p2p start --room ${room} --id codex` },
+    { label: "Generic CLI", id: "worker", command: `ninja-p2p start --room ${room} --id worker` },
+  ].filter((hint) => hint.id !== currentId);
+}
 
 export const SIDECAR_DISCOVERY_ASKS: AgentAsk[] = [
   { name: "help", description: "Summarize this agent sidecar and its built-in commands.", via: "command", example: "ninja-p2p command --id <you> <peer> help" },
@@ -481,9 +493,7 @@ export function buildRoomText(stateDir: string): string {
     `id: ${streamId || "unknown"}`,
     "",
     "Join this room from another agent:",
-    `  Claude: /ninja-p2p start --room ${room}`,
-    `  Codex: ninja-p2p start --room ${room} --id codex`,
-    `  Generic CLI: ninja-p2p start --room ${room} --id worker`,
+    ...joinHints(room, streamId).map((hint) => `  ${hint.label}: ${hint.command}`),
   ].join("\n");
 }
 
@@ -530,7 +540,7 @@ function createBridge(options: CliCommonOptions, mode: "sidecar" | "interactive"
     },
     password: options.password,
     skills: mode === "sidecar" ? SIDECAR_SKILLS : ["cli", "chat", "command"],
-    topics: ["events"],
+    topics: SIDECAR_TOPICS,
     agentProfile,
   });
 }
@@ -587,8 +597,9 @@ function startAgent(options: CliCommonOptions): void {
   console.log(`room: ${options.room}`);
   console.log(`id: ${options.streamId}`);
   console.log(`log: ${logFile}`);
-  console.log(`join from Claude: /ninja-p2p start --room ${options.room}`);
-  console.log(`join from Codex: ninja-p2p start --room ${options.room} --id codex`);
+  for (const hint of joinHints(options.room, options.streamId).slice(0, 2)) {
+    console.log(`join from ${hint.label}: ${hint.command}`);
+  }
   const prefix = getCommandPrefix(options);
   if (prefix === "/ninja-p2p") {
     console.log(`next: ${prefix} room`);
@@ -694,7 +705,7 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
       connected: bridge.getTransport() === "http" ? bridge.isConnected() : connected,
       transport: bridge.getTransport(),
       skills: SIDECAR_SKILLS,
-      topics: ["events"],
+      topics: SIDECAR_TOPICS,
       agentProfile: advertisedProfile,
       sharedFolders: options.sharedFolders,
       startedAt: readAgentSession(options.stateDir!)?.startedAt ?? Date.now(),
@@ -720,7 +731,7 @@ async function runAgent(options: CliCommonOptions): Promise<void> {
     connected: false,
     transport: bridge.getTransport(),
     skills: SIDECAR_SKILLS,
-    topics: ["events"],
+    topics: SIDECAR_TOPICS,
     agentProfile: advertisedProfile,
     sharedFolders: options.sharedFolders,
     startedAt: Date.now(),
@@ -1824,19 +1835,37 @@ async function runFetch(
   }, 2_000);
   progressTimer.unref?.();
 
-  const timeoutTimer = timeoutMs > 0 ? setTimeout(() => done?.(null), timeoutMs) : null;
-  timeoutTimer?.unref?.();
+  // --timeout limits how long the download may go without a new verified
+  // chunk, so a large but steady transfer is never cut off part way.
+  let lastChunks = -1;
+  let lastProgressAt = Date.now();
+  let stalled = false;
+  const stallTimer = timeoutMs > 0
+    ? setInterval(() => {
+      const have = manager.sessionFor(manifest!.fileId)?.progress().haveChunks ?? 0;
+      if (have !== lastChunks) {
+        lastChunks = have;
+        lastProgressAt = Date.now();
+      } else if (Date.now() - lastProgressAt >= timeoutMs) {
+        stalled = true;
+        done?.(null);
+      }
+    }, Math.min(1_000, timeoutMs))
+    : null;
+  stallTimer?.unref?.();
 
   const completion = await finished;
   clearInterval(progressTimer);
-  if (timeoutTimer) clearTimeout(timeoutTimer);
+  if (stallTimer) clearInterval(stallTimer);
 
   if (!completion) {
     const progress = manager.sessionFor(manifest.fileId)?.progress();
     if (failed) {
       console.error(failed);
     } else {
-      console.error(`timed out after ${formatDuration(Date.now() - startedAt)} at ${progress?.percent ?? 0}%`);
+      console.error(stalled
+        ? `no new chunks for ${formatDuration(timeoutMs)}; stopped at ${progress?.percent ?? 0}% after ${formatDuration(Date.now() - startedAt)}`
+        : `stopped after ${formatDuration(Date.now() - startedAt)} at ${progress?.percent ?? 0}%`);
     }
     manager.stop();
     await bridge.disconnect();

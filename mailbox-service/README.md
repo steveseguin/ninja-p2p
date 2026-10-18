@@ -47,14 +47,14 @@ With the private environment loaded, create each user's account separately:
 ```sh
 node admin.mjs create-owner "Account label"
 node admin.mjs create-mailbox OWNER_ID "Cloud worker"
-node admin.mjs create-agent MAILBOX_ID /private/worker.json
+node admin.mjs create-agent MAILBOX_ID /private/worker-mailbox.json
 node admin.mjs status
 ```
 
 `create-owner` prints the account key once. Deliver it privately to its owner.
 `create-agent` writes a new private JSON file containing a credential for that
 mailbox only; it refuses to overwrite a file. Transfer it privately to the
-agent and use it with `ninja-p2p mailbox --config /private/worker.json identity`.
+agent and use it with `ninja-p2p mailbox --config /private/worker-mailbox.json identity`.
 It expires after 30 days. Create a replacement when it expires.
 
 Codex and OpenCode users can instead run `ninja-p2p worker setup`. They sign in

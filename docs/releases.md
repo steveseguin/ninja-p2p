@@ -31,18 +31,18 @@ prebuild script recreates that directory.
 
 ## Publish and verify
 
-For an example version `0.2.3`:
+For an example version `0.3.1`:
 
 ```bash
 git add -A
-git commit -m "Release v0.2.3"
+git commit -m "Release v0.3.1"
 git push origin main
 # Wait for CI, then tag the exact tested commit.
-git tag -a v0.2.3 -m "ninja-p2p v0.2.3"
-git push origin v0.2.3
+git tag -a v0.3.1 -m "ninja-p2p v0.3.1"
+git push origin v0.3.1
 gh run list --workflow release.yml
 # Wait for a successful npm publish before announcing the release.
-gh release create v0.2.3 --verify-tag --title "ninja-p2p v0.2.3" --notes-file release-notes.md
+gh release create v0.3.1 --verify-tag --title "ninja-p2p v0.3.1" --notes-file release-notes.md
 npm view @vdoninja/ninja-p2p version
 git status --short
 ```

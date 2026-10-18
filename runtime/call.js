@@ -44,9 +44,10 @@ async function end() {
 function interrupt() {
   textGeneration++;
   if (!ready) return;
+  const speaking = responding || !!activeResponse;
   if (activeResponse) suppressed.add(activeResponse);
   if (responding) send({ type: 'response.cancel' });
-  send({ type: 'output_audio_buffer.clear' }); pendingResponse = false; log('\n[Interrupted]\n');
+  send({ type: 'output_audio_buffer.clear' }); pendingResponse = false; if (speaking) log('\n[Interrupted]\n');
 }
 function respond() { if (responding) { pendingResponse = true; return; } responding = true; send({ type: 'response.create' }); }
 function item(content) { send({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content } }); }
@@ -89,12 +90,13 @@ async function toggleMic() {
   microphone = stream; await trackSender.replaceTrack(stream.getAudioTracks()[0]); sharing();
 }
 function frame() {
-  if (!ready || !visual || $('preview').readyState < 2 || events.bufferedAmount > 100000) return;
+  if (!ready || !visual || !events || $('preview').readyState < 2 || events.bufferedAmount > 100000) return;
   const video = $('preview'), canvas = document.createElement('canvas');
   canvas.width = Math.min(768, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth);
   canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
   const url = canvas.toDataURL('image/jpeg', .55); if (url.length > 160000) return;
-  item([{ type: 'input_text', text: 'Selected ' + visual.kind + ' frame at ' + new Date().toISOString() }, { type: 'input_image', image_url: url }]);
+  // Runs on a timer, so a busy or closing channel skips this frame instead of throwing.
+  try { item([{ type: 'input_text', text: 'Selected ' + visual.kind + ' frame at ' + new Date().toISOString() }, { type: 'input_image', image_url: url }]); } catch { return; }
   $('frames').textContent = ++frames + ' image(s) sent to OpenAI.';
 }
 async function shareVisual(kind) {
@@ -107,7 +109,7 @@ async function shareVisual(kind) {
 }
 async function imageFile() {
   const file = $('image').files[0]; if (!file || !ready) return;
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5000000) throw new Error('Choose a PNG, JPEG, or WebP under 5 MB.');
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5000000) { $('image').value = ''; throw new Error('Choose a PNG, JPEG, or WebP under 5 MB.'); }
   const epoch = generation, visualEpoch = mediaGeneration, bitmap = await createImageBitmap(file);
   try {
     const canvas = document.createElement('canvas'), scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
@@ -147,7 +149,7 @@ async function message() {
 }
 for (const [id, action] of Object.entries({ start, stop: end, interrupt, mic: toggleMic, camera: () => shareVisual('camera'), screen: () => shareVisual('screen'), unshare: stopVisual, refresh: refreshTask, send: message })) $(id).onclick = () => Promise.resolve().then(action).catch(error);
 $('image').onchange = () => imageFile().catch(error);
-window.addEventListener('pagehide', () => { ready = false; if (microphone) microphone.getTracks().forEach(track => track.stop()); stopVisual(); if (peer) peer.close(); void fetch('/api/stop', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Ninja-Token': access }, body: '{}' }).catch(() => {}); });
+window.addEventListener('pagehide', () => { generation++; ready = false; if (microphone) microphone.getTracks().forEach(track => track.stop()); microphone = null; stopVisual(); if (peer) peer.close(); peer = null; events = null; sender = null; clearTimeout(timer); controls(); void fetch('/api/stop', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Ninja-Token': access }, body: '{}' }).catch(() => {}); });
 api('status').then(async status => {
   $('model').textContent = status.provider + ' · ' + status.model;
   $('status').textContent = 'Ready'; $('refresh').disabled = !status.task_available; $('share-task').disabled = !status.task_available;

@@ -60,6 +60,30 @@
     }
   }
 
+  // ── Skip link ────────────────────────────────────────────────────────────
+  // The 404 page resolves links against a <base>, which would send "#main"
+  // to the home page. Move focus directly instead.
+  document.querySelectorAll(".skip-link").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      var target = document.getElementById("main");
+      if (!target) return;
+      event.preventDefault();
+      target.setAttribute("tabindex", "-1");
+      target.focus();
+      target.scrollIntoView();
+    });
+  });
+
+  // ── Docs menu (narrow screens) ───────────────────────────────────────────
+  var docsSide = document.querySelector(".docs-side");
+  var docsMenu = docsSide && docsSide.querySelector(".docs-menu");
+  if (docsMenu) {
+    docsMenu.addEventListener("click", function () {
+      var open = docsSide.classList.toggle("open");
+      docsMenu.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+
   // ── Copy buttons ─────────────────────────────────────────────────────────
   document.querySelectorAll(".copy-btn").forEach(function (button) {
     button.addEventListener("click", function () {
@@ -73,8 +97,24 @@
         button.classList.add("copied");
         setTimeout(function () { button.classList.remove("copied"); }, 1600);
       };
+      // The async clipboard needs a secure context; fall back to a selection
+      // copy when the page is opened from disk or plain HTTP.
+      var fallback = function () {
+        var area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        try { if (document.execCommand("copy")) done(); } catch (e) { /* copy unavailable */ }
+        document.body.removeChild(area);
+        button.focus();
+      };
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, function () {});
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
       }
     });
   });
@@ -215,17 +255,21 @@
       while (step()) { /* fill to the finished state */ }
     } else {
       var timer = null;
+      var restart = null;
       var run = function () {
-        if (timer) return;
+        if (timer || restart) return;
         timer = setInterval(function () {
           if (!step()) {
             clearInterval(timer);
             timer = null;
-            setTimeout(function () { reset(); run(); }, 2600);
+            restart = setTimeout(function () { restart = null; reset(); run(); }, 2600);
           }
         }, 110);
       };
-      var stop = function () { if (timer) { clearInterval(timer); timer = null; } };
+      var stop = function () {
+        if (timer) { clearInterval(timer); timer = null; }
+        if (restart) { clearTimeout(restart); restart = null; }
+      };
       if ("IntersectionObserver" in window) {
         new IntersectionObserver(function (entries) {
           entries.forEach(function (e) { if (e.isIntersecting) run(); else stop(); });

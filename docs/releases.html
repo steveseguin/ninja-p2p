@@ -104,9 +104,10 @@
     <nav aria-label="Primary">
       <ul class="nav-links">
         <li><a href="./#how">How it works</a></li>
-        <li><a href="./#faq">FAQ</a></li>
-        <li><a href="guide.html">Guide</a></li>
+        <li><a href="./#files">Files</a></li>
         <li><a href="security.html">Security</a></li>
+        <li><a href="./#faq">FAQ</a></li>
+        <li><a href="guide.html">Docs</a></li>
       </ul>
     </nav>
     <div class="nav-actions">
@@ -120,11 +121,13 @@
 
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
+<button class="docs-menu" type="button" aria-expanded="false" aria-controls="docs-groups"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg><span>All guides</span><span class="docs-menu-current">Release guide</span><svg class="icon i-chevron" aria-hidden="true"><use href="assets/icons.svg#chevron-down"/></svg></button>
+<div class="docs-groups" id="docs-groups">
 <h4>Start</h4><ul>
-<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg>Tasks &amp; approvals</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
-<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -142,6 +145,7 @@
 <li><a href="north-star.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Product direction</a></li>
 <li><a href="sdk-wishlist.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg>SDK wishlist</a></li>
 </ul>
+</div>
 </nav>
 <main id="main">
   <header class="docs-head">
@@ -183,16 +187,16 @@ those jobs to pass before tagging. Local Windows validation complements those
 Linux checks. Avoid running a build while a live validator uses <code>dist</code>: the
 prebuild script recreates that directory.</p>
 <h2 id="publish-and-verify">Publish and verify<a class="anchor" href="#publish-and-verify" aria-label="Link to this section">#</a></h2>
-<p>For an example version <code>0.2.3</code>:</p>
+<p>For an example version <code>0.3.1</code>:</p>
 <div class="codeblock"><span class="lang">bash</span><pre><code>git add -A
-git commit -m &quot;Release v0.2.3&quot;
+git commit -m &quot;Release v0.3.1&quot;
 git push origin main
 <span class="tok-c"># Wait for CI, then tag the exact tested commit.</span>
-git tag -a v0.2.3 -m &quot;ninja-p2p v0.2.3&quot;
-git push origin v0.2.3
+git tag -a v0.3.1 -m &quot;ninja-p2p v0.3.1&quot;
+git push origin v0.3.1
 gh run list --workflow release.yml
 <span class="tok-c"># Wait for a successful npm publish before announcing the release.</span>
-gh release create v0.2.3 --verify-tag --title &quot;ninja-p2p v0.2.3&quot; --notes-file release-notes.md
+gh release create v0.3.1 --verify-tag --title &quot;ninja-p2p v0.3.1&quot; --notes-file release-notes.md
 npm view @vdoninja/ninja-p2p version
 git status --short</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p>Prepare the notes file from that version&#39;s changelog; keep temporary notes outside
@@ -220,7 +224,7 @@ when the existing version has already been published.</p>
       <p class="fine">Peer coordination for AI agents over WebRTC. Built on <a href="https://vdo.ninja">VDO.Ninja</a>.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
-    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="security.html">Security model</a></li><li><a href="protocol-and-reliability.html">Protocol</a></li><li><a href="operations.html">Operations</a></li></ul></div>
+    <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
     <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>

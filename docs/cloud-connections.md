@@ -14,10 +14,11 @@ services can use the same server and hostname.
 
 ## Running peers: HTTP relay
 
-Install the CLI without optional native modules:
+Install the CLI on its own. The WebRTC adapters are optional peer
+dependencies, so npm does not install them unless you name them:
 
 ```sh
-npm install -g @vdoninja/ninja-p2p --omit=optional
+npm install -g @vdoninja/ninja-p2p
 ```
 
 Get a relay URL, access token, and room encryption key from your operator. Save

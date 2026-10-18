@@ -424,6 +424,30 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; line-height: 1.15; }
 
 .install .prompt { color: var(--term-dim); user-select: none; }
 
+/* Code on the dark terminal background scrolls with a quiet scrollbar. */
+.install pre, .codeblock pre, .code-card pre {
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+
+/* Short commands and flags read as one unit; never break "--flag" at its
+   hyphen. The smallest phones need the wrap more than the tidiness. */
+@media (min-width: 420px) {
+  .section :not(pre) > code, .hero :not(pre) > code, .final :not(pre) > code { white-space: nowrap; }
+}
+
+.cmd-line {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--term-bg);
+  color: var(--term-text);
+  font-size: 0.82rem;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
+
 .copy-btn {
   display: inline-grid;
   place-items: center;
@@ -456,6 +480,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; line-height: 1.15; }
 /* Room visual in the hero */
 
 .room {
+  margin: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -794,7 +819,7 @@ a.card .more { display: inline-flex; align-items: center; gap: 6px; margin-top: 
 
 .stage-term {
   position: relative;
-  height: 214px;
+  height: 232px;
   border: 1px solid var(--term-line);
   border-radius: var(--radius);
   background: var(--term-bg);
@@ -894,11 +919,12 @@ a.card .more { display: inline-flex; align-items: center; gap: 6px; margin-top: 
 
 .split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 48px;
   align-items: center;
 }
 
+.split h2 { margin: 0 0 14px; font-size: clamp(1.8rem, 3.6vw, 2.6rem); font-weight: 650; }
 .split h3 { margin: 0 0 10px; font-size: 1.35rem; font-weight: 640; }
 .split p { color: var(--muted); }
 
@@ -1169,6 +1195,26 @@ th {
 }
 
 .docs-side h4:first-child, .docs-toc h4:first-child { margin-top: 0; }
+
+.docs-menu {
+  display: none;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 0.92rem/1.2 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.docs-menu .icon { width: 16px; height: 16px; color: var(--muted); }
+.docs-menu-current { margin-left: auto; color: var(--muted); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.docs-menu .i-chevron { transition: transform 0.2s; }
+.docs-side.open .docs-menu .i-chevron { transform: rotate(180deg); }
 .docs-side ul, .docs-toc ul { margin: 0; padding: 0; list-style: none; }
 
 .docs-side a {
@@ -1184,6 +1230,7 @@ th {
 .docs-side a .icon { width: 15px; height: 15px; }
 .docs-side a:hover { color: var(--text); background: var(--surface-2); }
 .docs-side a[aria-current="page"] { color: var(--text); background: var(--surface); outline: 1px solid var(--line); font-weight: 560; }
+.docs-side a:focus-visible { outline: 2px solid var(--accent); }
 
 .docs-toc a { display: block; padding: 4px 0 4px 12px; color: var(--muted); text-decoration: none; font-size: 0.85rem; line-height: 1.4; border-left: 1px solid var(--line); }
 .docs-toc a:hover { color: var(--text); }
@@ -1197,7 +1244,7 @@ th {
 .docs-head .meta a:hover { color: var(--text); }
 .docs-head .meta .icon { width: 14px; height: 14px; }
 
-.prose { max-width: 760px; font-size: 1rem; line-height: 1.72; }
+.prose { max-width: 760px; font-size: 1rem; line-height: 1.72; overflow-wrap: break-word; }
 .prose > :first-child { margin-top: 0; }
 .prose h2 { margin: 56px 0 14px; padding-top: 4px; font-size: 1.6rem; font-weight: 650; }
 .prose h3 { margin: 36px 0 10px; font-size: 1.2rem; font-weight: 620; }
@@ -1267,6 +1314,8 @@ th {
     background: var(--bg);
     border-bottom: 1px solid var(--line);
   }
+  /* Keep the pinned illustration short enough to leave the steps readable. */
+  .story-stage .stage { width: min(100%, 42vh * 1.6); margin: 0 auto; }
   .story-steps { grid-column: 1; grid-row: 2; padding: 4vh 0 30vh; }
   .step { min-height: 46vh; }
   .stage-term { display: none; }
@@ -1288,8 +1337,11 @@ th {
     border-bottom: 1px solid var(--line);
   }
   .nav.open .nav-links a { padding: 10px 8px; font-size: 1rem; }
-  .docs-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .docs-side { position: static; max-height: none; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+  .docs-layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 20px; }
+  .docs-side { position: static; max-height: none; margin-bottom: 24px; }
+  .js .docs-menu { display: flex; }
+  .js .docs-side:not(.open) .docs-groups { display: none; }
+  .docs-groups { padding: 14px 0 6px; }
   .docs-side ul { display: flex; flex-wrap: wrap; gap: 4px; }
   .docs-side h4 { margin-top: 14px; }
 }
@@ -1300,6 +1352,7 @@ th {
   .hero { padding: 40px 0 64px; }
   .grid.two, .grid.four, .stats { grid-template-columns: minmax(0, 1fr); }
   .nav-actions .btn { display: none; }
+  .install pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   .peer { padding: 5px 8px 5px 6px; gap: 6px; }
   .peer .avatar { width: 22px; height: 22px; border-radius: 6px; }
   .peer .avatar .icon { width: 12px; height: 12px; }
@@ -1324,6 +1377,11 @@ th {
   .faq .a { padding-right: 4px; }
   .docs-pager { grid-template-columns: minmax(0, 1fr); }
   .docs-pager .next { grid-column: 1; }
+}
+
+/* Landscape phones: a pinned illustration would cover the whole screen. */
+@media (max-width: 980px) and (max-height: 560px) {
+  .story-stage { position: static; }
 }
 
 @media (prefers-reduced-motion: reduce) {

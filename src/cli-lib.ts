@@ -185,7 +185,7 @@ export function helpText(): string {
     "  ninja-p2p review --id codex reviewer \"Review the change\"",
     "  ninja-p2p approve --id codex reviewer \"Approve this plan before I continue\"",
     "  ninja-p2p respond --id codex planner <requestId> '{\"approved\":true}'",
-    "  ninja-p2p event --id codex builds build_failed '{\"job\":\"api\"}'",
+    "  ninja-p2p event --id codex events build_failed '{\"job\":\"api\"}'",
     "  ninja-p2p command --id codex claude capabilities",
     "  ninja-p2p stop --id codex",
     "  ninja-p2p prune-archive --id codex --older-than-days 30 --keep-newest 200 [--apply true]",

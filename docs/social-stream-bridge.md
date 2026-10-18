@@ -77,7 +77,7 @@ room should be able to publish to the audience.
 | `--session <id>` | required | SSN session id (also `SSN_SESSION`, or first positional) |
 | `--room <name>` | generated | ninja-p2p room to publish into |
 | `--id <streamId>` | `social` | the bridge's identity in the room |
-| `--topic <name>` | `social` | topic the chat events are published on |
+| `--topic <name>` | `social` | topic the chat events are published on. Agent sidecars file `social` and `events` into their inbox; any other topic reaches only library peers subscribed to it |
 | `--read-only` | off | watch chat, refuse to send to it; recommended unless publishing is required |
 | `--echo` | off | print each message to stdout |
 | `--in-channel <n>` | `4` | SSN channel carrying chat |
@@ -245,13 +245,13 @@ something that can change without warning. See requirement G.
 
 ---
 
-# Requirements for Social Stream Ninja
+## Requirements for Social Stream Ninja
 
 Everything above works against SSN as it exists. This section is the proposal
 side: what SSN — especially the standalone desktop app — could change to make
 agent integration genuinely accessible. Ordered by impact.
 
-## A. Scoped session tokens *(highest impact, and a security fix)*
+### A. Scoped session tokens *(highest impact, and a security fix)*
 
 **Problem.** The session ID is the only credential and it grants everything:
 read chat, send chat to every platform, block users, clear overlays, and inject
@@ -297,7 +297,7 @@ token is what changes that answer. In the meantime `ninja-p2p ssn --read-only`
 enforces the same posture from this side, which helps against an over-eager
 agent but not against anyone who already holds the session id.
 
-## B. A single "Connect an app" setup surface
+### B. A single "Connect an app" setup surface
 
 **Problem.** Receiving chat requires two specific toggles, the critical one is
 third in a list under `Global settings and tools` → `Mechanics`, and missing it
@@ -314,7 +314,7 @@ a sign the UI is asking too much.
 That counter alone would eliminate most integration support questions, because
 the user can see whether the problem is on their side or the client's.
 
-## C. A health/handshake response
+### C. A health/handshake response
 
 **Problem.** A client can connect to the relay with a completely invalid session
 and get a successful connection that never delivers anything. I verified this:
@@ -331,7 +331,7 @@ answering:
 `getChatSources` already exists and is close to this; formalising it as a
 health check and documenting the "no publisher" response would be enough.
 
-## D. Standalone app: host the bridge natively
+### D. Standalone app: host the bridge natively
 
 **Problem.** The standalone desktop app is already a persistent process that
 does not need a browser window open — a much better host for an agent bridge
@@ -349,7 +349,7 @@ room"**, which:
 That collapses the whole setup to one checkbox and one copy-paste, which is the
 difference between a feature people try and one they finish.
 
-## E. Outbound rate limiting for agent-sent chat
+### E. Outbound rate limiting for agent-sent chat
 
 **Problem.** An agent replying to chat can loop or spam. That damage is public
 and lands on the user's channel and platform standing.
@@ -358,7 +358,7 @@ and lands on the user's channel and platform standing.
 ideally a "queue for approval" mode where agent-sent messages wait in the dock
 for a human click. The dock already has the interaction model for this.
 
-## F. Document the event vocabulary
+### F. Document the event vocabulary
 
 **Problem.** `event` is a free-form string (`"follow"`, `"raid"`, …). An agent
 that wants to react to raids has to guess the value per platform.
@@ -366,7 +366,7 @@ that wants to react to raids has to guess the value per platform.
 **Requirement.** Publish the enum and its per-platform mapping. `meta` already
 carries `eventTypeMapping`; surfacing that as documentation would do it.
 
-## G. Freeze and document the WebRTC listener contract
+### G. Freeze and document the WebRTC listener contract
 
 **Problem.** SSN's P2P path (room = session id, salt `vdo.ninja`, the user's
 password) is an internal detail. Building on it means building on something that
@@ -380,7 +380,7 @@ run true peer-to-peer.
 Lower priority than A–D, but it is the version with the least infrastructure in
 the path, and it costs SSN nothing to run.
 
-## What does not need to change
+### What does not need to change
 
 Worth saying: the message schema is genuinely good. `chatname` / `chatmessage` /
 `type` plus optional donation, membership, badges, and event fields covers

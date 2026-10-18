@@ -5,11 +5,11 @@ Start the worker once; it checks its hosted mailbox, runs one task at a time,
 and returns the result to the same task. Follow progress and decisions on the
 mailbox website or with `get_task` in your requesting agent.
 
-## Connect and start
+## 1. Connect your agents
 
 Install Node.js 20 or newer and your preferred agent CLI. Sign in to that CLI
-and make sure it works in the project folder you want it to use. Install Ninja
-P2P from GitHub:
+and make sure it works in the project folder you want it to use. This worker
+guide uses the current GitHub source. Install it on the worker's machine:
 
 ```sh
 npm install -g github:steveseguin/ninja-p2p
@@ -18,6 +18,11 @@ npm install -g github:steveseguin/ninja-p2p
 [Create and pair two mailboxes](cloud-connections.md#dots-and-agents-without-a-background-process):
 one for the requester, one for this worker. Keep the worker's credential file
 outside its project folder. No WebRTC adapter is required for mailbox tasks.
+The requester connects through the mailbox's MCP plugin; it does not need this
+CLI installation. The README's npm package and WebRTC adapter installation is
+for live rooms.
+
+## 2. Start the worker
 
 Next to that credential file, save `worker.json`:
 
@@ -46,7 +51,13 @@ The worker runs in the background. Its state and logs are saved beside the
 config in `worker.state`, unless you set `stateDir`. Keep that directory across
 restarts, and use one worker state directory per mailbox.
 
-## Ask for a result
+Check for `running: true` and `state: "waiting"` before sending the first task.
+`working` means the worker is handling a task. If it is still `connecting`,
+run the status command again after a few seconds. For `connection_error`, read
+`detail` in the status output; for a process that exits, check
+`worker.state/worker.log`.
+
+## 3. Ask for a result
 
 In your paired Dot or other MCP agent, ask:
 
@@ -87,9 +98,12 @@ ninja-p2p worker stop --config /private/worker.json
 ```
 
 Stopping finishes the current turn and saves its result, then stops accepting
-work. Start again with the same config and state directory. On a VPS, use
-`worker run --config /private/worker.json` as the foreground command for your
-service manager to restart after a reboot.
+work. Start again with the same config and state directory. On a VPS, use this
+foreground command with your service manager to restart after a reboot:
+
+```sh
+ninja-p2p worker run --config /private/worker.json
+```
 
 If the network disconnects, the worker retains task updates and retries them
 with the same request keys. A saved result is delivered without running the
@@ -98,7 +112,19 @@ asks for a decision before another attempt. Review the workspace and the logs
 under `worker.state/runs/TASK_ID/` first: an interrupted turn may have completed
 some actions. Decline to prevent another attempt.
 
-Use `worker status` for connection errors and task IDs. Renew expired mailbox
-credentials and restart with the same state directory. If the CLI is not on
-your PATH, set `executable` to its native executable or Node `.js` entry point;
+Check connection errors and task IDs with:
+
+```sh
+ninja-p2p worker status --config /private/worker.json
+```
+
+Renew expired mailbox credentials and restart with the same state directory.
+If the CLI is not on your PATH, set `executable` to its native executable or
+Node `.js` entry point;
 shell wrappers such as `.cmd`, `.bat` and `.ps1` are not accepted.
+
+If a Dot cannot see `create_task` or `get_task` after a plugin update, select
+**Refresh tools** in that plugin's settings. If the plugin lists the tools but
+the Dot still cannot use them, wait until its current work is idle, then select
+**Pause** and **Resume** in the Dot's profile. Ask it to call `get_mailbox` and
+`list_tasks` before retrying the same task request.

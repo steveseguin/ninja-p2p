@@ -159,14 +159,18 @@
 Start the worker once; it checks its hosted mailbox, runs one task at a time,
 and returns the result to the same task. Follow progress and decisions on the
 mailbox website or with <code>get_task</code> in your requesting agent.</p>
-<h2 id="connect-and-start">Connect and start<a class="anchor" href="#connect-and-start" aria-label="Link to this section">#</a></h2>
+<h2 id="1-connect-your-agents">1. Connect your agents<a class="anchor" href="#1-connect-your-agents" aria-label="Link to this section">#</a></h2>
 <p>Install Node.js 20 or newer and your preferred agent CLI. Sign in to that CLI
-and make sure it works in the project folder you want it to use. Install Ninja
-P2P from GitHub:</p>
+and make sure it works in the project folder you want it to use. This worker
+guide uses the current GitHub source. Install it on the worker&#39;s machine:</p>
 <div class="codeblock"><span class="lang">sh</span><pre><code>npm install -g github:steveseguin/ninja-p2p</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p><a href="cloud-connections.html#dots-and-agents-without-a-background-process">Create and pair two mailboxes</a>:
 one for the requester, one for this worker. Keep the worker&#39;s credential file
-outside its project folder. No WebRTC adapter is required for mailbox tasks.</p>
+outside its project folder. No WebRTC adapter is required for mailbox tasks.
+The requester connects through the mailbox&#39;s MCP plugin; it does not need this
+CLI installation. The README&#39;s npm package and WebRTC adapter installation is
+for live rooms.</p>
+<h2 id="2-start-the-worker">2. Start the worker<a class="anchor" href="#2-start-the-worker" aria-label="Link to this section">#</a></h2>
 <p>Next to that credential file, save <code>worker.json</code>:</p>
 <div class="codeblock"><span class="lang">json</span><pre><code>{
   &quot;mailboxConfig&quot;: &quot;mailbox.json&quot;,
@@ -185,7 +189,12 @@ ninja-p2p worker status --config /private/worker.json</code></pre><button class=
 <p>The worker runs in the background. Its state and logs are saved beside the
 config in <code>worker.state</code>, unless you set <code>stateDir</code>. Keep that directory across
 restarts, and use one worker state directory per mailbox.</p>
-<h2 id="ask-for-a-result">Ask for a result<a class="anchor" href="#ask-for-a-result" aria-label="Link to this section">#</a></h2>
+<p>Check for <code>running: true</code> and <code>state: &quot;waiting&quot;</code> before sending the first task.
+<code>working</code> means the worker is handling a task. If it is still <code>connecting</code>,
+run the status command again after a few seconds. For <code>connection_error</code>, read
+<code>detail</code> in the status output; for a process that exits, check
+<code>worker.state/worker.log</code>.</p>
+<h2 id="3-ask-for-a-result">3. Ask for a result<a class="anchor" href="#3-ask-for-a-result" aria-label="Link to this section">#</a></h2>
 <p>In your paired Dot or other MCP agent, ask:</p>
 <p>“Create a task for my paired worker to review the project README. Return the
 three most useful improvements. Monitor this task and show me its result.”</p>
@@ -213,19 +222,26 @@ by your agent provider under your existing account.</p>
 <h2 id="stop-and-recover">Stop and recover<a class="anchor" href="#stop-and-recover" aria-label="Link to this section">#</a></h2>
 <div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p worker stop --config /private/worker.json</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p>Stopping finishes the current turn and saves its result, then stops accepting
-work. Start again with the same config and state directory. On a VPS, use
-<code>worker run --config /private/worker.json</code> as the foreground command for your
-service manager to restart after a reboot.</p>
+work. Start again with the same config and state directory. On a VPS, use this
+foreground command with your service manager to restart after a reboot:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p worker run --config /private/worker.json</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p>If the network disconnects, the worker retains task updates and retries them
 with the same request keys. A saved result is delivered without running the
 agent again. If execution was interrupted without a saved outcome, the task
 asks for a decision before another attempt. Review the workspace and the logs
 under <code>worker.state/runs/TASK_ID/</code> first: an interrupted turn may have completed
 some actions. Decline to prevent another attempt.</p>
-<p>Use <code>worker status</code> for connection errors and task IDs. Renew expired mailbox
-credentials and restart with the same state directory. If the CLI is not on
-your PATH, set <code>executable</code> to its native executable or Node <code>.js</code> entry point;
+<p>Check connection errors and task IDs with:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p worker status --config /private/worker.json</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Renew expired mailbox credentials and restart with the same state directory.
+If the CLI is not on your PATH, set <code>executable</code> to its native executable or
+Node <code>.js</code> entry point;
 shell wrappers such as <code>.cmd</code>, <code>.bat</code> and <code>.ps1</code> are not accepted.</p>
+<p>If a Dot cannot see <code>create_task</code> or <code>get_task</code> after a plugin update, select
+<strong>Refresh tools</strong> in that plugin&#39;s settings. If the plugin lists the tools but
+the Dot still cannot use them, wait until its current work is idle, then select
+<strong>Pause</strong> and <strong>Resume</strong> in the Dot&#39;s profile. Ask it to call <code>get_mailbox</code> and
+<code>list_tasks</code> before retrying the same task request.</p>
 
   </article>
   <nav class="docs-pager" aria-label="More guides">
@@ -233,8 +249,9 @@ shell wrappers such as <code>.cmd</code>, <code>.bat</code> and <code>.ps1</code
 <a class="next" href="guide.html"><small>Next</small>Guide</a>
 </nav>
 </main>
-<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#connect-and-start">Connect and start</a></li>
-<li><a href="#ask-for-a-result">Ask for a result</a></li>
+<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#1-connect-your-agents">1. Connect your agents</a></li>
+<li><a href="#2-start-the-worker">2. Start the worker</a></li>
+<li><a href="#3-ask-for-a-result">3. Ask for a result</a></li>
 <li><a href="#choose-what-the-worker-may-do">Choose what the worker may do</a></li>
 <li><a href="#stop-and-recover">Stop and recover</a></li></ul></aside>
 </div>

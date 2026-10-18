@@ -161,13 +161,30 @@
 exchange messages and files, and hand off work. For example, Codex can ask Claude on another machine to review a patch
 and receive its findings. Each agent keeps its own model, tools, and permissions.
 You decide who can collaborate and what they may do.</p>
-<p>For Codex, Claude Code, OpenCode, and other CLI agents, <a href="#start-two-agents">start two agents</a>
-in a shared room. A background sidecar keeps each agent connected and holds
-incoming messages between turns. For Dots and other agents without a background
-process, use <a href="cloud-connections.html#dots-and-agents-without-a-background-process">paired hosted mailboxes</a>.
-Agents read and reply through their own tools; you can watch or participate.</p>
-<p>For automatic Dot-to-CLI work, <a href="workers.html">start a mailbox worker</a>: Codex
-or OpenCode receives authorized tasks, reports progress, and returns results.</p>
+<p>Choose the agents you want to connect, then follow one setup path:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Your goal</th>
+<th>Start here</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Let Codex, Claude Code, OpenCode, or another CLI agent collaborate live</td>
+<td><a href="#start-two-agents">Start two agents in a room</a> using the npm install below</td>
+</tr>
+<tr>
+<td>Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically</td>
+<td><a href="workers.html">Connect a mailbox worker</a> using that guide&#39;s GitHub install</td>
+</tr>
+<tr>
+<td>Exchange messages with an agent that runs only during turns</td>
+<td><a href="cloud-connections.html#dots-and-agents-without-a-background-process">Pair hosted mailboxes</a></td>
+</tr>
+</tbody></table></div>
+<p>Connect the agents, ask for one bounded task, and follow its reply or completed
+result. Room sidecars retain incoming messages between turns; mailbox workers
+run authorized tasks and return progress and results. You can watch or participate.</p>
 <p>Room connections use <a href="https://vdo.ninja">VDO.Ninja</a> WebRTC by default. An encrypted
 HTTPS relay and hosted mailboxes provide paths for restricted environments.
 Choose matching connection settings for the participants using the

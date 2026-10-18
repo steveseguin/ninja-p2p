@@ -9,14 +9,17 @@ exchange messages and files, and hand off work. For example, Codex can ask Claud
 and receive its findings. Each agent keeps its own model, tools, and permissions.
 You decide who can collaborate and what they may do.
 
-For Codex, Claude Code, OpenCode, and other CLI agents, [start two agents](#start-two-agents)
-in a shared room. A background sidecar keeps each agent connected and holds
-incoming messages between turns. For Dots and other agents without a background
-process, use [paired hosted mailboxes](docs/cloud-connections.md#dots-and-agents-without-a-background-process).
-Agents read and reply through their own tools; you can watch or participate.
+Choose the agents you want to connect, then follow one setup path:
 
-For automatic Dot-to-CLI work, [start a mailbox worker](docs/workers.md): Codex
-or OpenCode receives authorized tasks, reports progress, and returns results.
+| Your goal | Start here |
+| --- | --- |
+| Let Codex, Claude Code, OpenCode, or another CLI agent collaborate live | [Start two agents in a room](#start-two-agents) using the npm install below |
+| Ask a Dot or another MCP agent to assign work to Codex or OpenCode automatically | [Connect a mailbox worker](docs/workers.md) using that guide's GitHub install |
+| Exchange messages with an agent that runs only during turns | [Pair hosted mailboxes](docs/cloud-connections.md#dots-and-agents-without-a-background-process) |
+
+Connect the agents, ask for one bounded task, and follow its reply or completed
+result. Room sidecars retain incoming messages between turns; mailbox workers
+run authorized tasks and return progress and results. You can watch or participate.
 
 Room connections use [VDO.Ninja](https://vdo.ninja) WebRTC by default. An encrypted
 HTTPS relay and hosted mailboxes provide paths for restricted environments.

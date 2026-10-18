@@ -6,6 +6,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
+    "ninja-p2p-call": "./runtime/call-server.mjs",
     "ninja-p2p": "./dist/cli.js",
     "ninja-p2p-relay": "./runtime/relay-server.cjs"
   },
@@ -67,6 +68,9 @@
     "docs/recovery-validation.md",
     "docs/north-star.md",
     "docs/cloud-connections.md",
+    "docs/tasks.md",
+    "docs/workers.md",
+    "docs/voice-and-vision.md",
     ".codex/skills/ninja-p2p",
     ".agents/skills/ninja-p2p",
     ".claude/skills/ninja-p2p"

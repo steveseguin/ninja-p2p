@@ -121,8 +121,10 @@
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
 <h4>Start</h4><ul>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -131,6 +133,7 @@
 <h4>Integrations</h4><ul>
 <li><a href="social-stream-bridge.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream bridge</a></li>
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
+<li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
@@ -154,17 +157,36 @@
   <article class="prose">
 <h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>Add an independent encrypted HTTP relay transport for peers without WebRTC,
-preserving local inboxes and confirmed handoffs. WebRTC remains the default.</li>
-<li>Add hosted agent mailboxes with OAuth MCP access, signed wake events, paired
+<li><p>Add background mailbox workers for Codex and OpenCode, with allowed senders,
+task progress, approval decisions, cancellation and saved results across restarts.</p>
+</li>
+<li><p>Add Dots and OpenCode connection paths to the website and an automatic worker guide.</p>
+</li>
+<li><p>Add <code>receipt --until responded --timeout MS</code> to wait for an agent&#39;s reply
+after inbox storage, without a separate polling script.</p>
+</li>
+<li><p>Add hosted tasks with worker progress, owner-only approval decisions, linked
+results, cancellation requests, and idempotent updates through MCP and the CLI.</p>
+</li>
+<li><p>Add a local voice and vision conversation with OpenAI Realtime, selected task
+context, explicit media sharing, interruption, and an HTTPS text alternative.</p>
+</li>
+<li><p>Add an independent encrypted HTTP relay transport for peers without WebRTC,
+preserving local inboxes and confirmed handoffs. WebRTC remains the default.</p>
+</li>
+<li><p>Add hosted agent mailboxes with OAuth MCP access, signed wake events, paired
 recipients, and a native-free CLI. Cloud-agent credentials are scoped to one
-mailbox and can be revoked separately.</li>
-<li>Add opt-in confirmed handoffs with persistent retries, recipient storage
-receipts, duplicate suppression across reads and restarts, and a 24-hour expiry.</li>
-<li>Add bounded receipt waiting through <code>receipt --timeout</code> and advertise handoff
-support so older peers do not receive repeated requests.</li>
-<li>Allow peer discovery to retry after a rejected SDK view attempt, while ignoring
-failures from obsolete attempts and retired connections.</li>
+mailbox and can be revoked separately.</p>
+</li>
+<li><p>Add opt-in confirmed handoffs with persistent retries, recipient storage
+receipts, duplicate suppression across reads and restarts, and a 24-hour expiry.</p>
+</li>
+<li><p>Add bounded receipt waiting through <code>receipt --timeout</code> and advertise handoff
+support so older peers do not receive repeated requests.</p>
+</li>
+<li><p>Allow peer discovery to retry after a rejected SDK view attempt, while ignoring
+failures from obsolete attempts and retired connections.</p>
+</li>
 </ul>
 <h2 id="024--2026-09-05">0.2.4 — 2026-09-05<a class="anchor" href="#024--2026-09-05" aria-label="Link to this section">#</a></h2>
 <ul>
@@ -350,7 +372,7 @@ co-host, moderation, research, and live-production use case.</li>
 
   </article>
   <nav class="docs-pager" aria-label="More guides">
-<a href="cloud-connections.html"><small>Previous</small>Cloud connections</a>
+<a href="voice-and-vision.html"><small>Previous</small>Voice &amp; vision</a>
 <a class="next" href="recovery-validation.html"><small>Next</small>Recovery validation</a>
 </nav>
 </main>

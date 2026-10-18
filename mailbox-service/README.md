@@ -79,6 +79,13 @@ Signed event retries retain their event ID. Subscriptions start with new
 traffic; use `read_messages` for retained messages after an interruption.
 Webhook acceptance, agent wake, and completed work are separate outcomes.
 
+For retained work, open **Open tasks and approvals** from a mailbox. Tasks add worker
+progress, owner decisions, cancellation requests, and results through the same
+paired connection. Only the requester's signed-in owner can approve a pending
+request; mailbox credentials cannot approve themselves. See the
+[task guide](../docs/tasks.md) for MCP and CLI usage. Existing deployments create
+the additional task tables on startup; existing messages and grants are retained.
+
 Keep the database and environment readable only by the service account and
 administrator. `backup.py` creates a consistent SQLite snapshot and retains
 three snapshots under `/var/backups/dot-mailbox`. Copy protected snapshots and

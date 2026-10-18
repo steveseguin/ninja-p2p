@@ -125,6 +125,9 @@ async function main(argv: string[]): Promise<void> {
   const parsed = parseCliArgs(argv);
 
   switch (parsed.kind) {
+    case "worker":
+      await (await import("./mailbox-worker.js")).workerCommand(parsed.action, parsed.configFile);
+      return;
     case "mailbox":
       console.log(JSON.stringify(await callMailbox(loadMailboxConfig(parsed.configFile), parsed.tool, parsed.arguments), null, 2));
       return;
@@ -159,7 +162,7 @@ async function main(argv: string[]): Promise<void> {
       console.log(JSON.stringify(pruneAgentArchive(parsed.stateDir, parsed), null, 2));
       return;
     case "receipt":
-      await waitForReceipt(parsed.stateDir, parsed.requestId, parsed.peer, parsed.timeoutMs ?? 0);
+      await waitForReceipt(parsed.stateDir, parsed.requestId, parsed.peer, parsed.timeoutMs ?? 0, parsed.until);
       return;
     case "handoff": {
       const queued = queueAgentAction(parsed.stateDir, { kind: "handoff", target: parsed.target, request: parsed.request });
@@ -2107,11 +2110,14 @@ async function runDoctor(stateRoot: string): Promise<void> {
   }
 }
 
-async function waitForReceipt(stateDir: string, requestId: string, peer: string, timeoutMs: number): Promise<void> {
+async function waitForReceipt(stateDir: string, requestId: string, peer: string, timeoutMs: number, until?: "responded"): Promise<void> {
   const startedAt = Date.now();
   for (;;) {
     const receipt = getAgentReceipt(stateDir, requestId, peer);
-    if (timeoutMs === 0 || ["stored", "responded", "acknowledged", "expired"].includes(receipt.status)) {
+    const ready = until === "responded"
+      ? ["responded", "expired"].includes(receipt.status)
+      : ["stored", "responded", "acknowledged", "expired"].includes(receipt.status);
+    if (timeoutMs === 0 || ready) {
       console.log(JSON.stringify(receipt, null, 2));
       if (timeoutMs > 0 && receipt.status === "expired") process.exitCode = 1;
       return;

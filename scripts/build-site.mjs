@@ -25,12 +25,20 @@ const SITE = "https://steveseguin.github.io/ninja-p2p/";
 
 const PAGES = [
   {
+    src: "docs/workers.md", out: "workers.html", title: "Automatic workers", group: "Start", icon: "terminal",
+    description: "Keep Codex or OpenCode available for tasks from Dots and other agents, with progress, approvals and saved results.",
+  },
+  {
     src: "README.md", out: "guide.html", title: "Guide", group: "Start", icon: "book",
     description: "Install ninja-p2p, start two agents, and learn the whole CLI: wake hooks, shared folders, swarms, the dashboard, and the library.",
   },
   {
     src: "docs/operations.md", out: "operations.html", title: "Operations & recovery", group: "Start", icon: "wrench",
     description: "Upgrade without losing local work, inspect mail before consuming it, recover files, and diagnose wake hooks.",
+  },
+  {
+    src: "docs/tasks.md", out: "tasks.html", title: "Tasks & approvals", group: "Start", icon: "book",
+    description: "Hand work to a cloud agent, follow progress, approve a concrete request, and retrieve its result.",
   },
   {
     src: "docs/security.md", out: "security.html", title: "Security model", group: "Concepts", icon: "shield",
@@ -47,6 +55,10 @@ const PAGES = [
   {
     src: "docs/cloud-connections.md", out: "cloud-connections.html", title: "Cloud connections", group: "Integrations", icon: "globe",
     description: "Connect agents that cannot run WebRTC through an encrypted HTTPS relay or a hosted mailbox.",
+  },
+  {
+    src: "docs/voice-and-vision.md", out: "voice-and-vision.html", title: "Voice & vision", group: "Integrations", icon: "monitor",
+    description: "Discuss a task with live AI speech, selected camera or screen frames, and an HTTPS text alternative.",
   },
   {
     src: "CHANGELOG.md", out: "changelog.html", title: "Changelog", group: "Project", icon: "list",

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
 export type MailboxConfig = { url: string; token: string };
@@ -74,16 +74,23 @@ export function parseMailboxCommand(args: string[], env: NodeJS.ProcessEnv): {
 } {
   let configFile = env.NINJA_MAILBOX_CONFIG;
   let requestKey: string | undefined;
+  let inputFile: string | undefined;
+  let cursor: string | undefined;
   let after = 0;
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (!arg.startsWith("--")) { positional.push(arg); continue; }
-    if (!["--config", "--request-key", "--after"].includes(arg)) throw new Error(`Unknown mailbox option ${arg}`);
+    if (!["--config", "--request-key", "--after", "--file", "--cursor"].includes(arg)) throw new Error(`Unknown mailbox option ${arg}`);
     const value = args[++i];
     if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}`);
     if (arg === "--config") configFile = value;
     if (arg === "--request-key") requestKey = value;
+    if (arg === "--file") inputFile = value;
+    if (arg === "--cursor") {
+      if (!/^[a-f0-9]{32}$/.test(value)) throw new Error("--cursor must be a task ID from next_cursor");
+      cursor = value;
+    }
     if (arg === "--after") {
       after = Number(value);
       if (!/^\d+$/.test(value) || !Number.isSafeInteger(after)) throw new Error("--after must be a nonnegative safe integer");
@@ -93,6 +100,24 @@ export function parseMailboxCommand(args: string[], env: NodeJS.ProcessEnv): {
   const [command, target, ...rest] = positional;
   const text = rest.join(" ");
   const result = (tool: string, arguments_: Record<string, unknown>) => ({ kind: "mailbox" as const, configFile, tool, arguments: arguments_ });
+  if (command === "task") {
+    if (requestKey !== undefined || args.includes("--after")) throw new Error("Task request_key belongs in the JSON file; task lists use --cursor instead of --after");
+    if (target === "list" && positional.length === 2 && !inputFile) return result("list_tasks", cursor ? { after: cursor } : {});
+    if (target === "get" && positional.length === 3 && /^[a-f0-9]{32}$/.test(rest[0]) && !inputFile && !cursor) return result("get_task", { task_id: rest[0] });
+    if (["create", "update", "cancel"].includes(target) && positional.length === 2 && inputFile && !cursor) {
+      let input;
+      try {
+        if (statSync(inputFile).size > 32000) throw new Error();
+        const raw = readFileSync(inputFile, "utf8");
+        if (Buffer.byteLength(raw) > 32000) throw new Error();
+        input = JSON.parse(raw);
+        if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error();
+      } catch { throw new Error("Task --file must contain a JSON object of at most 32 KB"); }
+      return result({ create: "create_task", update: "update_task", cancel: "cancel_task" }[target]!, input);
+    }
+    throw new Error("Use mailbox task list [--cursor ID], get ID, or create/update/cancel --file request.json. Approve tasks on the mailbox website.");
+  }
+  if (inputFile || cursor) throw new Error("--file and --cursor apply only to mailbox task commands");
   if (command === "identity" && positional.length === 1) return result("get_mailbox", {});
   if (command === "read" && positional.length === 1) return result("read_messages", { after_sequence: after });
   if (command === "invite" && positional.length === 1) return result("create_peer_invitation", {});

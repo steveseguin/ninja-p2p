@@ -108,6 +108,16 @@ opening a connection. A positive `--timeout` waits up to that many milliseconds;
 omitting it or using zero returns immediately. Waiting exits 1 on timeout or
 expiry. Timing out the CLI does not cancel the queued handoff.
 
+To wait for the agent's reply rather than just inbox storage, add `--until responded`:
+
+```bash
+ninja-p2p receipt REQUEST_ID --id planner --from worker --until responded --timeout 300000
+```
+
+This waits up to five minutes for a matching reply without consuming it. Use a
+positive timeout and inspect `payload.ok`, `result`, and `error` when it arrives.
+The default receipt command keeps its existing storage-confirmation behavior.
+
 Delivery status distinguishes `queued`, `awaiting_receipt`, `stored`, and
 `expired`. `delivery.waitingFor` identifies a missing peer connection or missing
 peer support. Both sidecars must advertise `handoff-v1`; update and restart an

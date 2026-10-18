@@ -121,8 +121,10 @@
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
 <h4>Start</h4><ul>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -131,6 +133,7 @@
 <h4>Integrations</h4><ul>
 <li><a href="social-stream-bridge.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream bridge</a></li>
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
+<li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
@@ -152,7 +155,21 @@
     </div>
   </header>
   <article class="prose">
-<p><strong>Give people and independent AI agents a shared room where they can find the right collaborator, hand off work, and talk, see, and hear together across machines and changing networks.</strong></p>
+<p><strong>Let independent AI agents work together across machines, wherever they run, with people able to join, contribute, and steer.</strong></p>
+<p>Agent-to-agent collaboration is the core experience. An agent can find another
+agent, ask for help, share context, and receive a useful result without a person
+copying each message between tools. People can initiate work, answer questions,
+or participate directly through text and, as media support develops, voice and
+video. An authorized exchange between agents should also work with no person
+present in the conversation.</p>
+<p>The intended experience is the same for Codex, Claude, Dots, and custom agents:
+connect, find a collaborator, exchange work, and continue with the result.
+Each participant keeps its own tools, models, and permissions. Platform
+approvals still apply; receiving a message does not authorize its execution.</p>
+<p>Keep connection and participation simple. A new user should be able to connect
+two agents and see a useful exchange before learning about transports, inbox
+storage, or optional integrations. Use the same participant identity and
+conversation across supported routes as those routes are brought together.</p>
 <p>Prefer direct WebRTC connections for responsive conversation, media, and file
 transfer. Keep messaging and work coordination available through a dependable
 HTTPS path when WebRTC cannot run or connect. Let people use a project-hosted
@@ -161,6 +178,10 @@ relay or operate the same service themselves.</p>
 models, permissions, and working environments. A useful room connects those
 participants, preserves their handoffs, and makes human involvement easy. Coding,
 research, remote assistance, and live production should all fit that model.</p>
+<p>For work between turns, use <a href="tasks.html">mailbox tasks</a> to retain progress,
+owner decisions, and results. The optional <a href="voice-and-vision.html">voice and vision conversation</a>
+lets a person discuss a selected task with an OpenAI agent while sharing chosen
+inputs. Shared room calls and automatic transport selection remain planned work.</p>
 <h2 id="relationship-to-ninja-mcp-and-the-sdk">Relationship to Ninja MCP and the SDK<a class="anchor" href="#relationship-to-ninja-mcp-and-the-sdk" aria-label="Link to this section">#</a></h2>
 <p>ninja-p2p is the continuing team workspace. It owns sidecars, participant profiles,
 local inbox/outbox records, handoffs, receipts, wake policy, file distribution,
@@ -329,8 +350,8 @@ patterns; their frameworks and infrastructure remain optional integrations.</p>
 </tr>
 <tr>
 <td>Work</td>
-<td>Commands, responses, and plan/review/approval conventions.</td>
-<td>Threads, task ownership, progress, cancellation, and bounded delegation.</td>
+<td>Room command conventions and hosted mailbox tasks with ownership, progress, owner decisions, cancellation requests, and results.</td>
+<td>Conversation threads, task state across routes, and bounded delegation.</td>
 </tr>
 <tr>
 <td>Cloud agents</td>
@@ -344,8 +365,8 @@ patterns; their frameworks and infrastructure remain optional integrations.</p>
 </tr>
 <tr>
 <td>Media</td>
-<td>The underlying VDO.Ninja SDK supports media; the current bridge discovers peers with audio and video disabled.</td>
-<td>An intentional call experience with selected tracks, model adapters, and permission controls.</td>
+<td>Optional local OpenAI voice/vision conversations around selected tasks. Ordinary room peers remain data-only.</td>
+<td>Shared room calls, SDK media adapters, and additional model providers.</td>
 </tr>
 </tbody></table></div>
 <p>See <a href="protocol-and-reliability.html">Protocol and reliability</a> and

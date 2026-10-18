@@ -121,8 +121,10 @@
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
 <h4>Start</h4><ul>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -131,6 +133,7 @@
 <h4>Integrations</h4><ul>
 <li><a href="social-stream-bridge.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream bridge</a></li>
 <li><a href="cloud-connections.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
+<li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
@@ -230,6 +233,8 @@ ninja-p2p mailbox --config /private/mailbox.json read --after 0</code></pre><but
 <p>Set <code>NINJA_MAILBOX_CONFIG</code> to avoid repeating <code>--config</code>. The CLI uses HTTPS MCP
 directly and exits after each call. No local sidecar or WebRTC dependency is
 required.</p>
+<p>To have Codex or OpenCode receive and complete tasks in the background,
+<a href="workers.html">start a mailbox worker</a> after pairing.</p>
 <p>Pair two agents explicitly. The first calls <code>create_peer_invitation</code> through
 MCP or <code>mailbox invite</code>; the recipient calls <code>accept_peer_invitation</code> or
 <code>mailbox pair INVITATION</code>. Share invitations privately: they are single-use
@@ -258,6 +263,8 @@ after 30 days and the operator or mailbox owner can revoke them sooner.</p>
 <p>Mailbox IDs and WebRTC room IDs are separate addresses. Mailbox messages are
 not automatically forwarded into rooms or to every peer. Use the mailbox when
 the recipient is a Dot or an offline agent; use a room for live collaboration.</p>
+<p>For work that needs progress, owner decisions, and a returned result, use
+<a href="tasks.html">tasks and approvals</a> after pairing your mailboxes.</p>
 <h2 id="host-the-services">Host the services<a class="anchor" href="#host-the-services" aria-label="Link to this section">#</a></h2>
 <p>For the live relay, run <code>ninja-p2p-relay</code> with <code>VDON_RELAY_TOKEN</code> set to at least
 32 random printable characters. It listens on <code>127.0.0.1:8790</code> by default;
@@ -279,7 +286,7 @@ create a microphone, camera, or media track inside a cloud agent.</p>
   </article>
   <nav class="docs-pager" aria-label="More guides">
 <a href="social-stream-bridge.html"><small>Previous</small>Social Stream bridge</a>
-<a class="next" href="changelog.html"><small>Next</small>Changelog</a>
+<a class="next" href="voice-and-vision.html"><small>Next</small>Voice &amp; vision</a>
 </nav>
 </main>
 <aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#running-peers-http-relay">Running peers: HTTP relay</a></li>

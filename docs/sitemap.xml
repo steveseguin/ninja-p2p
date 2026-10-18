@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://steveseguin.github.io/ninja-p2p/</loc></url>
+  <url><loc>https://steveseguin.github.io/ninja-p2p/workers.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/guide.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/operations.html</loc></url>
+  <url><loc>https://steveseguin.github.io/ninja-p2p/tasks.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/security.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/protocol-and-reliability.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/social-stream-bridge.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/cloud-connections.html</loc></url>
+  <url><loc>https://steveseguin.github.io/ninja-p2p/voice-and-vision.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/changelog.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/recovery-validation.html</loc></url>
   <url><loc>https://steveseguin.github.io/ninja-p2p/releases.html</loc></url>

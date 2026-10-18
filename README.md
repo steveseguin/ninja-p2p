@@ -1,27 +1,27 @@
 # ninja-p2p
 
-AI agent coordination, persistent inboxes, and resumable file transfers, with WebRTC and HTTPS connection options.
+Connect independent AI agents so they can work together across machines. People can join, contribute, and steer.
 
 ## TL;DR
 
-`ninja-p2p` is a shared room and handoff layer that makes separate AI tools work
-like a team. Put Codex, Claude, your own bots, and optionally a human operator
-in the same room. They can discover each other, exchange messages and structured
-requests, move files directly or as a resumable swarm, and keep a local inbox
-while another agent is busy.
+`ninja-p2p` lets separate AI tools work as a team. Agents find one another,
+exchange messages and files, and hand off work. For example, Codex can ask Claude on another machine to review a patch
+and receive its findings. Each agent keeps its own model, tools, and permissions.
+You decide who can collaborate and what they may do.
 
-A sidecar can wake a turn-based agent when mail arrives. Social Stream Ninja is
-an important optional application of the same room: live Twitch, YouTube, Kick,
-and other chat becomes shared input for an AI co-host, moderator, researcher,
-or producer team.
+For Codex, Claude Code, OpenCode, and other CLI agents, [start two agents](#start-two-agents)
+in a shared room. A background sidecar keeps each agent connected and holds
+incoming messages between turns. For Dots and other agents without a background
+process, use [paired hosted mailboxes](docs/cloud-connections.md#dots-and-agents-without-a-background-process).
+Agents read and reply through their own tools; you can watch or participate.
 
-By default it runs over [VDO.Ninja](https://vdo.ninja) WebRTC data channels, so you do not need to host a new chat server. Cloud agents that cannot use WebRTC can use an encrypted HTTP relay. Hosted mailboxes let Dots and other agents exchange retained text without keeping a local sidecar running. See [cloud connections](docs/cloud-connections.md).
+For automatic Dot-to-CLI work, [start a mailbox worker](docs/workers.md): Codex
+or OpenCode receives authorized tasks, reports progress, and returns results.
 
-**Best for:** always-on agent rooms, cross-machine handoffs, shell automation,
-direct file distribution, and AI-assisted live production without deploying a
-coordination server.
-
-**Not for:** general network tunnelling, large cloud file archives, or very large public communities.
+Room connections use [VDO.Ninja](https://vdo.ninja) WebRTC by default. An encrypted
+HTTPS relay and hosted mailboxes provide paths for restricted environments.
+Choose matching connection settings for the participants using the
+[cloud connection guide](docs/cloud-connections.md).
 
 Package: [`@vdoninja/ninja-p2p`](https://www.npmjs.com/package/@vdoninja/ninja-p2p) | [Security model](docs/security.md) | [Social Stream bridge](docs/social-stream-bridge.md) | [Protocol and reliability](docs/protocol-and-reliability.md) | [SDK wishlist](docs/sdk-wishlist.md) | [Product direction](docs/north-star.md) | [Support](https://discord.vdo.ninja)
 
@@ -62,8 +62,6 @@ and command responses without consuming mail or re-executing work. See the [oper
 - A **sidecar** keeps one agent connected and holds its local inbox.
 - The **CLI or skill** lets Codex and Claude read and write that inbox during their turns.
 - The optional **dashboard** lets a person watch, chat, inspect agents, and send or download files.
-- The optional **Social Stream bridge** turns one live audience into room events
-  the whole agent team can observe.
 
 ## See It Work First
 
@@ -111,6 +109,9 @@ Use the room name printed above to start the second agent:
 ninja-p2p start --room <room-name> --id claude
 ```
 
+Give each agent a different ID, including two instances of the same client:
+for example, `codex-writer` and `codex-reviewer`. Each ID keeps its own inbox.
+
 Now they can talk:
 
 ```bash
@@ -134,6 +135,12 @@ ninja-p2p install-skill claude
 - In **Claude Code**, use `/ninja-p2p start`, `/ninja-p2p notify`, and `/ninja-p2p read`.
 - In **Codex**, mention `$ninja-p2p` or let Codex run the `ninja-p2p` command directly.
 - Restart the client after installing a skill if it does not appear immediately.
+
+## Optional Workflows
+
+- [Mailbox tasks](docs/tasks.md): follow progress, review a decision, and retrieve a result.
+- [Voice and vision](docs/voice-and-vision.md): discuss a selected task with an OpenAI agent and share chosen inputs.
+- [Social Stream bridge](docs/social-stream-bridge.md): give an agent team shared input from live audience chat.
 
 ## Which VDO.Ninja Package Do I Need?
 
@@ -341,6 +348,10 @@ same ID. `stored` confirms local storage at the recipient; `responded` means a
 reply arrived, whose result or error still needs checking. Older peers keep the
 handoff queued until they advertise support. See [handoff delivery and recovery](docs/operations.md#confirmed-handoffs).
 
+To wait for the reply in one command, use
+`ninja-p2p receipt REQUEST_ID --id codex --from reviewer --until responded --timeout 300000`.
+The reviewer needs an active turn or a wake hook to answer.
+
 What it does not do:
 
 - it does not interrupt Codex or Claude in the middle of a turn
@@ -358,9 +369,15 @@ ninja-p2p start --room ai-room --id claude \
 
 ninja-p2p start --room ai-room --id codex \
   --on-message "codex exec 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'"
+
+ninja-p2p start --room ai-room --id opencode \
+  --on-message "opencode run --dir /path/to/project 'Read your ninja-p2p inbox. Review authorized handoffs and respond using their original request IDs. Do not reply to receipts or responses.'"
 ```
 
-That is the difference between a message bus and two agents that actually work together while you are away.
+For OpenCode, replace `/path/to/project` with the review workspace. Configure its
+model access and [project permissions](https://opencode.ai/docs/permissions/) to
+allow the required reads and CLI commands before enabling unattended wakes.
+Use the same `handoff`, `read`, `respond`, and `receipt` commands across clients.
 
 The wake command receives these environment variables:
 

@@ -33,8 +33,17 @@ export type CliCommonOptions = {
 
 export type SkillRuntime = "claude" | "codex";
 
+export function parseWorkerCommand(args: string[]): { kind: "worker"; action: "start" | "run" | "status" | "stop"; configFile: string } {
+  const [action, flag, file, ...extra] = args;
+  if (!["start", "run", "status", "stop"].includes(action) || flag !== "--config" || !file || extra.length) {
+    throw new Error("Use worker start|run|status|stop --config worker.json");
+  }
+  return { kind: "worker", action: action as "start" | "run" | "status" | "stop", configFile: path.resolve(file) };
+}
+
 export type CliCommand =
   | ReturnType<typeof parseMailboxCommand>
+  | ReturnType<typeof parseWorkerCommand>
   | { kind: "help" }
   | { kind: "menu"; options: CliCommonOptions }
   | { kind: "install-skill"; runtime: SkillRuntime }
@@ -45,7 +54,7 @@ export type CliCommand =
   | { kind: "agent"; options: CliCommonOptions }
   | { kind: "notify"; stateDir: string }
   | { kind: "prune-archive"; stateDir: string; olderThanDays: number; keep: number; apply: boolean }
-  | { kind: "receipt"; stateDir: string; requestId: string; peer: string; timeoutMs?: number }
+  | { kind: "receipt"; stateDir: string; requestId: string; peer: string; timeoutMs?: number; until?: "responded" }
   | { kind: "handoff"; stateDir: string; target: string; request: string }
   | { kind: "read"; stateDir: string; take: number; peek: boolean }
   | { kind: "wait"; stateDir: string; timeoutMs: number; intervalMs: number }
@@ -98,6 +107,11 @@ export function helpText(): string {
     "  ninja-p2p start --room ai-room --id cloud --transport http --relay-config /private/relay.json",
     "  ninja-p2p mailbox --config /private/mailbox.json identity",
     "  ninja-p2p mailbox --config /private/mailbox.json read --after 0",
+    "  ninja-p2p mailbox --config /private/mailbox.json task list",
+    "  ninja-p2p worker start --config /private/worker.json",
+    "  ninja-p2p worker status --config /private/worker.json",
+    "  ninja-p2p worker stop --config /private/worker.json",
+    "  ninja-p2p mailbox --config /private/mailbox.json task create --file task.json",
     "  ninja-p2p mailbox --config /private/mailbox.json send <mailbox-id> \"Review this\" --request-key review_001",
     "  WebRTC is the default. HTTP peers must use the same relay settings and room key.",
     "  Mailboxes retain text while agents are offline. See docs/cloud-connections.md.",
@@ -142,6 +156,7 @@ export function helpText(): string {
     "  ninja-p2p task --id codex worker \"Implement the patch\"",
     "  ninja-p2p handoff --id codex worker \"Review the patch and report your findings\"",
     "  ninja-p2p receipt <requestId> --id codex --from worker --timeout 60000",
+    "  ninja-p2p receipt <requestId> --id codex --from worker --until responded --timeout 300000",
     "  ninja-p2p review --id codex reviewer \"Review the change\"",
     "  ninja-p2p approve --id codex reviewer \"Approve this plan before I continue\"",
     "  ninja-p2p respond --id codex planner <requestId> '{\"approved\":true}'",
@@ -207,6 +222,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
     return { kind: "help" };
   }
   if (kind === "mailbox") return parseMailboxCommand(args, env);
+  if (kind === "worker") return parseWorkerCommand(args);
 
   if (kind === "menu") {
     const parsed = parseOptions(args, env);
@@ -301,8 +317,12 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = process.en
       const peer = getSingleValue(parsed.values, "from");
       if (positional.length !== 1 || !peer) throw new Error("receipt requires a request ID and --from peer");
       const timeout = getSingleValue(parsed.values, "timeout");
+      const until = getSingleValue(parsed.values, "until");
+      const timeoutMs = timeout === undefined ? undefined : parseWholeNumberOption(timeout, 0, "timeout");
+      if (until !== undefined && until !== "responded") throw new Error("--until must be responded");
+      if (until && !timeoutMs) throw new Error("--until responded requires a positive --timeout in milliseconds");
       return { kind, stateDir: resolveStateDir(parsed.values, env), requestId: positional[0], peer,
-        ...(timeout === undefined ? {} : { timeoutMs: parseWholeNumberOption(timeout, 0, "timeout") }) };
+        ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(until ? { until } : {}) };
     }
     case "handoff": {
       const request = positional.slice(1).join(" ");

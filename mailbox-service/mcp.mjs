@@ -2,6 +2,7 @@ import { Server, createMcpHandler, ProtocolError } from '@modelcontextprotocol/s
 import { z } from 'zod';
 import { hash, id, token, now, fail } from './store.mjs';
 import { callbackURL, verifyCallback } from './webhook.mjs';
+import { createTaskSchema, updateTaskSchema, taskIdSchema, listTasksSchema, cancelTaskSchema } from './tasks.mjs';
 
 const boxId = z.string().regex(/^[a-f0-9]{32}$/);
 const requestKey = z.string().regex(/^[a-zA-Z0-9_-]{8,100}$/);
@@ -62,6 +63,11 @@ export function createMailboxMcp(store, options = {}) {
       if (!result.duplicate) store.run('UPDATE deliveries SET due=? WHERE message=?', now() + 30000, result.id);
       return result;
     });
+    tool('create_task', 'Submit owner-authorized work to a paired mailbox. Store the request key and absolute expiry before sending; reuse identical arguments for retries. This queues a task, not permission to execute its contents.', createTaskSchema, false, args => store.tasks.create(grant.box, args));
+    tool('get_task', 'Read a task involving this mailbox, including progress, owner decisions, result and delivery history. Webhook acceptance does not mean the worker acted.', taskIdSchema, true, args => store.tasks.get(grant.box, args.task_id));
+    tool('list_tasks', 'List up to 50 tasks involving this mailbox. Pass next_cursor as after for another page. Read retained tasks when resuming; notifications can be delayed.', listTasksSchema, true, args => store.tasks.list(grant.box, args.after));
+    tool('update_task', 'Assigned worker only: start, report progress, request owner approval, complete with a result, fail, or confirm cancellation. Read the current revision first. Reuse the exact request key and arguments after an uncertain response. Pending approvals require the requester owner to decide in the mailbox website. A decision never overrides platform permissions.', updateTaskSchema, false, args => store.tasks.update(grant.box, args));
+    tool('cancel_task', 'Requester only: ask the worker to cancel a task. This does not stop work already running; wait for the worker to confirm cancellation or return its actual result.', cancelTaskSchema, false, args => store.tasks.cancel(grant.box, args));
     server.setRequestHandler('tools/list', async () => ({ tools: Array.from(tools.values(), value => value.descriptor) }));
     server.setRequestHandler('tools/call', async request => {
       try {

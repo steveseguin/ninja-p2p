@@ -88,6 +88,52 @@ const other: PeerIdentity = {
   instanceId: "inst_other",
 };
 
+test("reply waiting ignores storage and unrelated replies, preserves messages, and reports expiry", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ninja-reply-wait-"));
+  const requestId = "review-request";
+  const receipt = createEnvelope(other, "ack", {
+    messageId: requestId, senderInstanceId: me.instanceId, forType: "handoff", receipt: "stored",
+  }, { to: me.streamId });
+  const status = { requestId, peer: other.streamId, senderInstanceId: me.instanceId,
+    status: "stored" as const, expiresAt: Date.now() + 60000, attempts: 1, nextAttemptAt: 0, receipt };
+  const run = (...extra: string[]) => spawnSync(process.execPath, [
+    "--import", "tsx", fileURLToPath(new URL("../src/cli.ts", import.meta.url)),
+    "receipt", requestId, "--state-dir", dir, "--from", other.streamId, "--timeout", "60", ...extra,
+  ], { encoding: "utf8", timeout: 5000, windowsHide: true });
+  try {
+    writeHandoffStatus(dir, status);
+    storeInboxMessage(dir, createEnvelope(other, "command_response", { requestId: "different-request", ok: true, result: "unrelated" }, { to: me.streamId }));
+    storeInboxMessage(dir, createEnvelope({ ...other, streamId: "different-peer" }, "command_response", { requestId, ok: true, result: "unrelated" }, { to: me.streamId }));
+    const stored = run();
+    assert.equal(stored.status, 0, stored.stderr);
+    assert.equal(JSON.parse(stored.stdout).status, "stored", "ordinary receipt waits retain their storage meaning");
+    const waiting = run("--until", "responded");
+    assert.equal(waiting.status, 1, waiting.stderr);
+    const timeout = JSON.parse(waiting.stdout);
+    assert.equal(timeout.status, "stored");
+    assert.equal(timeout.timedOut, true);
+    assert.ok(timeout.waitedMs >= 60);
+    assert.equal(getInboxSummary(dir).pending, 2, "waiting must not consume unrelated messages");
+    const response = createEnvelope(other, "command_response", { requestId, ok: false, error: "Review could not finish" }, { to: me.streamId });
+    storeInboxMessage(dir, response);
+    const finished = run("--until", "responded");
+    assert.equal(finished.status, 0, finished.stderr);
+    const result = JSON.parse(finished.stdout);
+    assert.equal(result.status, "responded");
+    assert.equal(result.receipts.find((item: MessageEnvelope) => item.id === response.id).payload.ok, false, "a reply can report a failure");
+    assert.equal(getInboxSummary(dir).pending, 3, "receipt lookup leaves the actual reply available");
+    takeInboxMessages(dir, 3);
+    pruneAgentArchive(dir, { olderThanDays: 0, keep: 0, apply: true });
+    writeHandoffStatus(dir, { ...status, status: "expired", expiresAt: Date.now() - 1, receipt: undefined });
+    const expired = run("--until", "responded");
+    assert.equal(expired.status, 1, expired.stderr);
+    assert.equal(JSON.parse(expired.stdout).status, "expired");
+    assert.equal(JSON.parse(expired.stdout).timedOut, undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function makeBridge(identity = me) {
   const bridge = new VDOBridge({
     room: "ai-room",

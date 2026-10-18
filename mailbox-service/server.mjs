@@ -5,7 +5,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { Store, hash, id, token, now, fail } from './store.mjs';
 import { createMailboxMcp } from './mcp.mjs';
 import { startDelivery } from './webhook.mjs';
-import { page, login, dashboard, consent } from './pages.mjs';
+import { page, login, dashboard, consent, taskPage } from './pages.mjs';
 
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 async function body(req, max = 24000) {
@@ -147,6 +147,26 @@ export async function start(options = {}) {
       }
       const sessionToken = cookie('dot_session');
       const session = sessionToken && store.get('SELECT s.* FROM sessions s JOIN owners o ON o.id=s.owner WHERE s.hash=? AND s.expires>? AND o.disabled=0', hash(sessionToken), now());
+      if (route === '/tasks' && req.method === 'GET') {
+        if (!session) return redirect('/');
+        return html(taskPage(store, session, url.searchParams.get('box'), url.searchParams.get('task'), url.searchParams.get('after') || ''));
+      }
+      if (['/tasks/create', '/tasks/decide', '/tasks/cancel'].includes(route) && req.method === 'POST') {
+        if (!session) fail('sign_in_required', 401);
+        const data = form(await body(req, 24000));
+        if (req.headers.origin !== origin || !equal(session.csrf, data.get('csrf'))) fail('invalid_csrf', 403);
+        store.rate('portal:' + session.owner, 120);
+        const box = store.box(session.owner, data.get('box'));
+        let task;
+        if (route === '/tasks/create') task = store.tasks.create(box.id, { recipient_id: data.get('recipient_id'), title: data.get('title'), request: data.get('request'), request_key: data.get('request_key'), expires_at: data.get('expires_at') }, true);
+        else {
+          const current = store.tasks.row(box.id, data.get('task_id'));
+          if (current.requester !== box.id) fail('Only the requester can decide or cancel.', 403);
+          const args = { task_id: current.id, revision: Number(data.get('revision')), request_key: data.get('request_key'), note: data.get('note') };
+          task = route === '/tasks/decide' ? store.tasks.decide(session.owner, { ...args, decision: data.get('decision') }) : store.tasks.cancel(box.id, args, true);
+        }
+        return redirect('/tasks?box=' + box.id + '&task=' + task.task_id);
+      }
       if (route === '/' && req.method === 'GET') {
         if (session) return html(dashboard(store, session, url.searchParams.get('box')));
         const csrf = token(); res.setHeader('Set-Cookie', `${cookieName('dot_login')}=${csrf}; ${cookieOptions}; Max-Age=600`); return html(login(csrf));

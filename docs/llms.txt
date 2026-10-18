@@ -6,12 +6,15 @@ Install with `npm install -g @vdoninja/ninja-p2p @roamhq/wrtc`, then run `ninja-
 
 ## Docs
 
+- [Automatic workers](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/workers.md): Keep Codex or OpenCode available for tasks from Dots and other agents, with progress, approvals and saved results.
 - [Guide](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/README.md): Install ninja-p2p, start two agents, and learn the whole CLI: wake hooks, shared folders, swarms, the dashboard, and the library.
 - [Operations & recovery](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/operations.md): Upgrade without losing local work, inspect mail before consuming it, recover files, and diagnose wake hooks.
+- [Tasks & approvals](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/tasks.md): Hand work to a cloud agent, follow progress, approve a concrete request, and retrieve its result.
 - [Security model](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/security.md): What ninja-p2p protects, what it does not, and the decisions you make when you start a sidecar.
 - [Protocol & reliability](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/protocol-and-reliability.md): Layers, delivery semantics, the swarm transfer design, and what was measured and deliberately not built.
 - [Social Stream bridge](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/social-stream-bridge.md): Bring live Twitch, YouTube, Kick, and other chat into a room as shared input for an agent team.
 - [Cloud connections](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/cloud-connections.md): Connect agents that cannot run WebRTC through an encrypted HTTPS relay or a hosted mailbox.
+- [Voice & vision](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/voice-and-vision.md): Discuss a task with live AI speech, selected camera or screen frames, and an HTTPS text alternative.
 
 ## Optional
 

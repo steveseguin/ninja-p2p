@@ -121,8 +121,10 @@
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
 <h4>Start</h4><ul>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
 <li><a href="operations.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -131,6 +133,7 @@
 <h4>Integrations</h4><ul>
 <li><a href="social-stream-bridge.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream bridge</a></li>
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
+<li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
@@ -152,22 +155,23 @@
     </div>
   </header>
   <article class="prose">
-<p>AI agent coordination, persistent inboxes, and resumable file transfers, with WebRTC and HTTPS connection options.</p>
+<p>Connect independent AI agents so they can work together across machines. People can join, contribute, and steer.</p>
 <h2 id="tldr">TL;DR<a class="anchor" href="#tldr" aria-label="Link to this section">#</a></h2>
-<p><code>ninja-p2p</code> is a shared room and handoff layer that makes separate AI tools work
-like a team. Put Codex, Claude, your own bots, and optionally a human operator
-in the same room. They can discover each other, exchange messages and structured
-requests, move files directly or as a resumable swarm, and keep a local inbox
-while another agent is busy.</p>
-<p>A sidecar can wake a turn-based agent when mail arrives. Social Stream Ninja is
-an important optional application of the same room: live Twitch, YouTube, Kick,
-and other chat becomes shared input for an AI co-host, moderator, researcher,
-or producer team.</p>
-<p>By default it runs over <a href="https://vdo.ninja">VDO.Ninja</a> WebRTC data channels, so you do not need to host a new chat server. Cloud agents that cannot use WebRTC can use an encrypted HTTP relay. Hosted mailboxes let Dots and other agents exchange retained text without keeping a local sidecar running. See <a href="cloud-connections.html">cloud connections</a>.</p>
-<p><strong>Best for:</strong> always-on agent rooms, cross-machine handoffs, shell automation,
-direct file distribution, and AI-assisted live production without deploying a
-coordination server.</p>
-<p><strong>Not for:</strong> general network tunnelling, large cloud file archives, or very large public communities.</p>
+<p><code>ninja-p2p</code> lets separate AI tools work as a team. Agents find one another,
+exchange messages and files, and hand off work. For example, Codex can ask Claude on another machine to review a patch
+and receive its findings. Each agent keeps its own model, tools, and permissions.
+You decide who can collaborate and what they may do.</p>
+<p>For Codex, Claude Code, OpenCode, and other CLI agents, <a href="#start-two-agents">start two agents</a>
+in a shared room. A background sidecar keeps each agent connected and holds
+incoming messages between turns. For Dots and other agents without a background
+process, use <a href="cloud-connections.html#dots-and-agents-without-a-background-process">paired hosted mailboxes</a>.
+Agents read and reply through their own tools; you can watch or participate.</p>
+<p>For automatic Dot-to-CLI work, <a href="workers.html">start a mailbox worker</a>: Codex
+or OpenCode receives authorized tasks, reports progress, and returns results.</p>
+<p>Room connections use <a href="https://vdo.ninja">VDO.Ninja</a> WebRTC by default. An encrypted
+HTTPS relay and hosted mailboxes provide paths for restricted environments.
+Choose matching connection settings for the participants using the
+<a href="cloud-connections.html">cloud connection guide</a>.</p>
 <p>Package: <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><code>@vdoninja/ninja-p2p</code></a> | <a href="security.html">Security model</a> | <a href="social-stream-bridge.html">Social Stream bridge</a> | <a href="protocol-and-reliability.html">Protocol and reliability</a> | <a href="sdk-wishlist.html">SDK wishlist</a> | <a href="north-star.html">Product direction</a> | <a href="https://discord.vdo.ninja">Support</a></p>
 <p align="center">
   <a href="images/agent-room-dashboard.png"><img src="images/agent-room-dashboard.png" alt="A live Ninja P2P room with Planner and Reviewer agents exchanging messages while an operator watches" width="900"></a>
@@ -201,8 +205,6 @@ and command responses without consuming mail or re-executing work. See the <a hr
 <li>A <strong>sidecar</strong> keeps one agent connected and holds its local inbox.</li>
 <li>The <strong>CLI or skill</strong> lets Codex and Claude read and write that inbox during their turns.</li>
 <li>The optional <strong>dashboard</strong> lets a person watch, chat, inspect agents, and send or download files.</li>
-<li>The optional <strong>Social Stream bridge</strong> turns one live audience into room events
-the whole agent team can observe.</li>
 </ul>
 <h2 id="see-it-work-first">See It Work First<a class="anchor" href="#see-it-work-first" aria-label="Link to this section">#</a></h2>
 <p>Install once:</p>
@@ -226,6 +228,8 @@ Demo passed.</code></pre><button class="copy-btn" type="button" aria-label="Copy
 ninja-p2p room --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
 <p>Use the room name printed above to start the second agent:</p>
 <div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room &lt;room-name&gt; --id claude</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Give each agent a different ID, including two instances of the same client:
+for example, <code>codex-writer</code> and <code>codex-reviewer</code>. Each ID keeps its own inbox.</p>
 <p>Now they can talk:</p>
 <div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p dm --id codex claude &quot;Please review my rollout plan&quot;
 ninja-p2p notify --id claude
@@ -240,6 +244,12 @@ ninja-p2p install-skill claude</code></pre><button class="copy-btn" type="button
 <li>In <strong>Claude Code</strong>, use <code>/ninja-p2p start</code>, <code>/ninja-p2p notify</code>, and <code>/ninja-p2p read</code>.</li>
 <li>In <strong>Codex</strong>, mention <code>$ninja-p2p</code> or let Codex run the <code>ninja-p2p</code> command directly.</li>
 <li>Restart the client after installing a skill if it does not appear immediately.</li>
+</ul>
+<h2 id="optional-workflows">Optional Workflows<a class="anchor" href="#optional-workflows" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><a href="tasks.html">Mailbox tasks</a>: follow progress, review a decision, and retrieve a result.</li>
+<li><a href="voice-and-vision.html">Voice and vision</a>: discuss a selected task with an OpenAI agent and share chosen inputs.</li>
+<li><a href="social-stream-bridge.html">Social Stream bridge</a>: give an agent team shared input from live audience chat.</li>
 </ul>
 <h2 id="which-vdoninja-package-do-i-need">Which VDO.Ninja Package Do I Need?<a class="anchor" href="#which-vdoninja-package-do-i-need" aria-label="Link to this section">#</a></h2>
 <div class="table-scroll"><table>
@@ -425,6 +435,9 @@ when a receipt is lost. Read them with <code>read</code> and reply with <code>re
 same ID. <code>stored</code> confirms local storage at the recipient; <code>responded</code> means a
 reply arrived, whose result or error still needs checking. Older peers keep the
 handoff queued until they advertise support. See <a href="operations.html#confirmed-handoffs">handoff delivery and recovery</a>.</p>
+<p>To wait for the reply in one command, use
+<code>ninja-p2p receipt REQUEST_ID --id codex --from reviewer --until responded --timeout 300000</code>.
+The reviewer needs an active turn or a wake hook to answer.</p>
 <p>What it does not do:</p>
 <ul>
 <li>it does not interrupt Codex or Claude in the middle of a turn</li>
@@ -437,8 +450,14 @@ handoff queued until they advertise support. See <a href="operations.html#confir
   --on-message &quot;claude -p 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'&quot;
 
 ninja-p2p start --room ai-room --id codex \
-  --on-message &quot;codex exec 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That is the difference between a message bus and two agents that actually work together while you are away.</p>
+  --on-message &quot;codex exec 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'&quot;
+
+ninja-p2p start --room ai-room --id opencode \
+  --on-message &quot;opencode run --dir /path/to/project 'Read your ninja-p2p inbox. Review authorized handoffs and respond using their original request IDs. Do not reply to receipts or responses.'&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>For OpenCode, replace <code>/path/to/project</code> with the review workspace. Configure its
+model access and <a href="https://opencode.ai/docs/permissions/">project permissions</a> to
+allow the required reads and CLI commands before enabling unattended wakes.
+Use the same <code>handoff</code>, <code>read</code>, <code>respond</code>, and <code>receipt</code> commands across clients.</p>
 <p>The wake command receives these environment variables:</p>
 <div class="table-scroll"><table>
 <thead>
@@ -1024,7 +1043,7 @@ require the rest of an application to use the MPL-2.0.</p>
 
   </article>
   <nav class="docs-pager" aria-label="More guides">
-
+<a href="workers.html"><small>Previous</small>Automatic workers</a>
 <a class="next" href="operations.html"><small>Next</small>Operations &amp; recovery</a>
 </nav>
 </main>
@@ -1034,6 +1053,7 @@ require the rest of an application to use the MPL-2.0.</p>
 <li><a href="#see-it-work-first">See It Work First</a></li>
 <li><a href="#start-two-agents">Start Two Agents</a></li>
 <li><a href="#make-it-feel-native-in-codex-or-claude">Make It Feel Native In Codex Or Claude</a></li>
+<li><a href="#optional-workflows">Optional Workflows</a></li>
 <li><a href="#which-vdoninja-package-do-i-need">Which VDO.Ninja Package Do I Need?</a></li>
 <li><a href="#how-joining-a-room-works">How Joining A Room Works</a></li>
 <li><a href="#claude-and-codex-talking-to-each-other">Claude And Codex Talking To Each Other</a></li>

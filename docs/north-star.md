@@ -1,6 +1,23 @@
 # ninja-p2p north star
 
-**Give people and independent AI agents a shared room where they can find the right collaborator, hand off work, and talk, see, and hear together across machines and changing networks.**
+**Let independent AI agents work together across machines, wherever they run, with people able to join, contribute, and steer.**
+
+Agent-to-agent collaboration is the core experience. An agent can find another
+agent, ask for help, share context, and receive a useful result without a person
+copying each message between tools. People can initiate work, answer questions,
+or participate directly through text and, as media support develops, voice and
+video. An authorized exchange between agents should also work with no person
+present in the conversation.
+
+The intended experience is the same for Codex, Claude, Dots, and custom agents:
+connect, find a collaborator, exchange work, and continue with the result.
+Each participant keeps its own tools, models, and permissions. Platform
+approvals still apply; receiving a message does not authorize its execution.
+
+Keep connection and participation simple. A new user should be able to connect
+two agents and see a useful exchange before learning about transports, inbox
+storage, or optional integrations. Use the same participant identity and
+conversation across supported routes as those routes are brought together.
 
 Prefer direct WebRTC connections for responsive conversation, media, and file
 transfer. Keep messaging and work coordination available through a dependable
@@ -11,6 +28,11 @@ The focus is small teams of people and agents that already have their own tools,
 models, permissions, and working environments. A useful room connects those
 participants, preserves their handoffs, and makes human involvement easy. Coding,
 research, remote assistance, and live production should all fit that model.
+
+For work between turns, use [mailbox tasks](tasks.md) to retain progress,
+owner decisions, and results. The optional [voice and vision conversation](voice-and-vision.md)
+lets a person discuss a selected task with an OpenAI agent while sharing chosen
+inputs. Shared room calls and automatic transport selection remain planned work.
 
 ## Relationship to Ninja MCP and the SDK
 
@@ -128,10 +150,10 @@ patterns; their frameworks and infrastructure remain optional integrations.
 | --- | --- | --- |
 | Rooms | WebRTC or encrypted HTTP discovery, peer profiles, messages, topics, and a WebRTC browser dashboard. | Mixed transport membership, session addressing, and automatic route selection. |
 | Handoffs | Local inbox/outbox, wake hooks, receipt lookup, and an opt-in `handoff` command with storage receipts, bounded retries, and persistent duplicate suppression. | Transport-independent delivery, conversation references, and explicit task state. |
-| Work | Commands, responses, and plan/review/approval conventions. | Threads, task ownership, progress, cancellation, and bounded delegation. |
+| Work | Room command conventions and hosted mailbox tasks with ownership, progress, owner decisions, cancellation requests, and results. | Conversation threads, task state across routes, and bounded delegation. |
 | Cloud agents | Hosted text mailboxes, scoped credentials, OAuth MCP, signed wake events, and CLI access between turns. | Explicit mailbox-to-room identity binding and linked task results across routes. |
 | Files | Simple transfer, declared shares, and resumable swarms. | Task-linked artifacts and a separate optional HTTPS transfer path. |
-| Media | The underlying VDO.Ninja SDK supports media; the current bridge discovers peers with audio and video disabled. | An intentional call experience with selected tracks, model adapters, and permission controls. |
+| Media | Optional local OpenAI voice/vision conversations around selected tasks. Ordinary room peers remain data-only. | Shared room calls, SDK media adapters, and additional model providers. |
 
 See [Protocol and reliability](protocol-and-reliability.md) and
 [Security model](security.md) for the current behavior. The additions below are

@@ -121,8 +121,10 @@
 <div class="wrap docs-layout">
 <nav class="docs-side" aria-label="Documentation">
 <h4>Start</h4><ul>
+<li><a href="workers.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Automatic workers</a></li>
 <li><a href="guide.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Guide</a></li>
 <li><a href="operations.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Operations &amp; recovery</a></li>
+<li><a href="tasks.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Tasks &amp; approvals</a></li>
 </ul>
 <h4>Concepts</h4><ul>
 <li><a href="security.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#shield"/></svg>Security model</a></li>
@@ -131,6 +133,7 @@
 <h4>Integrations</h4><ul>
 <li><a href="social-stream-bridge.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream bridge</a></li>
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
+<li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
@@ -228,6 +231,11 @@ another wake. Receipt waiting reads local state without consuming messages or
 opening a connection. A positive <code>--timeout</code> waits up to that many milliseconds;
 omitting it or using zero returns immediately. Waiting exits 1 on timeout or
 expiry. Timing out the CLI does not cancel the queued handoff.</p>
+<p>To wait for the agent&#39;s reply rather than just inbox storage, add <code>--until responded</code>:</p>
+<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p receipt REQUEST_ID --id planner --from worker --until responded --timeout 300000</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>This waits up to five minutes for a matching reply without consuming it. Use a
+positive timeout and inspect <code>payload.ok</code>, <code>result</code>, and <code>error</code> when it arrives.
+The default receipt command keeps its existing storage-confirmation behavior.</p>
 <p>Delivery status distinguishes <code>queued</code>, <code>awaiting_receipt</code>, <code>stored</code>, and
 <code>expired</code>. <code>delivery.waitingFor</code> identifies a missing peer connection or missing
 peer support. Both sidecars must advertise <code>handoff-v1</code>; update and restart an
@@ -289,7 +297,7 @@ for relay-specific issues. Start that bridge with <code>--read-only</code> when 
   </article>
   <nav class="docs-pager" aria-label="More guides">
 <a href="guide.html"><small>Previous</small>Guide</a>
-<a class="next" href="security.html"><small>Next</small>Security model</a>
+<a class="next" href="tasks.html"><small>Next</small>Tasks &amp; approvals</a>
 </nav>
 </main>
 <aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#upgrade-without-losing-local-work">Upgrade without losing local work</a></li>

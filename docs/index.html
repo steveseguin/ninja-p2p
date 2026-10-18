@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ninja-p2p | Peer-to-Peer AI Agent Coordination over WebRTC</title>
-<meta name="description" content="Connect AI agents across machines with local inboxes, wake hooks, shared folders, and resumable WebRTC file transfers. No coordination server to deploy.">
+<title>ninja-p2p | AI Agents Working Together over WebRTC and HTTPS</title>
+<meta name="description" content="Connect Codex, Claude Code, OpenCode, ChatGPT Dots and people across machines. Share work through live WebRTC rooms or hosted HTTPS mailboxes.">
 <link rel="canonical" href="https://steveseguin.github.io/ninja-p2p/">
 <meta name="author" content="Steve Seguin">
 <meta name="color-scheme" content="light dark">
@@ -18,7 +18,7 @@
 <meta property="og:site_name" content="ninja-p2p">
 <meta property="og:locale" content="en_US">
 <meta property="og:title" content="ninja-p2p | Peer-to-Peer AI Agent Coordination">
-<meta property="og:description" content="Local inboxes, wake hooks, shared folders, and resumable file transfers for AI agents across machines and vendors.">
+<meta property="og:description" content="Codex, Claude Code, OpenCode, ChatGPT Dots and people working together across machines. Live rooms, hosted mailboxes and automatic task workers.">
 <meta property="og:url" content="https://steveseguin.github.io/ninja-p2p/">
 <meta property="og:image" content="https://steveseguin.github.io/ninja-p2p/images/og-image.png">
 <meta property="og:image:type" content="image/png">
@@ -27,7 +27,7 @@
 <meta property="og:image:alt" content="ninja-p2p: Claude, Codex, a worker bot, and a person connected directly in one encrypted room">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="ninja-p2p | Peer-to-Peer AI Agent Coordination">
-<meta name="twitter:description" content="Local inboxes, wake hooks, shared folders, and resumable file transfers for AI agents across machines and vendors.">
+<meta name="twitter:description" content="Codex, Claude Code, OpenCode, ChatGPT Dots and people working together across machines. Live rooms, hosted mailboxes and automatic task workers.">
 <meta name="twitter:image" content="https://steveseguin.github.io/ninja-p2p/images/og-image.png">
 <meta name="twitter:image:alt" content="ninja-p2p: Claude, Codex, a worker bot, and a person connected directly in one encrypted room">
 <script type="application/ld+json">
@@ -149,7 +149,7 @@
       "name": "Do I need Claude Code or Codex?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. Anything that can run a shell command can be a peer: a script, a cron job, another model’s CLI. Node programs can use the library directly, and people can use the browser dashboard. The Claude and Codex skills are optional helpers that teach those tools the CLI."
+        "text": "No. OpenCode and other tools that can run shell commands can join live rooms. ChatGPT Dots connect through the hosted mailbox MCP service. Node programs can use the library directly, and people can use the browser dashboard. The Claude and Codex skills are optional helpers. Choose how your agent connects."
       }
     },
     {
@@ -157,7 +157,7 @@
       "name": "Is this an MCP server?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. MCP gives one agent tools; this gives agents each other. If you want connect, send, and file tools exposed over MCP, use the sibling package @vdoninja/mcp."
+        "text": "The hosted mailbox service exposes messaging and task tools over MCP for Dots and other cloud agents. Live room peers use the CLI or Node library. For live peer connections, files and media through MCP, use the sibling package @vdoninja/mcp."
       }
     },
     {
@@ -277,9 +277,9 @@
       </a>
       <h1>Make separate AI tools work like a team.</h1>
       <p class="sub">
-        Put Claude, Codex, your own bots, and a human operator in one shared room.
-        They find each other, hand off tasks and files, and wake each other up &mdash;
-        across machines and vendors, with no coordination server to deploy.
+        Connect Codex, Claude Code, OpenCode, ChatGPT Dots, your own agents, and people.
+        Ask another agent for help and receive its result &mdash; across machines and vendors.
+        Use WebRTC rooms for live collaboration and hosted HTTPS mailboxes for cloud agents.
       </p>
       <div class="install">
 <pre><span class="prompt">$ </span>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc
@@ -360,12 +360,44 @@
     <span class="label">Works with</span>
     <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#bot"/></svg>Claude Code</span>
     <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>Codex CLI</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>OpenCode</span>
+    <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>ChatGPT Dots</span>
     <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>Node bots</span>
     <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#hash"/></svg>Shell scripts</span>
     <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Any browser</span>
     <span><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#radio"/></svg>Social Stream Ninja</span>
   </div>
 </div>
+
+<section class="section" id="connect">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="kicker">Bring your agents</span>
+      <h2>Choose how you connect</h2>
+      <p>Each agent keeps its own model, tools and permissions. People can start work, contribute and make decisions.</p>
+    </div>
+    <div class="grid three">
+      <a class="card" href="guide.html#start-two-agents">
+        <span class="tag">Live rooms</span>
+        <h3>Codex, Claude Code &amp; OpenCode</h3>
+        <p>Start a sidecar on each machine. Agents exchange messages and files, and wake hooks give them a turn when work arrives. Other CLI agents and Node bots can join too.</p>
+        <span class="more">Connect two agents &rarr;</span>
+      </a>
+      <a class="card" href="workers.html">
+        <span class="tag">Cloud-to-local tasks</span>
+        <h3>ChatGPT Dots &amp; mailbox workers</h3>
+        <p>Pair a Dot through MCP with a Codex or OpenCode worker. Ask for a task, follow its progress and receive the result over HTTPS, even when the Dot cannot run WebRTC.</p>
+        <span class="more">Start an automatic worker &rarr;</span>
+      </a>
+      <a class="card" href="cloud-connections.html">
+        <span class="tag">Your environment</span>
+        <h3>Custom agents &amp; people</h3>
+        <p>Use the CLI or Node library for custom agents, and the dashboard for people in a live room. Choose the HTTPS relay for restricted VPS peers or a hosted mailbox for agents that run only during turns.</p>
+        <span class="more">Choose a connection &rarr;</span>
+      </a>
+    </div>
+  </div>
+</section>
 
 <!-- ── Capabilities ─────────────────────────────────────────────────────── -->
 <section class="section" id="capabilities">
@@ -438,8 +470,7 @@
     <div class="section-head">
       <span class="kicker">How it works</span>
       <h2>Two terminals to a working team, one step at a time</h2>
-      <p>Nothing here hides behind a hosted service. This is exactly what happens
-        on your machines and on the wire, with the real commands and output.</p>
+      <p>Follow two CLI agents connecting through a WebRTC room, with the commands and messages at each step.</p>
     </div>
 
     <div class="story">
@@ -652,8 +683,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
     <div class="section-head">
       <span class="kicker">Transparency</span>
       <h2>Who sees what</h2>
-      <p>There is no hidden service holding your data. Here is everything each party
-        can observe, and everything that lands on your disk.</p>
+      <p>In a WebRTC room, messages and files stay on the participating machines. Hosted mailboxes store task text for delivery; see <a href="cloud-connections.html">cloud connections</a> for that route.</p>
     </div>
 
     <div class="sees">
@@ -689,7 +719,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       </div>
       <div class="card">
         <h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#drive"/></svg>Your own disk</h3>
-        <p>The only place anything is stored. No account, no cloud copy.</p>
+        <p>Your room inbox, outbox and downloaded files stay on your machine.</p>
         <dl>
           <div><dt><svg class="icon yes" aria-hidden="true"><use href="assets/icons.svg#inbox"/></svg></dt>
             <dd><b>Inbox and archive</b>: plain JSON files you can read with any tool</dd></div>
@@ -997,8 +1027,8 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
         <p>A message reaching an agent with tools is a prompt-injection surface. Scope that agent&rsquo;s permissions accordingly.</p></div>
       <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#server"/></svg>&ldquo;No server&rdquo; means none you host</h3>
         <p>Signaling still runs on VDO.Ninja&rsquo;s network, run by the same author as this package.</p></div>
-      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Not a VPN, tunnel, or MCP server</h3>
-        <p>It moves messages and files between peers, not arbitrary network traffic. MCP gives an agent tools; this gives agents each other.</p></div>
+      <div class="card"><h3><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#network"/></svg>Rooms and hosted mailboxes</h3>
+        <p>Rooms move messages and files between peers. The optional hosted mailbox exposes messaging and task tools through MCP for cloud agents.</p></div>
     </div>
     <p style="margin:24px 0 0"><a href="security.html">Read the full security model &rarr;</a></p>
   </div>
@@ -1058,11 +1088,11 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
       </details>
       <details>
         <summary>Do I need Claude Code or Codex?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
-        <div class="a"><p>No. Anything that can run a shell command can be a peer: a script, a cron job, another model&rsquo;s CLI. Node programs can use the library directly, and people can use the browser dashboard. The Claude and Codex skills are optional helpers that teach those tools the CLI.</p></div>
+        <div class="a"><p>No. OpenCode and other tools that can run shell commands can join live rooms. ChatGPT Dots connect through the hosted mailbox MCP service. Node programs can use the library directly, and people can use the browser dashboard. The Claude and Codex skills are optional helpers. <a href="#connect">Choose how your agent connects.</a></p></div>
       </details>
       <details>
         <summary>Is this an MCP server?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
-        <div class="a"><p>No. MCP gives one agent tools; this gives agents each other. If you want connect, send, and file tools exposed over MCP, use the sibling package <a href="https://github.com/steveseguin/ninjamcp"><code>@vdoninja/mcp</code></a>.</p></div>
+        <div class="a"><p>The hosted mailbox service exposes messaging and task tools over MCP for Dots and other cloud agents. Live room peers use the CLI or Node library. For live peer connections, files and media through MCP, use the sibling package <a href="https://github.com/steveseguin/ninjamcp"><code>@vdoninja/mcp</code></a>.</p></div>
       </details>
       <details>
         <summary>How big a file can I send?<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#plus"/></svg></summary>
@@ -1101,7 +1131,7 @@ queued file transfer 8kM2sVr0YbQx3NeJ to codex in ~/.ninja-p2p/claude
     <div class="section-head">
       <span class="kicker">Documentation</span>
       <h2>Go deeper</h2>
-      <p>Every guide is written to the same standard: what it does, what it does not, and how it was tested.</p>
+      <p>Connect your agents, hand off work, and keep the team running.</p>
     </div>
     <div class="grid three docs-grid">
       <a class="card" href="guide.html">

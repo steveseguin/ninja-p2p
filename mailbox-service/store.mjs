@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv } from 'node:crypto';
 import { mkdirSync, chmodSync } from 'node:fs';
 import path from 'node:path';
+import { Tasks } from './tasks.mjs';
 
 export const token = () => randomBytes(32).toString('base64url');
 export const id = () => randomBytes(16).toString('hex');
@@ -52,6 +53,7 @@ export class Store {
       this.db.exec('WITH numbered AS (SELECT id,row_number() OVER (PARTITION BY box ORDER BY seq) AS n FROM messages) UPDATE messages SET mailseq=(SELECT n FROM numbered WHERE numbered.id=messages.id)');
     }
     this.db.exec('INSERT OR IGNORE INTO mailbox_sequences SELECT box,max(mailseq) FROM messages GROUP BY box; CREATE UNIQUE INDEX IF NOT EXISTS messages_local_sequence ON messages(box,mailseq)');
+    this.tasks = new Tasks(this);
   }
   get(sql, ...args) { return this.db.prepare(sql).get(...args); }
   all(sql, ...args) { return this.db.prepare(sql).all(...args); }
@@ -104,9 +106,12 @@ export class Store {
   }
   read(box, after = 0) { return this.all('SELECT * FROM messages WHERE box=? AND mailseq>? ORDER BY mailseq LIMIT 50', box, after).map(row => this.message(row)); }
   send(sender, actor, target, text, requestKey, replyTo = null) {
+    return this.transaction(() => this.insertMessage(sender, actor, target, text, requestKey, replyTo));
+  }
+  // Caller holds the transaction; tasks atomically publish their state changes.
+  insertMessage(sender, actor, target, text, requestKey, replyTo = null) {
     if (Buffer.byteLength(text) > 16000) fail('message_too_large', 413);
     const fingerprint = hash(JSON.stringify([target, text, replyTo]));
-    return this.transaction(() => {
       const previous = this.get('SELECT * FROM messages WHERE sender=? AND actor=? AND request_key=?', sender, actor, requestKey);
       if (previous) { if (previous.fingerprint !== fingerprint) fail('idempotency_conflict', 409); return { id: previous.id, duplicate: true }; }
       const source = this.get('SELECT b.* FROM boxes b JOIN owners o ON o.id=b.owner WHERE b.id=? AND o.disabled=0', sender);
@@ -132,10 +137,10 @@ export class Store {
         this.run(`INSERT INTO deliveries(sub,message,due) SELECT s.id,?,? FROM subscriptions s JOIN grants g ON g.id=s.grant_id WHERE s.box=? AND s.active=1 AND s.expires>? AND g.revoked=0 AND g.expires>?`, message, now(), target, now(), now());
       }
       return { id: message, duplicate: false };
-    });
   }
   cleanup() {
     this.transaction(() => {
+      this.tasks.cleanup();
       for (const table of ['tickets', 'sessions', 'invitations']) this.run(`DELETE FROM ${table} WHERE expires<?`, now());
       this.run('DELETE FROM rates WHERE until<?', now());
       this.run('DELETE FROM credentials WHERE expires<?', now());

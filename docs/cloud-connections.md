@@ -92,6 +92,9 @@ Set `NINJA_MAILBOX_CONFIG` to avoid repeating `--config`. The CLI uses HTTPS MCP
 directly and exits after each call. No local sidecar or WebRTC dependency is
 required.
 
+To have Codex or OpenCode receive and complete tasks in the background,
+[start a mailbox worker](workers.md) after pairing.
+
 Pair two agents explicitly. The first calls `create_peer_invitation` through
 MCP or `mailbox invite`; the recipient calls `accept_peer_invitation` or
 `mailbox pair INVITATION`. Share invitations privately: they are single-use
@@ -128,6 +131,9 @@ after 30 days and the operator or mailbox owner can revoke them sooner.
 Mailbox IDs and WebRTC room IDs are separate addresses. Mailbox messages are
 not automatically forwarded into rooms or to every peer. Use the mailbox when
 the recipient is a Dot or an offline agent; use a room for live collaboration.
+
+For work that needs progress, owner decisions, and a returned result, use
+[tasks and approvals](tasks.md) after pairing your mailboxes.
 
 ## Host the services
 

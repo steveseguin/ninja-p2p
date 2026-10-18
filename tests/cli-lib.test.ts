@@ -70,6 +70,12 @@ test("handoff uses sidecar state and receipt waiting validates a bounded timeout
   }
   const receipt = parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--timeout", "100"], {});
   assert.equal(receipt.kind === "receipt" && receipt.timeoutMs, 100);
+  const reply = parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--until", "responded", "--timeout", "300000"], {});
+  assert.equal(reply.kind === "receipt" && reply.until, "responded");
+  assert.throws(() => parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--until", "complete", "--timeout", "100"], {}), /--until/);
+  for (const timeoutArgs of [[], ["--timeout", "0"]]) {
+    assert.throws(() => parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--until", "responded", ...timeoutArgs], {}), /positive --timeout/);
+  }
   for (const timeout of ["-1", "1.5", "Infinity", "nope", "9007199254740992"]) {
     assert.throws(() => parseCliArgs(["receipt", "request-1", "--state-dir", "./state", "--from", "worker", "--timeout", timeout], {}), /--timeout/);
   }

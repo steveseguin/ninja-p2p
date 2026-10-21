@@ -1650,7 +1650,7 @@ function getCommandPrefix(options: CliCommonOptions): string {
   return options.agentProfile?.runtime?.includes("claude") ? "/ninja-p2p" : "ninja-p2p";
 }
 
-function buildAgentArgs(options: CliCommonOptions): string[] {
+export function buildAgentArgs(options: CliCommonOptions): string[] {
   const args = [
     "--room", options.room,
     "--name", options.name,
@@ -1658,9 +1658,8 @@ function buildAgentArgs(options: CliCommonOptions): string[] {
     "--role", options.role,
     "--state-dir", options.stateDir ?? "",
   ];
-  if (options.password !== false) {
-    args.push("--password", String(options.password));
-  }
+  // Forward the resolved value, including false, instead of inheriting NINJA_PASSWORD again.
+  args.push("--password", String(options.password));
   if (options.transport) args.push("--transport", options.transport);
   if (options.relayConfig) args.push("--relay-config", path.resolve(options.relayConfig));
   if (options.waitMs !== 1500) {

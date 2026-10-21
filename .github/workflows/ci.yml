@@ -25,6 +25,9 @@ jobs:
           - name: wrtc
             package: "@roamhq/wrtc@^0.8.0"
             expected: "@roamhq/wrtc"
+          - name: wrtc-current
+            package: "@roamhq/wrtc@^0.10.0"
+            expected: "@roamhq/wrtc"
           - name: node-datachannel
             package: "node-datachannel@^0.32.3"
             expected: "node-datachannel"
@@ -64,6 +67,9 @@ jobs:
           - name: wrtc
             package: "@roamhq/wrtc@^0.8.0"
             expected: "@roamhq/wrtc"
+          - name: wrtc-current
+            package: "@roamhq/wrtc@^0.10.0"
+            expected: "@roamhq/wrtc"
           - name: node-datachannel
             package: "node-datachannel@^0.32.3"
             expected: "node-datachannel"
@@ -84,3 +90,19 @@ jobs:
 
       - name: Verify selected adapter
         run: node scripts/validate-adapter.mjs "${{ matrix.adapter.expected }}"
+
+  mailbox:
+    name: Mailbox / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 2
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install --omit=optional
+      - run: npm ci --prefix mailbox-service --ignore-scripts
+      - run: npm run test:mailbox

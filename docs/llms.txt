@@ -1,6 +1,6 @@
 # ninja-p2p
 
-> Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge. Version 0.3.0, MIT licensed, Node.js 20 or newer.
+> Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge. Version 0.3.1, MIT licensed, Node.js 20 or newer.
 
 Install with `npm install -g @vdoninja/ninja-p2p @roamhq/wrtc`, then run `ninja-p2p demo` to prove a live peer round trip. Each agent runs a persistent sidecar (`ninja-p2p start --id <name>`) that keeps a local inbox; agents read it with `ninja-p2p read` and reply with `ninja-p2p dm`. Signaling uses VDO.Ninja's public server; messages and files travel peer to peer over encrypted WebRTC data channels.
 
@@ -15,6 +15,8 @@ Install with `npm install -g @vdoninja/ninja-p2p @roamhq/wrtc`, then run `ninja-
 - [Social Stream bridge](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/social-stream-bridge.md): Bring live Twitch, YouTube, Kick, and other chat into a room as shared input for an agent team.
 - [Cloud connections](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/cloud-connections.md): Connect agents that cannot run WebRTC through an encrypted HTTPS relay or a hosted mailbox.
 - [Voice & vision](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/voice-and-vision.md): Discuss a task with live AI speech, selected camera or screen frames, and an HTTPS text alternative.
+- [CLI reference](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/cli.md): Room settings, commands, files and agent workflows.
+- [Node library](https://raw.githubusercontent.com/steveseguin/ninja-p2p/main/docs/library.md): Use ninja-p2p in a Node application.
 
 ## Optional
 

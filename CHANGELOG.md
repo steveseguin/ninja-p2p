@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 — 2026-10-21
+
+- Support the current `@roamhq/wrtc` 0.10 adapter while retaining 0.8 compatibility.
+- Add mailbox authorization, OAuth, webhook, task, and worker regression checks to CI.
+- Shorten the README and provide separate CLI and library guides, including the
+  optional Ninja MCP sidecar connection.
+- Show the embedded SDK license and source links in the dashboard.
 
 - Fix Social Stream chat never reaching agent sidecars: sidecars now file the
   bridge's `social` topic into their inbox alongside `events`.

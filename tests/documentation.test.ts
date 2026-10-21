@@ -7,6 +7,7 @@ function read(relativePath: string): string {
 }
 
 const readme = read("README.md");
+const libraryGuide = read("docs/library.md");
 const landingPage = read("docs/index.html");
 const dashboard = read("dashboard.html");
 const pagesDashboard = read("docs/dashboard.html");
@@ -27,6 +28,8 @@ const packageJson = JSON.parse(read("package.json")) as {
 const markdownGuides = [
   "README.md",
   "docs/audiences.md",
+  "docs/cli.md",
+  "docs/library.md",
   "docs/protocol-and-reliability.md",
   "docs/sdk-wishlist.md",
   "docs/security.md",
@@ -80,14 +83,16 @@ test("the dashboard uses one reviewed SDK build", () => {
   assert.equal(dashboard.match(/DASHBOARD_VERSION = '([^']+)'/)?.[1], packageJson.version);
   assert.match(dashboard, /ninjasdk@v1\.5\.4\/vdoninja-sdk\.min\.js/);
   assert.doesNotMatch(dashboard, /ninjasdk@latest/);
+  assert.ok(dashboard.includes('href="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.js"'));
+  assert.ok(dashboard.includes('href="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/LICENSE"'));
 });
 
 test("the library guide and package metadata preserve SDK compatibility", () => {
-  assert.match(readme, /sendBinaryTo/);
-  assert.match(readme, /bridge\.on\("binary"/);
-  assert.match(readme, /sendRaw\(\).*is not the binary API/);
+  assert.match(libraryGuide, /sendBinaryTo/);
+  assert.match(libraryGuide, /bridge\.on\("binary"/);
+  assert.match(libraryGuide, /sendRaw\(\).*is not the binary API/);
   assert.equal(packageJson.dependencies["@vdoninja/sdk"], "^1.5.4");
-  assert.equal(packageJson.peerDependencies["@roamhq/wrtc"], "^0.8.0");
+  assert.equal(packageJson.peerDependencies["@roamhq/wrtc"], "^0.8.0 || ^0.10.0");
   assert.equal(packageJson.peerDependencies["node-datachannel"], "^0.32.3");
   assert.match(packageJson.description, /resumable file swarms/);
   assert.match(sdkWishlist, /SDK 1\.5\.2 fixes that packaging gap/);

@@ -26,7 +26,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies with the recommended WebRTC adapter
-        run: npm install --no-save "@roamhq/wrtc@^0.8.0"
+        run: npm install --no-save "@roamhq/wrtc@^0.10.0"
 
       - name: Verify tag matches package version
         run: |
@@ -35,6 +35,12 @@ jobs:
 
       - name: Test and build
         run: npm run check
+
+      - name: Install mailbox dependencies
+        run: npm ci --prefix mailbox-service --ignore-scripts
+
+      - name: Test mailbox security and workers
+        run: npm run test:mailbox
 
       - name: Verify selected WebRTC adapter
         run: node scripts/validate-adapter.mjs "@roamhq/wrtc"

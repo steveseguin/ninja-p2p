@@ -241,6 +241,7 @@ details.asks summary:hover{color:var(--fg)}
       <button id="btn-disconnect" disabled>Disconnect</button>
     </div>
     <div class="status" id="conn-status" role="status">Disconnected</div>
+    <div class="hint">VDO.Ninja SDK 1.5.4: <a href="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/LICENSE">MPL-2.0 license</a> &middot; <a href="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.js">SDK source</a></div>
   </div>
 
   <div id="peer-section">
@@ -276,6 +277,9 @@ details.asks summary:hover{color:var(--fg)}
 
 <aside id="details-panel" aria-label="Peer details"></aside>
 
+<!-- VDO.Ninja SDK 1.5.4, Copyright (c) 2025-2026 Steve Seguin, MPL-2.0.
+     Corresponding source: https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.js
+     License: https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/LICENSE -->
 <script src="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.min.js" integrity="sha384-1sqG7ZGnmcB9z5Dp8nh3jGB/86lkte79JjCJcLTYjO+Il27JP856VZAa+VpyLNGw" crossorigin="anonymous"></script>
 <script>
 (function() {
@@ -286,7 +290,7 @@ details.asks summary:hover{color:var(--fg)}
   let connected = false;
   let myStreamId = '';
   let myIdentity = null;
-  const DASHBOARD_VERSION = '0.3.0';
+  const DASHBOARD_VERSION = '0.3.1';
   const peers = new Map(); // streamId -> {uuid, identity, skills, status, connected}
   const peerUuidToStream = new Map();
   const readyUuids = new Set(); // control data channels that have opened

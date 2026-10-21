@@ -48,9 +48,9 @@ worker. A team can assign work and retain the handoff in ninja-p2p, while an MCP
 client operates the remote capability. Voice and vision should share SDK media
 adapters across both products. See [Ninja MCP's direction](https://github.com/steveseguin/ninjamcp/blob/main/references/direction.md).
 
-The planned MCP integration should expose selected ninja-p2p operations through
-Ninja MCP, with ninja-p2p remaining the owner of its inbox, task, and receipt
-records. Keep both products independently usable. Their current application
+The optional [Ninja MCP sidecar adapter](https://steveseguin.github.io/ninjamcp/ninja-p2p.html)
+exposes local peer, inbox, handoff, and receipt operations. ninja-p2p remains
+the owner of those records. Keep both products independently usable. Their current application
 protocols differ, so interoperability needs an explicit adapter that preserves
 identity, permissions, request IDs, and receipt meaning. A shared room name
 alone does not provide that integration.

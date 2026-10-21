@@ -138,6 +138,10 @@
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
 <li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
+<h4>Reference</h4><ul>
+<li><a href="cli.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>CLI reference</a></li>
+<li><a href="library.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Node library</a></li>
+</ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
 <li><a href="recovery-validation.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#rotate"/></svg>Recovery validation</a></li>
@@ -155,39 +159,58 @@
     <div class="meta">
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/CHANGELOG.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg>View source</a>
       <a href="https://github.com/steveseguin/ninja-p2p/edit/main/CHANGELOG.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Suggest an edit</a>
-      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.0</a>
+      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.1</a>
     </div>
   </header>
   <article class="prose">
-<h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
+<h2 id="031--2026-10-21">0.3.1 — 2026-10-21<a class="anchor" href="#031--2026-10-21" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>Fix Social Stream chat never reaching agent sidecars: sidecars now file the
-bridge&#39;s <code>social</code> topic into their inbox alongside <code>events</code>.</li>
-<li>Fix dashboard security issues: peer-supplied names can no longer inject HTML
+<li><p>Support the current <code>@roamhq/wrtc</code> 0.10 adapter while retaining 0.8 compatibility.</p>
+</li>
+<li><p>Add mailbox authorization, OAuth, webhook, task, and worker regression checks to CI.</p>
+</li>
+<li><p>Shorten the README and provide separate CLI and library guides, including the
+optional Ninja MCP sidecar connection.</p>
+</li>
+<li><p>Show the embedded SDK license and source links in the dashboard.</p>
+</li>
+<li><p>Fix Social Stream chat never reaching agent sidecars: sidecars now file the
+bridge&#39;s <code>social</code> topic into their inbox alongside <code>events</code>.</p>
+</li>
+<li><p>Fix dashboard security issues: peer-supplied names can no longer inject HTML
 through attributes, a peer cannot take over another peer&#39;s entry, the room
 password is no longer saved in the browser, and the SDK script is pinned with
-a Subresource Integrity hash.</li>
-<li>Fix dashboard reliability: stop an upload as soon as the receiver rejects it,
+a Subresource Integrity hash.</p>
+</li>
+<li><p>Fix dashboard reliability: stop an upload as soon as the receiver rejects it,
 show replayed history once and in time order, ignore swarm control traffic,
 tolerate malformed peer profiles, clean up after a failed connect, and treat an
-empty password as no password, matching the CLI.</li>
-<li>Redesign the dashboard with a top bar, light and dark themes, a getting-started
-panel, a separate peer details column, and keyboard-accessible peer list.</li>
-<li><code>start</code> and <code>room</code> no longer suggest joining with the ID the agent already uses.</li>
-<li><code>doctor</code> and <code>status</code> no longer create empty <code>inbox</code>, <code>archive</code>, and <code>outbox</code>
-folders inside state folders that are not sidecars, such as <code>workers/</code>.</li>
-<li>The dashboard supports <code>/task</code>, lists its commands readably under <code>/help</code>, and
-keeps a chosen file and the focused field when peer details refresh.</li>
-<li>Polish the website: fix overflowing command boxes and a clipped demo terminal,
+empty password as no password, matching the CLI.</p>
+</li>
+<li><p>Redesign the dashboard with a top bar, light and dark themes, a getting-started
+panel, a separate peer details column, and keyboard-accessible peer list.</p>
+</li>
+<li><p><code>start</code> and <code>room</code> no longer suggest joining with the ID the agent already uses.</p>
+</li>
+<li><p><code>doctor</code> and <code>status</code> no longer create empty <code>inbox</code>, <code>archive</code>, and <code>outbox</code>
+folders inside state folders that are not sidecars, such as <code>workers/</code>.</p>
+</li>
+<li><p>The dashboard supports <code>/task</code>, lists its commands readably under <code>/help</code>, and
+keeps a chosen file and the focused field when peer details refresh.</p>
+</li>
+<li><p>Polish the website: fix overflowing command boxes and a clipped demo terminal,
 add a collapsible docs menu on phones, link the worker, task, and voice guides,
-and refresh the dashboard screenshot.</li>
-<li><code>fetch --timeout</code> now ends a download only after that long without a new
-verified chunk, instead of cutting off any transfer longer than five minutes.</li>
-<li>Correct the docs: the raw CLI flow now starts a sidecar so replies arrive,
+and refresh the dashboard screenshot.</p>
+</li>
+<li><p><code>fetch --timeout</code> now ends a download only after that long without a new
+verified chunk, instead of cutting off any transfer longer than five minutes.</p>
+</li>
+<li><p>Correct the docs: the raw CLI flow now starts a sidecar so replies arrive,
 the hosted mailbox&#39;s MCP tools are described consistently, <code>NINJA_ROOM</code>
 bypasses the sidecar queue, mailbox credentials no longer share the worker
 config&#39;s file name, and the README lists the remaining flags and helper
-programs.</li>
+programs.</p>
+</li>
 </ul>
 <h2 id="030--2026-10-18">0.3.0 — 2026-10-18<a class="anchor" href="#030--2026-10-18" aria-label="Link to this section">#</a></h2>
 <ul>
@@ -412,11 +435,11 @@ co-host, moderation, research, and live-production use case.</li>
 
   </article>
   <nav class="docs-pager" aria-label="More guides">
-<a href="voice-and-vision.html"><small>Previous</small>Voice &amp; vision</a>
+<a href="library.html"><small>Previous</small>Node library</a>
 <a class="next" href="recovery-validation.html"><small>Next</small>Recovery validation</a>
 </nav>
 </main>
-<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#unreleased">Unreleased</a></li>
+<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#031--2026-10-21">0.3.1 — 2026-10-21</a></li>
 <li><a href="#030--2026-10-18">0.3.0 — 2026-10-18</a></li>
 <li><a href="#024--2026-09-05">0.2.4 — 2026-09-05</a></li>
 <li><a href="#023--2026-09-05">0.2.3 — 2026-09-05</a></li>
@@ -445,7 +468,7 @@ co-host, moderation, research, and live-production use case.</li>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
     <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
-    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
+    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.1</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>
       <span>Claude and Codex are trademarks of their respective owners. ninja-p2p is not affiliated with Anthropic or OpenAI.</span>

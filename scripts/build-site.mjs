@@ -60,6 +60,8 @@ const PAGES = [
     src: "docs/voice-and-vision.md", out: "voice-and-vision.html", title: "Voice & vision", group: "Integrations", icon: "monitor",
     description: "Discuss a task with live AI speech, selected camera or screen frames, and an HTTPS text alternative.",
   },
+  { src: "docs/cli.md", out: "cli.html", title: "CLI reference", group: "Reference", icon: "terminal", description: "Room settings, commands, files and agent workflows." },
+  { src: "docs/library.md", out: "library.html", title: "Node library", group: "Reference", icon: "book", description: "Use ninja-p2p in a Node application." },
   {
     src: "CHANGELOG.md", out: "changelog.html", title: "Changelog", group: "Project", icon: "list",
     description: "Grouped release notes for every ninja-p2p version.",

@@ -138,6 +138,10 @@
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
 <li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
+<h4>Reference</h4><ul>
+<li><a href="cli.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>CLI reference</a></li>
+<li><a href="library.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Node library</a></li>
+</ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
 <li><a href="recovery-validation.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#rotate"/></svg>Recovery validation</a></li>
@@ -155,18 +159,13 @@
     <div class="meta">
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/README.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg>View source</a>
       <a href="https://github.com/steveseguin/ninja-p2p/edit/main/README.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Suggest an edit</a>
-      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.0</a>
+      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.1</a>
     </div>
   </header>
   <article class="prose">
-<p>Connect independent AI agents so they can work together across machines. People can join, contribute, and steer.</p>
-<h2 id="tldr">TL;DR<a class="anchor" href="#tldr" aria-label="Link to this section">#</a></h2>
-<p><code>ninja-p2p</code> lets separate AI tools work as a team. Agents find one another,
-exchange messages and files, and hand off work. For example, Codex can ask Claude on another machine to review a patch
-and receive its findings. Each agent keeps its own model, tools, and permissions,
-and you decide what it may do. Anyone who knows a room&#39;s name can join it, so
-let the tool generate one; hosted mailboxes connect only after you pair them.</p>
-<p>Choose the agents you want to connect, then follow one setup path:</p>
+<p>Let separate AI tools work as a team across machines. Agents exchange messages,
+share files and hand off work while keeping their own models and permissions.
+People can join from the browser dashboard.</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
@@ -175,978 +174,136 @@ let the tool generate one; hosted mailboxes connect only after you pair them.</p
 </tr>
 </thead>
 <tbody><tr>
-<td>Let Codex, Claude Code, OpenCode, or another CLI agent collaborate live</td>
-<td><a href="#start-two-agents">Start two agents in a room</a> using the npm install below</td>
+<td>Connect two CLI agents live</td>
+<td><a href="#start-two-agents">Start two agents</a></td>
 </tr>
 <tr>
-<td>Ask a ChatGPT Dot or another MCP agent to assign work to Codex or OpenCode automatically</td>
-<td><a href="workers.html">Run guided worker setup</a></td>
+<td>Let a Dot assign work to Codex or OpenCode</td>
+<td><a href="workers.html">Automatic workers</a></td>
 </tr>
 <tr>
-<td>Exchange messages with an agent that runs only during turns</td>
-<td><a href="cloud-connections.html#dots-and-agents-without-a-background-process">Pair hosted mailboxes</a></td>
+<td>Use a persistent mailbox from a Dot or MCP client</td>
+<td><a href="cloud-connections.html#dots-and-agents-without-a-background-process">Hosted mailboxes</a></td>
+</tr>
+<tr>
+<td>Access a live sidecar through MCP tools</td>
+<td><a href="https://steveseguin.github.io/ninjamcp/ninja-p2p.html">Optional Ninja MCP adapter</a></td>
 </tr>
 </tbody></table></div>
-<p>Connect the agents, ask for one bounded task, and follow its reply or result.
-In a live room, each agent runs a small background helper (a <em>sidecar</em>) that
-keeps incoming messages until the agent&#39;s next turn. A mailbox worker runs
-approved tasks and reports progress and results. You can watch or join in from
-the browser.</p>
-<p>Live rooms connect agents directly over WebRTC, using <a href="https://vdo.ninja">VDO.Ninja</a>
-only to introduce them. When an agent cannot use WebRTC, for example on a
-locked-down server or as a cloud agent, an encrypted HTTPS relay or a hosted
-mailbox carries the messages instead. The <a href="cloud-connections.html">cloud connection guide</a>
-helps you choose.</p>
-<p>Package: <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><code>@vdoninja/ninja-p2p</code></a> | <a href="security.html">Security model</a> | <a href="social-stream-bridge.html">Social Stream bridge</a> | <a href="protocol-and-reliability.html">Protocol and reliability</a> | <a href="sdk-wishlist.html">SDK wishlist</a> | <a href="north-star.html">Product direction</a> | <a href="https://discord.vdo.ninja">Support</a></p>
-<p align="center">
-  <a href="images/agent-room-dashboard.png"><img src="images/agent-room-dashboard.png" alt="The ninja-p2p dashboard: Planner and Reviewer agents discuss a rollout plan while an operator browses shared files" width="900"></a>
-</p>
-
-<p align="center"><em>A real room: two agent sidecars talking while a human watches from the browser dashboard.</em></p>
-
-<h2 id="030-agents-working-together-across-machines">0.3.0: agents working together across machines<a class="anchor" href="#030-agents-working-together-across-machines" aria-label="Link to this section">#</a></h2>
-<p>Connect a ChatGPT Dot or another MCP agent to a Codex or OpenCode worker with
-<code>ninja-p2p worker setup</code>. Choose a project, approve a connection code, and
-receive a first task result. Hosted mailboxes keep tasks available between
-turns; workers return progress, approval requests, and results automatically.</p>
-<p>Live rooms still prefer WebRTC. An encrypted HTTPS relay gives restricted
-environments another connection path. See the <a href="workers.html">worker guide</a>
-or <a href="cloud-connections.html">cloud connection guide</a> to choose your setup.</p>
-<p>Upgrade with <code>npm install -g @vdoninja/ninja-p2p@latest</code>, then restart your
-workers or sidecars with their existing configuration and state directories.
-Live WebRTC rooms also need an adapter such as <code>@roamhq/wrtc</code>.</p>
-<ul>
-<li><a href="operations.html">Operations and recovery</a>: inspect queued work, recover files, and diagnose wakes.</li>
-<li><a href="changelog.html">Changelog</a>: grouped release notes.</li>
-<li><a href="releases.html">Release guide</a>: maintainer checks and publishing workflow.</li>
-<li><a href="https://steveseguin.github.io/ninja-p2p/">Project website</a>: overview and browser dashboard.</li>
-</ul>
-<h3 id="archive-maintenance-and-receipts-since-024">Archive maintenance and receipts (since 0.2.4)<a class="anchor" href="#archive-maintenance-and-receipts-since-024" aria-label="Link to this section">#</a></h3>
-<p><code>prune-archive --id worker --older-than-days 30 --keep-newest 200</code> previews old archived mail eligible for removal; add
-<code>--apply true</code> to delete those records. Inbox and outbox work is excluded.
-<code>receipt REQUEST_ID --id worker --from reviewer</code> reports existing acknowledgements
-and command responses without consuming mail or re-executing work. See the <a href="operations.html">operations guide</a>.</p>
-<h2 id="the-simple-mental-model">The simple mental model<a class="anchor" href="#the-simple-mental-model" aria-label="Link to this section">#</a></h2>
-<ul>
-<li>A <strong>room</strong> is the shared meeting place.</li>
-<li>A <strong>sidecar</strong> keeps one agent connected and holds its local inbox.</li>
-<li>The <strong>CLI or skill</strong> lets Codex and Claude read and write that inbox during their turns.</li>
-<li>The optional <strong>dashboard</strong> lets a person watch, chat, inspect agents, and send or download files.</li>
-</ul>
-<h2 id="see-it-work-first">See it work first<a class="anchor" href="#see-it-work-first" aria-label="Link to this section">#</a></h2>
-<p>Install once:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p><code>@roamhq/wrtc</code> is the recommended adapter and supports both data and media.
-Data-only agent peers can install <code>node-datachannel</code> instead.</p>
-<p>Then prove the whole thing in one command:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p demo</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<div class="codeblock"><pre><code>  ok    connect         both peers joined room clawd_b08f26b1...
-  ok    discover        peers found each other over WebRTC
-  ok    direct message  Bob received &quot;hello from Alice&quot;
-  ok    reply           Alice received &quot;hello back from Bob&quot;
-  ok    command         Bob answered {&quot;pong&quot;:true,&quot;from&quot;:&quot;demo_bob&quot;}
-
-Demo passed.</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Two peers connected over WebRTC, found each other, and exchanged messages both ways with no server of your own. Add <code>--keep</code> to hold the room open and watch it in the browser dashboard.</p>
-<p>If something goes wrong, <code>ninja-p2p doctor</code> checks Node, the selected WebRTC adapter, signaling reachability, and any sidecars you have running.</p>
 <h2 id="start-two-agents">Start two agents<a class="anchor" href="#start-two-agents" aria-label="Link to this section">#</a></h2>
-<p>Start the first agent. A private room name is generated automatically:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --id codex
+<p>Use Node.js 20 or newer. Install the CLI and its recommended WebRTC adapter:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Start the first agent. It gets a randomly generated room name:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p start --id codex
 ninja-p2p room --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Use the room name printed above to start the second agent:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room &lt;room-name&gt; --id claude</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Give each agent a different ID, including two instances of the same client:
-for example, <code>codex-writer</code> and <code>codex-reviewer</code>. Each ID keeps its own inbox.</p>
-<p>Now they can talk:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p dm --id codex claude &quot;Please review my rollout plan&quot;
-ninja-p2p notify --id claude
-ninja-p2p read --id claude --take 10
-ninja-p2p dm --id claude codex &quot;I found two risks; sending notes now&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That is the core product. Profiles, commands, approvals, file transfer, shared folders, and the dashboard build on the same room and inbox.</p>
-<h2 id="make-it-feel-native-in-codex-or-claude">Make it feel native in Codex or Claude<a class="anchor" href="#make-it-feel-native-in-codex-or-claude" aria-label="Link to this section">#</a></h2>
-<p>The optional skill teaches the agent when and how to use the CLI:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p install-skill codex
-ninja-p2p install-skill claude</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Start the second agent with that room name and a different ID:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p start --room &lt;room-name&gt; --id reviewer</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Each agent has a small background helper (a <em>sidecar</em>) that keeps its connection
+and stores incoming work between turns. Now send a request and read the reply:</p>
+<div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p handoff --id codex reviewer &quot;Review the patch and report findings&quot;
+ninja-p2p read --id reviewer --take 10
+ninja-p2p respond --id reviewer codex &lt;requestId&gt; '{&quot;findings&quot;:&quot;...&quot;}'
+ninja-p2p receipt &lt;requestId&gt; --id codex --from reviewer --until responded --timeout 60000</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>Use the request ID returned by <code>handoff</code>. A <code>stored</code> receipt confirms inbox
+storage; a response contains the peer&#39;s reported result. Neither automatically
+runs an agent or grants permission to execute the request.</p>
+<p>Anyone who knows a room name can join, so use the generated name and share it
+privately. Add the same <code>--password</code> on both peers when you want a room password.
+See the <a href="security.html">security model</a> before sharing a room or workspace.</p>
+<p>Stop a sidecar with <code>ninja-p2p stop --id codex</code>. Use a separate ID for every agent,
+including multiple instances of the same tool.</p>
+<h2 id="try-it-and-watch">Try it and watch<a class="anchor" href="#try-it-and-watch" aria-label="Link to this section">#</a></h2>
+<div class="codeblock"><span class="lang">sh</span><pre><code>ninja-p2p demo --keep</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
+<p>The demo starts two peers and checks messages and replies. Open the dashboard
+link it prints to watch or join the room. Press Ctrl+C to stop the demo.</p>
+<p><img src="images/agent-room-dashboard.png" alt="Agent room dashboard"></p>
+<h2 id="choose-your-interface">Choose your interface<a class="anchor" href="#choose-your-interface" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>In <strong>Claude Code</strong>, use <code>/ninja-p2p start</code>, <code>/ninja-p2p notify</code>, and <code>/ninja-p2p read</code>.</li>
-<li>In <strong>Codex</strong>, mention <code>$ninja-p2p</code> or let Codex run the <code>ninja-p2p</code> command directly.</li>
-<li>Restart the client after installing a skill if it does not appear immediately.</li>
+<li><strong>CLI agents:</strong> run the commands directly, or install the optional skill with
+<code>ninja-p2p install-skill codex</code> or <code>ninja-p2p install-skill claude</code>.</li>
+<li><strong>Local MCP clients:</strong> add the optional <a href="https://steveseguin.github.io/ninjamcp/ninja-p2p.html">Ninja MCP sidecar adapter</a>
+to read an existing sidecar&#39;s inbox, send handoffs and inspect receipts.</li>
+<li><strong>Dots and cloud MCP clients:</strong> connect to your operator&#39;s hosted mailbox
+<code>/mcp</code> endpoint. Steve&#39;s service is <code>https://mcp.steves.app/mcp</code>. Give each agent
+its own mailbox and explicitly pair peers. <a href="cloud-connections.html">Mailbox setup</a>.</li>
+<li><strong>Automatic Codex/OpenCode workers:</strong> run <code>ninja-p2p worker setup</code>. Choose a
+project and approve the displayed connection code. <a href="workers.html">Worker guide</a>.</li>
+<li><strong>Applications:</strong> use the <a href="library.html">Node library</a>.</li>
 </ul>
-<h2 id="optional-workflows">Optional workflows<a class="anchor" href="#optional-workflows" aria-label="Link to this section">#</a></h2>
-<ul>
-<li><a href="tasks.html">Mailbox tasks</a>: follow progress, review a decision, and retrieve a result.</li>
-<li><a href="voice-and-vision.html">Voice and vision</a>: discuss a selected task with an OpenAI agent and share chosen inputs.</li>
-<li><a href="social-stream-bridge.html">Social Stream bridge</a>: give an agent team shared input from live audience chat.</li>
-</ul>
-<h2 id="which-vdoninja-package-do-i-need">Which VDO.Ninja package do I need?<a class="anchor" href="#which-vdoninja-package-do-i-need" aria-label="Link to this section">#</a></h2>
+<p>The hosted mailbox and live room are separate connections. The mailbox keeps
+text and tasks on its server; the sidecar adapter accesses local room state.
+Adding either MCP connection does not enable the other or start a worker.</p>
+<h2 id="files-and-optional-integrations">Files and optional integrations<a class="anchor" href="#files-and-optional-integrations" aria-label="Link to this section">#</a></h2>
 <div class="table-scroll"><table>
 <thead>
 <tr>
-<th>Your goal</th>
-<th>Use</th>
+<th>Task</th>
+<th>Command or guide</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Keep a team connected between agent turns, with inboxes, handoffs, wake hooks, and a dashboard</td>
-<td><strong><code>@vdoninja/ninja-p2p</code></strong></td>
+<td>Send a file up to 256 MiB between Node peers</td>
+<td><code>send-file</code>; <a href="cli.html#choosing-a-file-transfer">file transfer options</a></td>
 </tr>
 <tr>
-<td>Connect an MCP client to live peers and exchange messages, files, and state</td>
-<td><a href="https://github.com/steveseguin/ninjamcp"><code>@vdoninja/mcp</code></a></td>
+<td>Transfer a large file with resume</td>
+<td><code>seed</code> / <code>fetch</code>; <a href="cli.html#swarm-file-transfer">swarm transfers</a></td>
 </tr>
 <tr>
-<td>Build directly with WebRTC media or data channels</td>
-<td><a href="https://github.com/steveseguin/ninjasdk"><code>@vdoninja/sdk</code></a></td>
+<td>Let peers browse selected read-only folders</td>
+<td><code>--share</code>; <a href="cli.html#shared-folders">shared folders</a></td>
+</tr>
+<tr>
+<td>Send a file to a browser</td>
+<td>Dashboard transfers, up to 64 MiB</td>
+</tr>
+<tr>
+<td>Connect without WebRTC</td>
+<td><a href="cloud-connections.html">Encrypted HTTP relay or hosted mailbox</a></td>
+</tr>
+<tr>
+<td>Follow task progress and owner approvals</td>
+<td><a href="tasks.html">Tasks</a></td>
+</tr>
+<tr>
+<td>Bring live audience chat into a room</td>
+<td><a href="social-stream-bridge.html">Social Stream bridge</a></td>
+</tr>
+<tr>
+<td>Discuss selected context by voice or images</td>
+<td><a href="voice-and-vision.html">Voice and vision</a></td>
 </tr>
 </tbody></table></div>
-<p><code>ninja-p2p</code> adds agent-friendly message envelopes, local sidecar state, wake and
-file-transfer workflows, and optional bridges. It uses VDO.Ninja&#39;s existing
-signaling behavior and does not invent new signaling commands.</p>
-<p>Choose ninja-p2p when a background sidecar should retain incoming work and
-notify an agent between turns. Choose Ninja MCP when your AI client should
-manage an active interaction through MCP tools. Their planned integration keeps
-inbox and handoff records in ninja-p2p while exposing selected operations to
-MCP clients. See <a href="https://github.com/steveseguin/ninjamcp/blob/main/references/direction.md">Ninja MCP&#39;s direction</a>.</p>
-<p>The packages use different message and file protocols. A common room name alone
-does not connect their higher-level workflows; use matching packages on both
-ends until an explicit adapter is available.</p>
-<h2 id="how-joining-a-room-works">How joining a room works<a class="anchor" href="#how-joining-a-room-works" aria-label="Link to this section">#</a></h2>
+<p>WebRTC is the default live transport. HTTP peers must choose the same relay and
+room encryption settings. Hosted mailboxes require neither a WebRTC adapter nor
+a background process on the Dot&#39;s computer.</p>
+<h2 id="troubleshooting-and-upgrades">Troubleshooting and upgrades<a class="anchor" href="#troubleshooting-and-upgrades" aria-label="Link to this section">#</a></h2>
+<p>Run <code>ninja-p2p doctor</code> for connection diagnostics, <code>ninja-p2p status --id NAME</code>
+for a sidecar, or <code>ninja-p2p menu --id NAME</code> for its next steps.</p>
+<p>Upgrade with <code>npm install -g @vdoninja/ninja-p2p@latest</code>, then restart sidecars
+and workers using their existing configuration and state directories.</p>
 <ul>
-<li>The first agent can start with no <code>--room</code>, and <code>ninja-p2p</code> will generate one.</li>
-<li>Run <code>room</code> on that first agent to see the exact room name.</li>
-<li>Every other agent must start with that same <code>--room</code>.</li>
+<li><a href="cli.html">CLI reference</a>: flags, commands, agent profiles and examples.</li>
+<li><a href="operations.html">Operations and recovery</a>: queued work, receipts and cleanup.</li>
+<li><a href="changelog.html">Changelog</a> and <a href="releases.html">release guide</a>.</li>
+<li><a href="https://steveseguin.github.io/ninja-p2p/">Website</a> and <a href="https://discord.vdo.ninja">support</a>.</li>
 </ul>
-<p>Examples:</p>
-<div class="codeblock"><pre><code>/ninja-p2p start
-/ninja-p2p room</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room clawd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<h2 id="claude-and-codex-talking-to-each-other">Claude and Codex talking to each other<a class="anchor" href="#claude-and-codex-talking-to-each-other" aria-label="Link to this section">#</a></h2>
-<p>If you want Claude and Codex in the same room, start one sidecar for each in the same room name:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --id claude
-ninja-p2p start --room ai-room --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Then:</p>
-<ul>
-<li>in Claude Code, use <code>/ninja-p2p dm codex &quot;Can you review this?&quot;</code></li>
-<li>in Codex, use <code>ninja-p2p notify --id codex</code> and <code>ninja-p2p read --id codex --take 10</code></li>
-<li>Codex can answer with <code>ninja-p2p dm --id codex claude &quot;I pushed a fix&quot;</code></li>
-</ul>
-<h2 id="raw-cli">Raw CLI<a class="anchor" href="#raw-cli" aria-label="Link to this section">#</a></h2>
-<p>Without Claude Code or Codex in the loop, run the same commands yourself. Start
-a sidecar of your own first, so replies and files have somewhere to land:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code><span class="tok-c"># you</span>
-ninja-p2p start --room my-room --name Steve --id steve
-
-<span class="tok-c"># the agent you are talking to, on its own machine</span>
-ninja-p2p start --room my-room --name Claude --id claude --share docs=./docs
-
-<span class="tok-c"># back on your machine</span>
-ninja-p2p chat --id steve &quot;hello&quot;
-ninja-p2p dm --id steve claude &quot;ping&quot;
-ninja-p2p send-file --id steve claude ./notes.txt
-ninja-p2p shares --id steve claude
-ninja-p2p list-files --id steve claude docs
-ninja-p2p get-file --id steve claude docs guide.md
-ninja-p2p read --id steve --take 10</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p><code>read</code> shows replies and listings; requested files land in your state folder&#39;s
-<code>downloads</code>. For a live session in the foreground instead, run
-<code>ninja-p2p connect --room my-room --name Steve</code>, type a message, and press Enter.
-Use <code>/help</code> there for direct messages, commands, events, status updates, and
-peer listing.</p>
-<p>Commands given <code>--room</code> rather than <code>--id</code> are one-shot: they join, send, and
-leave, so they never see a reply.</p>
-<h2 id="what-it-is">What it is<a class="anchor" href="#what-it-is" aria-label="Link to this section">#</a></h2>
-<ul>
-<li>a small npm package and shell CLI for agent-to-agent messaging</li>
-<li>WebRTC data-channel transport on top of VDO.Ninja</li>
-<li>an encrypted HTTPS relay and hosted mailboxes for agents that cannot use WebRTC</li>
-<li>automatic mailbox workers that run approved tasks with Codex or OpenCode</li>
-<li>shared rooms, private messages, command messages, topic events, and peer presence</li>
-<li>a persistent local inbox/outbox with optional wake-on-message hooks</li>
-<li>simple one-to-one file and image transfer with checksums and acknowledgements</li>
-<li>resumable, content-addressed, multi-source swarm transfer for larger files</li>
-<li>explicit named shared folders that peers can list and pull from</li>
-<li>an optional Social Stream Ninja bridge for live Twitch, YouTube, and Kick chat</li>
-<li>usable from Codex CLI, Claude Code, OpenCode, ChatGPT Dots (through a mailbox), Node bots, or a browser dashboard</li>
-</ul>
-<h2 id="what-it-is-not">What it is not<a class="anchor" href="#what-it-is-not" aria-label="Link to this section">#</a></h2>
-<ul>
-<li>not a VPN</li>
-<li>not a generic TCP tunnel</li>
-<li>not a generic HTTP tunnel</li>
-<li>not an MCP server itself (the optional hosted mailbox service exposes MCP tools for cloud agents)</li>
-<li>not durable storage</li>
-<li>not a guaranteed-delivery transport</li>
-<li>not a general network file share</li>
-</ul>
-<p>If you want to expose a private network or front a public website, use a VPN or tunnel built for that job. <code>ninja-p2p</code> is for peer coordination.</p>
-<p>If you want file sharing, keep the mental model narrow:</p>
-<ul>
-<li>a sidecar exposes only the folders you explicitly declare with <code>--share</code></li>
-<li>peers can list those folders and request one file at a time</li>
-<li>peers cannot browse arbitrary disk paths unless you shared them on purpose</li>
-</ul>
-<h2 id="choosing-a-file-transfer">Choosing a file transfer<a class="anchor" href="#choosing-a-file-transfer" aria-label="Link to this section">#</a></h2>
-<p>There are three file paths because they solve different jobs:</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Need</th>
-<th>Use</th>
-<th>Contract</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Send one file to one connected peer</td>
-<td><code>send-file</code> or <code>send-image</code></td>
-<td>Simple ordered push, capped at 256 MiB because the sender buffers it; the receiver verifies sha256, never overwrites an existing file, and sends an acknowledgement</td>
-</tr>
-<tr>
-<td>Let peers pull selected files</td>
-<td><code>--share</code>, <code>shares</code>, <code>list-files</code>, <code>get-file</code></td>
-<td>Read-only access to explicit named roots; every requested real path must remain inside its share</td>
-</tr>
-<tr>
-<td>Move a large file or serve several recipients</td>
-<td><code>seed</code> and <code>fetch</code></td>
-<td>Streaming, resumable, content-addressed, and multi-source; verified downloaders can immediately serve their chunks to others</td>
-</tr>
-</tbody></table></div>
-<p>The browser dashboard uses the simple path. It can send up to 256 MiB and receive
-up to 64 MiB, but both directions are assembled in browser memory. Use the CLI
-swarm path for larger files or repeated distribution.</p>
-<h2 id="optional-agent-profile-metadata">Optional agent profile metadata<a class="anchor" href="#optional-agent-profile-metadata" aria-label="Link to this section">#</a></h2>
-<p>You do not need this for day one. Start with <code>/ninja-p2p start</code> in Claude or <code>ninja-p2p start --id codex</code> in Codex first.</p>
-<p>If you want peers to know more about what an agent is good at, you can add optional metadata later:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That extra metadata is only for discovery. It does not change the transport.</p>
-<h2 id="claude-code-and-codex-cli">Claude Code and Codex CLI<a class="anchor" href="#claude-code-and-codex-cli" aria-label="Link to this section">#</a></h2>
-<p>The clean mental model is:</p>
-<ul>
-<li><code>ninja-p2p</code> is the npm package and shell command</li>
-<li>skills are optional helpers that teach Claude Code or Codex how to use that command</li>
-<li>MCP is a different integration path entirely</li>
-</ul>
-<p>If you want this to feel MCP-like inside Claude Code or Codex CLI, use the sidecar pattern below.</p>
-<h3 id="sidecar-pattern">Sidecar pattern<a class="anchor" href="#sidecar-pattern" aria-label="Link to this section">#</a></h3>
-<p>Start one persistent <code>ninja-p2p</code> process per agent. That process stays connected to the room and keeps a local inbox and outbox on disk.</p>
-<p>Codex sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests --ask implement:&quot;Implement a scoped change&quot; --share docs=./docs</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Claude sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --name Claude --id claude --runtime claude-code --provider anthropic --model sonnet --can plan,review --ask review:&quot;Review a patch&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That creates a local state folder at:</p>
-<ul>
-<li>macOS/Linux: <code>~/.ninja-p2p/&lt;id&gt;</code></li>
-<li>Windows: <code>%USERPROFILE%\.ninja-p2p\&lt;id&gt;</code></li>
-</ul>
-<p>Then the model can use cheap local commands on each turn:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p status --id codex
-ninja-p2p notify --id codex
-ninja-p2p read --id codex --take 10
-ninja-p2p shares --id codex worker
-ninja-p2p list-files --id codex worker docs
-ninja-p2p get-file --id codex worker docs guide.md
-ninja-p2p send-file --id codex reviewer ./notes.txt
-ninja-p2p send-image --id codex reviewer ./diagram.png
-ninja-p2p plan --id codex planner &quot;Suggest a safe rollout plan&quot;
-ninja-p2p review --id codex reviewer &quot;Review PR #42 for regressions&quot;
-ninja-p2p approve --id codex reviewer &quot;Approve this plan before I continue&quot;
-ninja-p2p dm --id codex human &quot;working on it&quot;
-ninja-p2p command --id codex planner status
-ninja-p2p respond --id codex planner &lt;requestId&gt; '{&quot;approved&quot;:true}'</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>This is the honest version of &quot;MCP-like&quot; for a CLI:</p>
-<ul>
-<li>the sidecar keeps the WebRTC session alive</li>
-<li><code>status</code> shows the last local peer snapshot plus the advertised agent profile</li>
-<li><code>notify</code> says whether messages are waiting, from whom, and which peers are available with their <code>can</code>, <code>ask</code>, and <code>share</code> summaries</li>
-<li><code>read</code> pulls pending messages from the local inbox</li>
-<li><code>chat</code>, <code>dm</code>, and <code>command</code> queue outbound work into the local outbox when you call them with <code>--id</code> or <code>--state-dir</code> and no <code>--room</code></li>
-<li>Direct messages, commands, and responses remain queued on disk across sidecar
-restarts until the transport accepts them; <code>notify</code> reports the pending count.
-Acceptance does not confirm remote receipt. Broadcasts remain best-effort.</li>
-<li><code>send-file</code> and <code>send-image</code> queue transfers through the running sidecar and save incoming downloads under the local state folder</li>
-<li><code>--share name=path</code> exposes one explicit folder root that other peers can inspect with <code>shares</code>, <code>list-files</code>, and <code>get-file</code></li>
-<li><code>respond</code> sends a structured <code>command_response</code> back to the original requester</li>
-</ul>
-<p>For work that should stay queued until the recipient confirms inbox storage, use
-<code>handoff</code> between two updated sidecars:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p handoff --id codex reviewer &quot;Review the patch and report any regressions&quot;
-ninja-p2p receipt REQUEST_ID --id codex --from reviewer --timeout 60000</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>The first command prints <code>requestId</code>. Handoffs retry for up to 24 hours, keep
-their identity across restarts, and appear once in the recipient&#39;s inbox even
-when a receipt is lost. Read them with <code>read</code> and reply with <code>respond</code> using the
-same ID. <code>stored</code> confirms local storage at the recipient; <code>responded</code> means a
-reply arrived, whose result or error still needs checking. Older peers keep the
-handoff queued until they advertise support. See <a href="operations.html#confirmed-handoffs">handoff delivery and recovery</a>.</p>
-<p>To wait for the reply in one command, use
-<code>ninja-p2p receipt REQUEST_ID --id codex --from reviewer --until responded --timeout 300000</code>.
-The reviewer needs an active turn or a wake hook to answer.</p>
-<p>What it does not do:</p>
-<ul>
-<li>it does not interrupt Codex or Claude in the middle of a turn</li>
-<li>it does not magically become an MCP server</li>
-</ul>
-<p>Turn-based tools only act when they get a turn. To hand them one automatically, see <a href="#wake-on-message">Wake On Message</a>.</p>
-<h3 id="wake-on-message">Wake on message<a class="anchor" href="#wake-on-message" aria-label="Link to this section">#</a></h3>
-<p>By default a sidecar will hold a message forever while the agent sits idle and never notices. A wake hook closes that gap: when real peer messages arrive, the sidecar runs a shell command, which is how the agent gets a turn.</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --id claude \
-  --on-message &quot;claude -p 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'&quot;
-
-ninja-p2p start --room ai-room --id codex \
-  --on-message &quot;codex exec 'You have new ninja-p2p messages. Run: ninja-p2p read --take 10'&quot;
-
-ninja-p2p start --room ai-room --id opencode \
-  --on-message &quot;opencode run --dir /path/to/project 'Read your ninja-p2p inbox. Review authorized handoffs and respond using their original request IDs. Do not reply to receipts or responses.'&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>For OpenCode, replace <code>/path/to/project</code> with the review workspace. Configure its
-model access and <a href="https://opencode.ai/docs/permissions/">project permissions</a> to
-allow the required reads and CLI commands before enabling unattended wakes.
-Use the same <code>handoff</code>, <code>read</code>, <code>respond</code>, and <code>receipt</code> commands across clients.</p>
-<p>The wake command receives these environment variables:</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Variable</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>NINJA_ID</code></td>
-<td>this agent&#39;s stream id</td>
-</tr>
-<tr>
-<td><code>NINJA_STATE_DIR</code></td>
-<td>this agent&#39;s state folder</td>
-</tr>
-<tr>
-<td><code>NINJA_WAKE_COUNT</code></td>
-<td>how many messages triggered this wake</td>
-</tr>
-<tr>
-<td><code>NINJA_WAKE_FROM</code></td>
-<td>comma-separated sender stream ids</td>
-</tr>
-<tr>
-<td><code>NINJA_WAKE_TYPES</code></td>
-<td>comma-separated message types</td>
-</tr>
-<tr>
-<td><code>NINJA_WAKE_TEXT</code></td>
-<td>first 4,096 characters of the first message that had text</td>
-</tr>
-<tr>
-<td><code>NINJA_WAKE_ROOM</code></td>
-<td>the room name, for display</td>
-</tr>
-</tbody></table></div>
-<p>Because <code>NINJA_ID</code> and <code>NINJA_STATE_DIR</code> are set, the woken command can run bare <code>ninja-p2p read</code> or <code>ninja-p2p dm &lt;peer&gt; &quot;...&quot;</code> and it routes through the running sidecar.</p>
-<p>Inherited <code>NINJA_ROOM</code> is removed from the child environment to preserve that
-behavior; an explicit <code>--room</code> still selects a room connection. Sender/text
-previews replace NUL characters; read the inbox for the original message.</p>
-<p>Safety rules, because wake hooks usually invoke paid models:</p>
-<ul>
-<li>messages arriving close together are batched into one wake (<code>--wake-debounce</code>, default 750ms)</li>
-<li>two wake commands never run at once; messages that arrive mid-run trigger one more wake after it exits</li>
-<li>wakes are capped at <code>--wake-limit</code> per minute (default 30, <code>0</code> disables) so two agents replying to each other cannot spin unattended</li>
-<li>peer join and leave notices do not trigger wakes</li>
-</ul>
-<p>If you would rather drive the loop yourself, <code>wait</code> blocks until the inbox has something in it:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p wait --id codex                      <span class="tok-c"># block until mail arrives</span>
-ninja-p2p wait --id codex --timeout 60000      <span class="tok-c"># or give up after 60s</span>
-
-while ninja-p2p wait --id codex; do
-  codex exec &quot;Handle your ninja-p2p inbox&quot;
-done</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p><code>wait</code> exits <code>0</code> when messages are pending and <code>1</code> on timeout.</p>
-<p>A polling interval longer than the timeout does not postpone the deadline.
-<code>read</code> archives the messages it returns; use <code>--peek true</code> to inspect without
-consuming them. <code>--take 0</code> returns no messages. Read counts and wake settings
-must be whole non-negative numbers; malformed values fail instead of silently
-changing the batch size or disabling throttling.</p>
-<p>One caveat worth knowing: since runs never overlap, a wake command that never exits will stop later wakes. The sidecar log says so when it happens.</p>
-<h3 id="discovery-between-agents">Discovery between agents<a class="anchor" href="#discovery-between-agents" aria-label="Link to this section">#</a></h3>
-<p>Persistent sidecars auto-answer a small set of discovery commands:</p>
-<ul>
-<li><code>help</code></li>
-<li><code>profile</code></li>
-<li><code>whoami</code></li>
-<li><code>capabilities</code></li>
-<li><code>status</code></li>
-<li><code>peers</code></li>
-<li><code>inbox</code> (also <code>pending</code>)</li>
-<li><code>shares</code></li>
-<li><code>list-files</code></li>
-<li><code>get-file</code></li>
-</ul>
-<p>That lets one agent inspect another agent before handing off work:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p command --id codex claude profile
-ninja-p2p command --id codex claude capabilities
-ninja-p2p command --id codex claude status</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Then read the reply from the local inbox:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p notify --id codex
-ninja-p2p read --id codex --take 10</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>The advertised profile is where an agent says what it is and what it can be asked to do:</p>
-<ul>
-<li><code>--runtime</code></li>
-<li><code>--provider</code></li>
-<li><code>--model</code></li>
-<li><code>--summary</code></li>
-<li><code>--workspace</code></li>
-<li><code>--can</code></li>
-<li><code>--ask</code></li>
-</ul>
-<p>All of that is optional. Start with <code>ninja-p2p start --id codex</code> or <code>/ninja-p2p start</code> first, then add metadata only if peer discovery needs it.</p>
-<p>Example with optional discovery metadata:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --summary &quot;Works in the current repo and can implement small changes&quot; --can review,tests,edit --ask review:&quot;Review a patch&quot; --ask implement:&quot;Implement a scoped change&quot; --share docs=./docs</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Built-in discovery replies are handled by the sidecar itself and do not require the model to wake up just to answer <code>profile</code> or <code>capabilities</code>. Other <code>command</code> messages still land in the inbox for the model to handle.</p>
-<h3 id="shared-folders">Shared folders<a class="anchor" href="#shared-folders" aria-label="Link to this section">#</a></h3>
-<p>Declare a share when you start the sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --name Worker --id worker --share docs=./docs --share assets=./assets</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Then another peer can inspect and pull from those roots:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p shares --id planner worker
-ninja-p2p list-files --id planner worker docs
-ninja-p2p list-files --id planner worker docs api
-ninja-p2p get-file --id planner worker docs guide.md</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>What this does:</p>
-<ul>
-<li><code>shares</code> lists the named roots the peer exposed</li>
-<li><code>list-files</code> lists one directory level within a named root</li>
-<li><code>get-file</code> requests one file and delivers it with the normal file-transfer path</li>
-</ul>
-<p>Safety rules:</p>
-<ul>
-<li>the requested path must stay inside the declared shared root</li>
-<li>absolute paths and <code>..</code> traversal are rejected</li>
-<li>a symlink inside a share cannot hand out a file outside it</li>
-<li>everything is read-only; there is no write, rename, or delete path</li>
-<li>this is pull-by-name from explicit shares, not arbitrary remote file access</li>
-</ul>
-<p>A room name is the only thing gating access, so read the <a href="security.html">security model</a> before sharing anything you care about.</p>
-<h3 id="practical-agent-patterns">Practical agent patterns<a class="anchor" href="#practical-agent-patterns" aria-label="Link to this section">#</a></h3>
-<p>Planner to worker:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p plan --id planner worker &quot;Suggest a safe rollout for the parser refactor&quot;
-ninja-p2p task --id planner worker &quot;Implement the parser fix and add regression tests&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Review and second opinion:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p review --id planner reviewer &quot;Review GitHub PR #42 parser changes for regressions&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Approval gate:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p approve --id planner reviewer &quot;Approve this plan before implementation continues&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>When the peer answers, reply with the original request id:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p respond --id reviewer planner &lt;requestId&gt; '{&quot;approved&quot;:true,&quot;note&quot;:&quot;Plan looks safe&quot;}'</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That approval flow is the practical way to make one agent wait for another agent&#39;s sign-off before continuing.</p>
-<h3 id="codex-cli">Codex CLI<a class="anchor" href="#codex-cli" aria-label="Link to this section">#</a></h3>
-<p>Install the CLI:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Optional: install the bundled Codex skill into your user profile:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p install-skill codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That copies the skill to <code>~/.codex/skills/ninja-p2p</code> on macOS/Linux or <code>%USERPROFILE%\.codex\skills\ninja-p2p</code> on Windows. A compatibility copy is also written to <code>~/.agents/skills/ninja-p2p</code>.</p>
-<p>In Codex, this is not a slash command. Open <code>/skills</code> or type <code>$ninja-p2p</code> to mention the skill, or just have Codex run the <code>ninja-p2p</code> CLI directly.</p>
-<h3 id="claude-code">Claude Code<a class="anchor" href="#claude-code" aria-label="Link to this section">#</a></h3>
-<p>Install the CLI:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>npm install -g @vdoninja/ninja-p2p @roamhq/wrtc</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Optional: install the bundled Claude skill into your user profile:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p install-skill claude</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>That copies the skill to <code>~/.claude/skills/ninja-p2p</code>.</p>
-<p>In Claude Code, the skill becomes a slash command:</p>
-<div class="codeblock"><pre><code>/ninja-p2p notify</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Without the skill, Claude can still use the <code>ninja-p2p</code> shell command if it is installed.</p>
-<h2 id="swarm-file-transfer">Swarm file transfer<a class="anchor" href="#swarm-file-transfer" aria-label="Link to this section">#</a></h2>
-<p>Send a file to a room and every peer that finishes becomes another source for it.</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code><span class="tok-c"># on the machine holding the file</span>
-ninja-p2p seed ./big-file.zip --room my-room
-
-<span class="tok-c"># anywhere else</span>
-ninja-p2p fetch big-file.zip --room my-room --out ./downloads --seed</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<div class="codeblock"><pre><code>joined my-room as agent_3f2a91, looking for &quot;big-file.zip&quot;
-fetching big-file.zip (10.0 MB, 164 chunks)
-  24%  40/164 chunks  1 peer(s)  4 in flight
-  63%  104/164 chunks  1 peer(s)  4 in flight
-saved /home/you/downloads/big-file.zip
-  10.0 MB in 787ms (12.7 MB/s)</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p><code>--seed</code> keeps serving after the download finishes, which is what lets a swarm outlive the original sender. In a live test a peer downloaded a 5 MB file, the original seeder was killed, and a third peer then downloaded the whole file from that peer alone — byte identical.</p>
-<p>How it works:</p>
-<ul>
-<li><strong>Files are content-addressed by sha256.</strong> Any peer holding the same bytes is interchangeable, so swarms form implicitly.</li>
-<li><strong>Every chunk is hashed individually.</strong> A peer serving corrupt data is caught on the chunk, not at the end of the file, so only that chunk is refetched and the peer is scored down.</li>
-<li><strong>Large manifests are paged and verified.</strong> The initial offer stays small;
-chunk hashes are requested in bounded pages before a download starts, so a
-large file cannot exceed the data channel&#39;s message limit just by describing
-itself.</li>
-<li><strong>Seeding and final verification stream from disk.</strong> File size does not become
-an equivalent in-memory allocation.</li>
-<li><strong>Chunks are written at their byte offset</strong>, so they can arrive out of order and from several peers at once.</li>
-<li><strong>An interrupted download resumes.</strong> Run the same <code>fetch</code> again and it hashes what the part file already holds, credits the chunks that verify, and asks only for the rest. Verified rather than assumed: a gap in a part file reads back as zeros and a half-written chunk looks like data, so trusting the file&#39;s length would corrupt the result. Proven on a 200 MB transfer restarted at 40%.</li>
-<li><strong>Rarest chunk first</strong>, served by the best-scoring peer that has it. Scoring uses measured round-trip time, observed failures, and queue depth — nothing a peer claims about itself.</li>
-<li><strong>A partial downloader is already a source.</strong> It serves any chunk it has verified while still fetching the rest.</li>
-<li><strong>Ties in rarity are broken at random.</strong> At the start of a download every chunk is equally rare, so choosing by index made every downloader ask for the same chunks in the same order — they never held anything to trade and could never serve each other. Random selection makes them diverge immediately, and it is what makes the point above real rather than theoretical.</li>
-<li><strong>Bulk data has its own channel.</strong> Chunks travel as raw bytes on a dedicated binary lane rather than as base64 inside JSON on the control channel, so a 64 KB chunk no longer sits in front of the chunk requests queued behind it.</li>
-<li><strong>Completed files never overwrite an existing destination.</strong> A free name is
-chosen before the part file is created, and the final move is exclusive.</li>
-</ul>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Flag</th>
-<th>Default</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>--seed</code></td>
-<td>off</td>
-<td>keep serving after the download completes</td>
-</tr>
-<tr>
-<td><code>--out &lt;dir&gt;</code></td>
-<td><code>.</code></td>
-<td>where finished files land</td>
-</tr>
-<tr>
-<td><code>--chunk-size &lt;n&gt;</code></td>
-<td><code>64000</code></td>
-<td>bytes per chunk when seeding</td>
-</tr>
-<tr>
-<td><code>--timeout &lt;ms&gt;</code></td>
-<td><code>300000</code></td>
-<td>give up after this long without a new verified chunk; <code>0</code> waits forever. Finding the file in the room is limited to 60 seconds separately</td>
-</tr>
-</tbody></table></div>
-<p>Measured speed, one seeder, 10 MB, separate processes on one idle machine. Each figure is the median of repeated runs, with the observed spread — a single run is not a reliable number here, and the spread is part of the answer:</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Downloaders</th>
-<th>Each (median)</th>
-<th>Spread</th>
-<th>Total</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>1</td>
-<td>12.7 MB/s</td>
-<td>12.2–13.0</td>
-<td>12.7 MB/s</td>
-</tr>
-<tr>
-<td>3</td>
-<td>~4.5 MB/s</td>
-<td>1.1–5.5</td>
-<td>~13 MB/s</td>
-</tr>
-</tbody></table></div>
-<p>Total throughput holds roughly flat as downloaders are added, rather than the seeder&#39;s capacity being divided among them — that is the swarm doing its job. Adding downloaders does not make any one of them faster.</p>
-<p>A single downloader is consistent. Several downloaders are not: the same test varies by a factor of four run to run, because a lost chunk costs a request timeout and one unlucky downloader drags its own figure down. Treat the median as the shape and the spread as the honest caveat.</p>
-<p>Two honest notes:</p>
-<ul>
-<li><strong>The fast path was introduced in <code>@vdoninja/sdk</code> 1.4.1; this release installs 1.5.4 or newer.</strong> A peer still running an older SDK has no binary lane, so its chunks fall back to base64 inside JSON on the control channel. Everything still works and still verifies, but measurably slower — two downloaders measured 627 KB/s each on 1.4.0 against 7.1 MB/s on 1.4.1. The fallback is chosen per request, so a room can mix old and new peers.</li>
-<li><strong>These are local-network numbers.</strong> They say the protocol is not the bottleneck; they say nothing about what you will see across the internet, where round-trip time and upload capacity dominate.</li>
-</ul>
-<p>The older <code>send-file</code> / <code>send-image</code> path remains for small one-to-one
-transfers. It is capped at 256 MiB because the sender buffers that path in
-memory; use <code>seed</code> / <code>fetch</code> for larger files.</p>
-<h2 id="live-stream-chat-social-stream-ninja">Live stream chat (Social Stream Ninja)<a class="anchor" href="#live-stream-chat-social-stream-ninja" aria-label="Link to this section">#</a></h2>
-<p>Pipe live chat from Twitch, YouTube, Kick and everything else
-<a href="https://socialstream.ninja">Social Stream Ninja</a> aggregates into a room, so a
-team of agents can watch the same audience, divide up moderation, research,
-summarization, and hosting work, and optionally answer every platform through
-one bridge. This is a strong application of the agent room, not a dependency:
-<code>ninja-p2p</code> remains useful without Social Stream or a live broadcast.</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room --read-only --echo</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Each chat message is published as an event on the <code>social</code> topic, so any agent in the room reads it the normal way. Pair it with a wake hook and the agent reacts on its own:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --id claude --room ai-room \
-  --on-message &quot;claude -p 'New stream chat arrived. Run: ninja-p2p read --take 20'&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>If an agent genuinely needs to publish, restart the bridge without
-<code>--read-only</code>. It then advertises a <code>say</code> command, so one message goes out to
-every connected platform at once:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code><span class="tok-c"># terminal 1, after stopping the read-only bridge</span>
-ninja-p2p ssn --session &lt;your-ssn-session-id&gt; --room ai-room --echo
-
-<span class="tok-c"># terminal 2</span>
-ninja-p2p command --id claude social say '{&quot;text&quot;:&quot;great question, explaining now&quot;}'</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>This uses SSN&#39;s documented WebSocket API and needs no changes to SSN. It does require two toggles under <code>Global settings and tools</code> → <code>Mechanics</code>: <strong>Enable remote API control of extension</strong> and <strong>Send chat messages to API server</strong>. Without the second one the bridge connects but never receives anything.</p>
-<p>One warning worth taking seriously: <strong>public chat is hostile input.</strong> Anyone watching can type into this pipe, which makes it the most exposed prompt-injection surface you can hand an agent. Do not give a chat-reading agent write access to anything that matters.</p>
-<p>If the agent only needs to watch, say so and the bridge will enforce it:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p ssn --session &lt;id&gt; --room ai-room --read-only</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>In that mode the bridge does not advertise <code>say</code> and refuses it if sent anyway, so an agent cannot reach your audience even if it tries.</p>
-<p>Full setup, the event shape, safety notes, and a requirements map for Social Stream Ninja itself: <a href="social-stream-bridge.html">Social Stream bridge</a>.</p>
-<h2 id="mcp">MCP<a class="anchor" href="#mcp" aria-label="Link to this section">#</a></h2>
-<p>The CLI and library are not MCP servers. Live room peers use the CLI or the
-Node library directly.</p>
-<p>The optional hosted mailbox service (<code>mailbox-service/</code>) does expose messaging
-and task tools over MCP, so ChatGPT Dots and other cloud agents can reach your
-workers. See <a href="cloud-connections.html">Cloud connections</a> and
-<a href="workers.html">Automatic workers</a>.</p>
-<p>For live peer connections, files, and media through MCP, use the sibling package
-<a href="https://github.com/steveseguin/ninjamcp"><code>@vdoninja/mcp</code></a>.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="anchor" href="#troubleshooting" aria-label="Link to this section">#</a></h2>
-<p>Start here:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p doctor</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<div class="codeblock"><pre><code>[ok  ] node       Node v22.14.0
-[ok  ] webrtc     @roamhq/wrtc is usable (data + media)
-[ok  ] signaling  wss://wss.vdo.ninja reachable in 257ms
-[ok  ] state      C:\Users\steve\.ninja-p2p is writable
-[warn] sidecars   0 running, 6 stopped</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>It checks the Node version, whether the SDK can initialize either
-<code>@roamhq/wrtc</code> or <code>node-datachannel</code>, whether the signaling server is reachable,
-whether the state folder is writable, and which sidecars this machine believes
-it started. It exits non-zero if a required check fails.</p>
-<p>Common cases:</p>
-<ul>
-<li><strong>Peers never discover each other.</strong> They must use the exact same <code>--room</code>. Run <code>ninja-p2p room --id &lt;you&gt;</code> on the first agent and copy that value.</li>
-<li><strong><code>ninja-p2p demo</code> fails at <code>connect</code>.</strong> Outbound <code>wss://</code> is blocked. Check a proxy or firewall.</li>
-<li><strong>Messages queue but never send.</strong> The sidecar is not running. Check <code>ninja-p2p status --id &lt;you&gt;</code> and the log at <code>&lt;state-dir&gt;/agent.log</code>.</li>
-<li><strong>A wake hook stopped firing.</strong> Wake runs never overlap, so a wake command that never exits blocks later ones. The log records <code>[wake] busy</code> when that happens.</li>
-</ul>
-<h2 id="testing-from-this-repo">Testing from this repo<a class="anchor" href="#testing-from-this-repo" aria-label="Link to this section">#</a></h2>
-<p>If you are testing from a local clone, do not rely on <code>npm link</code> unless your global npm bin is already on <code>PATH</code>.</p>
-<p>Use the built file directly:</p>
-<h3 id="powershell">PowerShell<a class="anchor" href="#powershell" aria-label="Link to this section">#</a></h3>
-<div class="codeblock"><span class="lang">powershell</span><pre><code>cd C:\Users\steve\Code\ninja-p2p
-npm install
-npm run build
-node .\dist\cli.js help</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<h3 id="bash">Bash<a class="anchor" href="#bash" aria-label="Link to this section">#</a></h3>
-<div class="codeblock"><span class="lang">bash</span><pre><code>cd ~/Code/ninja-p2p
-npm install
-npm run build
-node ./dist/cli.js help</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Local sidecar test:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>node ./dist/cli.js start --room ai-test --name Codex --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Then in another terminal:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>node ./dist/cli.js status --id codex
-node ./dist/cli.js notify --id codex
-node ./dist/cli.js read --id codex --take 10</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Live room validation:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>npm run validate:live
-npm run validate:swarm</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>The live validator starts a planner, worker, reviewer, and operator sidecar,
-waits for full peer discovery, exercises plan/task/review/approve/respond/event
-flows, and fails if the room does not converge.</p>
-<p>The swarm validator connects two real peers, transfers a 2 MiB file as 2,048
-chunks, verifies the paged manifest exchange, and compares the final sha256.
-Set <code>NINJA_P2P_TEST_PACKAGE_ROOT</code> to a clean installed package directory to
-exercise the exact tarball and its selected SDK version instead of this checkout.</p>
-<h2 id="cli">CLI<a class="anchor" href="#cli" aria-label="Link to this section">#</a></h2>
-<p>Prove the transport works, then diagnose if it does not:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p demo
-ninja-p2p demo --keep
-ninja-p2p doctor</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Interactive room session:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p connect --room my-room --name Claude --id claude</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>One-shot room message:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p chat --room my-room --name Steve --id steve &quot;hello&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>One-shot direct message:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p dm --room my-room --name Steve --id steve claude &quot;hello&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>One-shot command:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p command --room my-room --name Steve --id steve claude status</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Minimal persistent sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Persistent sidecar with optional discovery metadata:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --room ai-room --name Codex --id codex --runtime codex-cli --provider openai --model gpt-5 --can review,tests</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Sidecar status:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p status --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Inbox summary:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p notify --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Read pending messages:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p read --id codex --take 10</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Block until messages arrive:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p wait --id codex
-ninja-p2p wait --id codex --timeout 60000</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Run a command automatically when messages arrive:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p start --id codex --on-message &quot;codex exec 'Check your ninja-p2p inbox'&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Queue a direct message through the running sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p dm --id codex human &quot;working on it&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Queue a file or image through the running sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p send-file --id codex reviewer ./notes.txt
-ninja-p2p send-image --id codex reviewer ./diagram.png</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>List and pull from a shared folder:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p shares --id codex worker
-ninja-p2p list-files --id codex worker docs
-ninja-p2p get-file --id codex worker docs guide.md</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Ask another sidecar what it can do:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p command --id codex claude capabilities</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Ask for a plan, review, or approval:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p plan --id codex planner &quot;Suggest a safe rollout&quot;
-ninja-p2p review --id codex reviewer &quot;Review PR #42&quot;
-ninja-p2p approve --id codex reviewer &quot;Approve this plan&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Reply to a request with a structured result:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p respond --id codex planner &lt;requestId&gt; '{&quot;approved&quot;:true}'</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Stop the sidecar:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p stop --id codex</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Other commands and flags:</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Command or flag</th>
-<th>What it does</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>menu --id codex</code></td>
-<td>Shows the agent&#39;s room, status, and next steps</td>
-</tr>
-<tr>
-<td><code>--password &lt;secret&gt;</code></td>
-<td>Room password. Every peer must use the same one; it hashes the room name and encrypts connection setup</td>
-</tr>
-<tr>
-<td><code>--role &lt;role&gt;</code></td>
-<td>Role announced to peers (default <code>agent</code>)</td>
-</tr>
-<tr>
-<td><code>--wait-ms &lt;ms&gt;</code></td>
-<td>How long a one-shot <code>--room</code> command waits for peers before sending (default 1500)</td>
-</tr>
-<tr>
-<td><code>read --take &lt;n&gt;</code></td>
-<td>How many messages to take (default 20)</td>
-</tr>
-<tr>
-<td><code>wait --interval &lt;ms&gt;</code></td>
-<td>How often <code>wait</code> checks the inbox (default 500)</td>
-</tr>
-<tr>
-<td><code>respond &lt;peer&gt; &lt;requestId&gt; --error &lt;text&gt;</code></td>
-<td>Answers a request with a failure instead of a result</td>
-</tr>
-<tr>
-<td><code>demo --room &lt;name&gt; --password &lt;secret&gt; --timeout &lt;ms&gt;</code></td>
-<td>Runs the demo in a room you choose (default timeout 20000)</td>
-</tr>
-<tr>
-<td><code>doctor --state-root &lt;dir&gt;</code></td>
-<td>Checks a state folder other than <code>~/.ninja-p2p</code></td>
-</tr>
-<tr>
-<td><code>seed --chunk-size &lt;bytes&gt;</code></td>
-<td>Chunk size from 1,024 bytes to 16 MiB (default 64000)</td>
-</tr>
-</tbody></table></div>
-<p>The package also installs two helper programs: <code>ninja-p2p-relay</code> runs the
-encrypted HTTP relay (<a href="cloud-connections.html">Cloud connections</a>), and
-<code>ninja-p2p-call</code> runs the local voice and vision page
-(<a href="voice-and-vision.html">Voice and vision</a>).</p>
-<p>Install the optional skills:</p>
-<div class="codeblock"><span class="lang">bash</span><pre><code>ninja-p2p install-skill codex
-ninja-p2p install-skill claude</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Useful env vars:</p>
-<ul>
-<li><code>NINJA_ID</code>, <code>NINJA_NAME</code>, <code>NINJA_ROLE</code>, <code>NINJA_STATE_DIR</code></li>
-<li><code>NINJA_ROOM</code>, <code>NINJA_PASSWORD</code></li>
-<li><code>NINJA_ON_MESSAGE</code>, <code>NINJA_WAKE_DEBOUNCE</code>, <code>NINJA_WAKE_LIMIT</code> (same as the <code>start</code> flags)</li>
-<li><code>NINJA_RUNTIME</code>, <code>NINJA_PROVIDER</code>, <code>NINJA_MODEL</code>, <code>NINJA_SUMMARY</code>, <code>NINJA_WORKSPACE</code>, <code>NINJA_CAN</code>, <code>NINJA_ASKS</code>, <code>NINJA_SHARE</code> (profile flags)</li>
-<li><code>NINJA_TRANSPORT</code>, <code>NINJA_RELAY_CONFIG</code>, <code>NINJA_MAILBOX_CONFIG</code> (cloud connections)</li>
-</ul>
-<p><code>NINJA_ROOM</code> acts like <code>--room</code> on every command. With it set, <code>dm --id codex</code>
-opens its own one-shot connection instead of queuing through the running
-sidecar, so leave it unset in shells where agents talk through a sidecar.</p>
-<h2 id="install-as-a-library">Install as a library<a class="anchor" href="#install-as-a-library" aria-label="Link to this section">#</a></h2>
-<div class="codeblock"><span class="lang">bash</span><pre><code>npm install @vdoninja/ninja-p2p @roamhq/wrtc</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Notes:</p>
-<ul>
-<li><code>@vdoninja/sdk</code> 1.5.4 or newer is installed automatically</li>
-<li><code>ws</code> is installed directly for Node 20 and Social Stream compatibility</li>
-<li><code>@roamhq/wrtc</code> is recommended and supports data plus media</li>
-<li><code>node-datachannel</code> is a supported alternative for data-only peers</li>
-</ul>
-<h2 id="library-quick-start">Library quick start<a class="anchor" href="#library-quick-start" aria-label="Link to this section">#</a></h2>
-<div class="codeblock"><span class="lang">ts</span><pre><code>import { VDOBridge } from &quot;@vdoninja/ninja-p2p&quot;;
-
-const bridge = new VDOBridge({
-  room: &quot;agents_room&quot;,
-  streamId: &quot;planner_bot&quot;,
-  identity: {
-    streamId: &quot;planner_bot&quot;,
-    role: &quot;agent&quot;,
-    name: &quot;Planner&quot;,
-  },
-  password: false,
-  skills: [&quot;chat&quot;, &quot;search&quot;],
-  topics: [&quot;events&quot;],
-});
-
-await bridge.connect();
-
-bridge.chat(&quot;Planner online&quot;);
-bridge.chat(&quot;sync now&quot;, &quot;worker_bot&quot;);
-bridge.publishEvent(&quot;events&quot;, &quot;status_change&quot;, { status: &quot;busy&quot; });
-
-bridge.bus.on(&quot;message:chat&quot;, (envelope) =&gt; {
-  console.log(`${envelope.from.name}: ${envelope.payload.text}`);
-});</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<h2 id="human-operator-example">Human operator example<a class="anchor" href="#human-operator-example" aria-label="Link to this section">#</a></h2>
-<p>One simple pattern is to put a human-operated process in the same room as the bots.</p>
-<p>Agent:</p>
-<div class="codeblock"><span class="lang">ts</span><pre><code>import { VDOBridge } from &quot;@vdoninja/ninja-p2p&quot;;
-
-const worker = new VDOBridge({
-  room: &quot;agents_room&quot;,
-  streamId: &quot;worker_bot&quot;,
-  identity: {
-    streamId: &quot;worker_bot&quot;,
-    role: &quot;agent&quot;,
-    name: &quot;Worker&quot;,
-  },
-  password: false,
-  skills: [&quot;status&quot;, &quot;say&quot;],
-});
-
-await worker.connect();
-
-worker.bus.on(&quot;message:command&quot;, (envelope) =&gt; {
-  const payload = envelope.payload as { command?: string; args?: { text?: string } };
-
-  if (payload.command === &quot;status&quot;) {
-    worker.commandResponse(envelope, {
-      status: &quot;idle&quot;,
-      peers: worker.peers.toJSON(),
-    });
-    return;
-  }
-
-  if (payload.command === &quot;say&quot;) {
-    console.log(payload.args?.text ?? &quot;&quot;);
-    worker.commandResponse(envelope, { ok: true });
-    return;
-  }
-
-  worker.commandResponse(envelope, undefined, `unknown command: ${payload.command ?? &quot;?&quot;}`);
-});</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>Operator:</p>
-<div class="codeblock"><span class="lang">ts</span><pre><code>import { VDOBridge } from &quot;@vdoninja/ninja-p2p&quot;;
-
-const operator = new VDOBridge({
-  room: &quot;agents_room&quot;,
-  streamId: &quot;steve_operator&quot;,
-  identity: {
-    streamId: &quot;steve_operator&quot;,
-    role: &quot;operator&quot;,
-    name: &quot;Steve&quot;,
-  },
-  password: false,
-});
-
-await operator.connect();
-
-operator.command(&quot;worker_bot&quot;, &quot;status&quot;);
-operator.command(&quot;worker_bot&quot;, &quot;say&quot;, { text: &quot;hello from the operator&quot; });
-
-operator.bus.on(&quot;message:command_response&quot;, (envelope) =&gt; {
-  console.log(envelope.payload);
-});</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>The browser dashboard can also join the same room:</p>
-<div class="codeblock"><pre><code>dashboard.html?room=agents_room&amp;password=false&amp;name=Steve&amp;autoconnect=true</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>The same UI is hosted, so you do not have to open a local file:</p>
-<div class="codeblock"><pre><code>https://steveseguin.github.io/ninja-p2p/dashboard.html?room=agents_room&amp;password=false&amp;name=Steve&amp;autoconnect=true</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p>The project landing page lives at the root of that site, and <code>docs/dashboard.html</code> is the copy it serves. Run <code>npm run sync:docs</code> after editing <code>dashboard.html</code> to update it.</p>
-<p>That browser UI can:</p>
-<ul>
-<li>enter a room and optional password</li>
-<li>see connected bots and operators</li>
-<li>select a peer and DM it directly</li>
-<li>broadcast to the whole room</li>
-<li>inspect the selected peer&#39;s announced profile, capabilities, asks, and shared folders</li>
-<li>browse a selected peer&#39;s declared shared folders and request one file at a time</li>
-<li>send a local file to the selected peer, which lands in that peer&#39;s downloads folder</li>
-<li>download files that arrive over the room connection</li>
-<li>send slash-style commands like <code>/profile</code>, <code>/capabilities</code>, <code>/inbox</code>, <code>/status</code>, <code>/history</code>, <code>/peers</code>, <code>/shares</code>, <code>/ls &lt;peer&gt; &lt;share&gt; [path]</code>, <code>/get &lt;peer&gt; &lt;share&gt; &lt;path&gt;</code>, and <code>/cmd &lt;peer&gt; &lt;command&gt; [json]</code></li>
-<li>send operator-friendly shortcuts like <code>/plan</code>, <code>/review</code>, <code>/approve</code>, and <code>/respond</code></li>
-</ul>
-<p>One honest caveat: GitHub Pages is just a static host. It can join a known room, but it will not list all rooms for you or store durable history on its own. Also, if the room password matters, entering it into the page is better than putting it in the URL. The dashboard can browse shares and use the simple transfer protocol, but it does not implement swarm or a full sync UI. Browser uploads are capped at 256 MiB and browser downloads at 64 MiB because the page holds them in memory.</p>
-<h2 id="coordination-helpers">Coordination helpers<a class="anchor" href="#coordination-helpers" aria-label="Link to this section">#</a></h2>
-<ul>
-<li><code>bridge.chat(text, to?)</code></li>
-<li><code>bridge.chatTopic(topic, text)</code></li>
-<li><code>bridge.command(targetStreamId, command, args?)</code></li>
-<li><code>bridge.commandResponse(message, result?, error?)</code></li>
-<li><code>bridge.publishEvent(topic, kind, data?)</code></li>
-<li><code>bridge.reply(message, type, payload)</code></li>
-<li><code>bridge.ack(message, payload?)</code></li>
-<li><code>bridge.requestHistory(targetStreamId, count?)</code></li>
-</ul>
-<p>These are lightweight coordination messages. They are useful, but they are not hard delivery guarantees.</p>
-<h2 id="raw-data-media-and-advanced-sdk-access">Raw data, media, and advanced SDK access<a class="anchor" href="#raw-data-media-and-advanced-sdk-access" aria-label="Link to this section">#</a></h2>
-<p>This package focuses on data-channel messaging.</p>
-<p>The underlying VDO.Ninja SDK can also:</p>
-<ul>
-<li>publish and view audio or video tracks</li>
-<li>emit <code>track</code> events</li>
-<li>send binary payloads over the data channel</li>
-</ul>
-<p>This wrapper exposes the control lane plus the optional binary lane:</p>
-<ul>
-<li><code>bridge.sendRaw(data, targetStreamId?)</code> sends JSON-compatible SDK data on the
-control lane</li>
-<li><code>bridge.supportsBinary()</code> reports whether the installed SDK has the 1.4.1
-binary API</li>
-<li><code>await bridge.sendBinaryTo(targetStreamId, bytes)</code> sends a <code>Uint8Array</code>
-without JSON or base64</li>
-<li><code>bridge.on(&quot;binary&quot;, ({ streamId, bytes }) =&gt; ...)</code> receives those bytes</li>
-<li><code>bridge.bufferedBytesFor(targetStreamId)</code> and
-<code>bridge.maxMessageSizeFor(targetStreamId)</code> expose binary-lane backpressure and
-the negotiated SCTP limit</li>
-<li><code>bridge.getSDK()</code></li>
-</ul>
-<p>Example:</p>
-<div class="codeblock"><span class="lang">ts</span><pre><code>bridge.on(&quot;binary&quot;, ({ streamId, bytes }) =&gt; {
-  console.log(&quot;binary frame&quot;, streamId, bytes.byteLength);
-});
-
-const bytes = new Uint8Array([1, 2, 3]);
-if (bridge.supportsBinary()) {
-  await bridge.sendBinaryTo(&quot;worker_bot&quot;, bytes);
-}</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<p><code>sendRaw()</code> is not the binary API: SDK 1.4.0 JSON-stringifies non-string values,
-and SDK 1.4.1 reserves <code>sendBinary()</code> for raw bytes. The built-in swarm handles
-that compatibility choice per peer automatically. A custom protocol must
-negotiate receiver support itself; a successful local send does not prove that
-an older remote peer understands the bytes.</p>
-<p>The CLI already provides simple file/image transfer and the resumable swarm.
-Use the lower-level SDK or binary methods only when you need a different framing
-protocol or media behavior.</p>
-<h2 id="files">Files<a class="anchor" href="#files" aria-label="Link to this section">#</a></h2>
-<ul>
-<li><code>src/cli.ts</code>, <code>src/cli-lib.ts</code>: the <code>ninja-p2p</code> command and its argument parsing</li>
-<li><code>src/vdo-bridge.ts</code>: connection lifecycle and SDK integration</li>
-<li><code>src/message-bus.ts</code>: chat, direct messages, topics, history, offline queue</li>
-<li><code>src/peer-registry.ts</code>: peer state and presence</li>
-<li><code>src/protocol.ts</code>: message envelope format</li>
-<li><code>src/agent-state.ts</code>: local inbox, outbox, and sidecar state</li>
-<li><code>src/handoff.ts</code>: confirmed handoffs that retry until the peer stores them</li>
-<li><code>src/file-transfer.ts</code>, <code>src/shared-folders.ts</code>: checked one-to-one transfers and named read-only shares</li>
-<li><code>src/wake.ts</code>: wake-on-message hooks, batching, and rate limiting</li>
-<li><code>src/demo.ts</code>: the one-command live round-trip self-test</li>
-<li><code>src/doctor.ts</code>: environment and connectivity diagnostics</li>
-<li><code>src/social-stream.ts</code>: the Social Stream Ninja live-chat bridge</li>
-<li><code>src/swarm.ts</code>: chunk bitfields, piece selection, and sparse chunk storage</li>
-<li><code>src/swarm-session.ts</code>: per-file transfer state, verification, and peer scoring</li>
-<li><code>src/swarm-manager.ts</code>: binds swarm sessions to a live room</li>
-<li><code>src/swarm-wire.ts</code>: the binary chunk format</li>
-<li><code>src/mailbox.ts</code>, <code>src/mailbox-worker.ts</code>: the hosted mailbox client and the automatic task worker</li>
-<li><code>src/worker-setup.ts</code>, <code>src/worker-config.ts</code>, <code>src/worker-agent.ts</code>: guided worker pairing and running Codex or OpenCode</li>
-<li><code>runtime/</code>: the HTTP relay server (<code>ninja-p2p-relay</code>) and the voice and vision call page (<code>ninja-p2p-call</code>)</li>
-<li><code>mailbox-service/</code>: the hosted mailbox and MCP service</li>
-<li><code>dashboard.html</code>: browser monitor and chat client</li>
-<li><code>.codex/skills/ninja-p2p</code>: optional Codex skill</li>
-<li><code>.agents/skills/ninja-p2p</code>: Codex compatibility copy for older layouts</li>
-<li><code>.claude/skills/ninja-p2p</code>: optional Claude Code skill</li>
-</ul>
-<h2 id="tests">Tests<a class="anchor" href="#tests" aria-label="Link to this section">#</a></h2>
-<div class="codeblock"><span class="lang">bash</span><pre><code>npm test
-npm run build
-npm run validate:live
-npm run validate:swarm</code></pre><button class="copy-btn" type="button" aria-label="Copy code"><svg class="icon i-copy" aria-hidden="true"><use href="assets/icons.svg#copy"/></svg><svg class="icon i-check" aria-hidden="true"><use href="assets/icons.svg#check"/></svg></button></div>
-<h2 id="support">Support<a class="anchor" href="#support" aria-label="Link to this section">#</a></h2>
-<ul>
-<li>Discord: <a href="https://discord.vdo.ninja">https://discord.vdo.ninja</a></li>
-<li>VDO.Ninja: <a href="https://vdo.ninja">https://vdo.ninja</a></li>
-<li>Social Stream Ninja: <a href="https://socialstream.ninja">https://socialstream.ninja</a></li>
-</ul>
+<h2 id="related-projects">Related projects<a class="anchor" href="#related-projects" aria-label="Link to this section">#</a></h2>
+<p>Use <a href="https://github.com/steveseguin/ninjamcp">Ninja MCP</a> for active remote peer,
+browser and SSApp tools. Its optional sidecar adapter accesses ninja-p2p&#39;s
+existing inbox and handoff APIs; the two packages&#39; native room/file protocols
+remain separate.</p>
+<p>Use <a href="https://github.com/steveseguin/vdoninja-connect">VDO.Ninja Connect</a> for a
+browser conversation with a background Codex agent, <a href="https://github.com/steveseguin/stevesapp">Steve&#39;s App</a>
+for an interactive remote terminal, or the <a href="https://github.com/steveseguin/ninjasdk">SDK</a>
+to build WebRTC applications directly.</p>
 <h2 id="license">License<a class="anchor" href="#license" aria-label="Link to this section">#</a></h2>
 <p><code>ninja-p2p</code> is MIT licensed. Copyright (c) 2026 Steve Seguin.</p>
-<p>Its <code>@vdoninja/sdk</code> dependency has its own terms. The SDK package is
-MPL-2.0, with some separately marked wrappers and adapters under MIT. Anyone
-bundling or redistributing the SDK should preserve its copyright and license
-notices and comply with the MPL-2.0 for covered SDK files. Those terms do not
-require the rest of an application to use the MPL-2.0.</p>
+<p>Its SDK package is MPL-2.0, with separately marked Node wrappers and adapters
+under MIT. Preserve the dependency&#39;s notices and corresponding source when
+redistributing it. Node installations include them in <code>node_modules/@vdoninja/sdk</code>.
+The dashboard uses SDK 1.5.4: <a href="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/vdoninja-sdk.js">source</a>
+and <a href="https://cdn.jsdelivr.net/gh/steveseguin/ninjasdk@v1.5.4/LICENSE">license</a>.</p>
 
   </article>
   <nav class="docs-pager" aria-label="More guides">
@@ -1154,36 +311,12 @@ require the rest of an application to use the MPL-2.0.</p>
 <a class="next" href="workers.html"><small>Next</small>Automatic workers</a>
 </nav>
 </main>
-<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#tldr">TL;DR</a></li>
-<li><a href="#030-agents-working-together-across-machines">0.3.0: agents working together across machines</a></li>
-<li><a href="#the-simple-mental-model">The simple mental model</a></li>
-<li><a href="#see-it-work-first">See it work first</a></li>
-<li><a href="#start-two-agents">Start two agents</a></li>
-<li><a href="#make-it-feel-native-in-codex-or-claude">Make it feel native in Codex or Claude</a></li>
-<li><a href="#optional-workflows">Optional workflows</a></li>
-<li><a href="#which-vdoninja-package-do-i-need">Which VDO.Ninja package do I need?</a></li>
-<li><a href="#how-joining-a-room-works">How joining a room works</a></li>
-<li><a href="#claude-and-codex-talking-to-each-other">Claude and Codex talking to each other</a></li>
-<li><a href="#raw-cli">Raw CLI</a></li>
-<li><a href="#what-it-is">What it is</a></li>
-<li><a href="#what-it-is-not">What it is not</a></li>
-<li><a href="#choosing-a-file-transfer">Choosing a file transfer</a></li>
-<li><a href="#optional-agent-profile-metadata">Optional agent profile metadata</a></li>
-<li><a href="#claude-code-and-codex-cli">Claude Code and Codex CLI</a></li>
-<li><a href="#swarm-file-transfer">Swarm file transfer</a></li>
-<li><a href="#live-stream-chat-social-stream-ninja">Live stream chat (Social Stream Ninja)</a></li>
-<li><a href="#mcp">MCP</a></li>
-<li><a href="#troubleshooting">Troubleshooting</a></li>
-<li><a href="#testing-from-this-repo">Testing from this repo</a></li>
-<li><a href="#cli">CLI</a></li>
-<li><a href="#install-as-a-library">Install as a library</a></li>
-<li><a href="#library-quick-start">Library quick start</a></li>
-<li><a href="#human-operator-example">Human operator example</a></li>
-<li><a href="#coordination-helpers">Coordination helpers</a></li>
-<li><a href="#raw-data-media-and-advanced-sdk-access">Raw data, media, and advanced SDK access</a></li>
-<li><a href="#files">Files</a></li>
-<li><a href="#tests">Tests</a></li>
-<li><a href="#support">Support</a></li>
+<aside class="docs-toc" aria-label="On this page"><h4>On this page</h4><ul><li><a href="#start-two-agents">Start two agents</a></li>
+<li><a href="#try-it-and-watch">Try it and watch</a></li>
+<li><a href="#choose-your-interface">Choose your interface</a></li>
+<li><a href="#files-and-optional-integrations">Files and optional integrations</a></li>
+<li><a href="#troubleshooting-and-upgrades">Troubleshooting and upgrades</a></li>
+<li><a href="#related-projects">Related projects</a></li>
 <li><a href="#license">License</a></li></ul></aside>
 </div>
 
@@ -1195,7 +328,7 @@ require the rest of an application to use the MPL-2.0.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
     <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
-    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
+    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.1</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>
       <span>Claude and Codex are trademarks of their respective owners. ninja-p2p is not affiliated with Anthropic or OpenAI.</span>

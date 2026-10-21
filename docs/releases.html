@@ -138,6 +138,10 @@
 <li><a href="cloud-connections.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#globe"/></svg>Cloud connections</a></li>
 <li><a href="voice-and-vision.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#monitor"/></svg>Voice &amp; vision</a></li>
 </ul>
+<h4>Reference</h4><ul>
+<li><a href="cli.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#terminal"/></svg>CLI reference</a></li>
+<li><a href="library.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#book"/></svg>Node library</a></li>
+</ul>
 <h4>Project</h4><ul>
 <li><a href="changelog.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#list"/></svg>Changelog</a></li>
 <li><a href="recovery-validation.html"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#rotate"/></svg>Recovery validation</a></li>
@@ -155,13 +159,13 @@
     <div class="meta">
       <a href="https://github.com/steveseguin/ninja-p2p/blob/main/docs/releases.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#github"/></svg>View source</a>
       <a href="https://github.com/steveseguin/ninja-p2p/edit/main/docs/releases.md"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#wrench"/></svg>Suggest an edit</a>
-      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.0</a>
+      <a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#package"/></svg>v0.3.1</a>
     </div>
   </header>
   <article class="prose">
 <p>Releases use the existing GitHub Actions trusted-publishing workflow. A pushed
 <code>v*</code> tag triggers <code>.github/workflows/release.yml</code>, verifies the package version,
-runs tests and the adapter check, and publishes to npm with provenance.
+runs core and mailbox tests and the adapter check, and publishes to npm with provenance.
 GitHub release notes are created separately. No npm token belongs in the repo.</p>
 <h2 id="prepare-on-main">Prepare on main<a class="anchor" href="#prepare-on-main" aria-label="Link to this section">#</a></h2>
 <ol>
@@ -176,6 +180,8 @@ version and FAQ data into the landing page.</li>
 <li>Run <code>npm run check</code>, <code>node scripts/validate-adapter.mjs @roamhq/wrtc</code>, and
 <code>npm pack --dry-run</code>. Confirm new user guides are included in <code>package.json</code>&#39;s
 <code>files</code> list and that secrets, scratch files, and local state are excluded.</li>
+<li>On Node 22.16+ or 24, run <code>npm ci --prefix mailbox-service --ignore-scripts</code>
+and <code>npm run test:mailbox</code> for mailbox authorization, tasks, and worker checks.</li>
 <li>For transport changes, use the repository&#39;s live room/swarm validators in
 isolated test rooms. Never use a real streaming channel as a release test.
 Use the <a href="recovery-validation.html">recovery validator</a> for controlled message
@@ -225,7 +231,7 @@ when the existing version has already been published.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="./#how">How it works</a></li><li><a href="dashboard.html">Dashboard</a></li><li><a href="./#faq">FAQ</a></li><li><a href="https://www.npmjs.com/package/@vdoninja/ninja-p2p">npm package</a></li></ul></div>
     <div><h4>Docs</h4><ul><li><a href="guide.html">Guide</a></li><li><a href="workers.html">Automatic workers</a></li><li><a href="cloud-connections.html">Cloud connections</a></li><li><a href="security.html">Security model</a></li><li><a href="operations.html">Operations</a></li></ul></div>
-    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.0</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
+    <div><h4>Community</h4><ul><li><a href="https://github.com/steveseguin/ninja-p2p">GitHub</a></li><li><a href="https://discord.vdo.ninja">Discord</a></li><li><a href="changelog.html">Release 0.3.1</a></li><li><a href="https://github.com/steveseguin/ninja-p2p/issues">Report an issue</a></li></ul></div>
     <div class="footer-base">
       <span>&copy; 2026 Steve Seguin &middot; <a href="https://github.com/steveseguin/ninja-p2p/blob/main/LICENSE">MIT License</a></span>
       <span>Claude and Codex are trademarks of their respective owners. ninja-p2p is not affiliated with Anthropic or OpenAI.</span>

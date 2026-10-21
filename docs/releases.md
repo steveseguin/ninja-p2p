@@ -2,7 +2,7 @@
 
 Releases use the existing GitHub Actions trusted-publishing workflow. A pushed
 `v*` tag triggers `.github/workflows/release.yml`, verifies the package version,
-runs tests and the adapter check, and publishes to npm with provenance.
+runs core and mailbox tests and the adapter check, and publishes to npm with provenance.
 GitHub release notes are created separately. No npm token belongs in the repo.
 
 ## Prepare on main
@@ -18,7 +18,9 @@ GitHub release notes are created separately. No npm token belongs in the repo.
 4. Run `npm run check`, `node scripts/validate-adapter.mjs @roamhq/wrtc`, and
    `npm pack --dry-run`. Confirm new user guides are included in `package.json`'s
    `files` list and that secrets, scratch files, and local state are excluded.
-5. For transport changes, use the repository's live room/swarm validators in
+5. On Node 22.16+ or 24, run `npm ci --prefix mailbox-service --ignore-scripts`
+   and `npm run test:mailbox` for mailbox authorization, tasks, and worker checks.
+6. For transport changes, use the repository's live room/swarm validators in
    isolated test rooms. Never use a real streaming channel as a release test.
    Use the [recovery validator](recovery-validation.md) for controlled message
    loss/restart checks and verified TURN-only transfers.

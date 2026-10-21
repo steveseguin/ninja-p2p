@@ -1,6 +1,6 @@
 {
   "name": "@vdoninja/ninja-p2p",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Agent coordination and file handoffs over WebRTC or HTTP, with persistent inboxes, hosted agent mailboxes, wake hooks, resumable file swarms, and an optional Social Stream bridge",
   "type": "module",
   "main": "./dist/index.js",
@@ -73,7 +73,9 @@
     "docs/voice-and-vision.md",
     ".codex/skills/ninja-p2p",
     ".agents/skills/ninja-p2p",
-    ".claude/skills/ninja-p2p"
+    ".claude/skills/ninja-p2p",
+    "docs/cli.md",
+    "docs/library.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -84,7 +86,8 @@
     "validate:live": "node ./scripts/validate-live.mjs",
     "validate:swarm": "node ./scripts/validate-swarm-live.mjs",
     "sync:docs": "node scripts/build-site.mjs",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test:mailbox": "node --test --test-concurrency=1 tests/mailbox.test.mjs tests/mailbox-tasks.test.mjs tests/mailbox-worker.test.mjs tests/mailbox-security.test.mjs"
   },
   "keywords": [
     "p2p",
@@ -130,7 +133,7 @@
     "ws": "^8.21.0"
   },
   "peerDependencies": {
-    "@roamhq/wrtc": "^0.8.0",
+    "@roamhq/wrtc": "^0.8.0 || ^0.10.0",
     "node-datachannel": "^0.32.3"
   },
   "peerDependenciesMeta": {

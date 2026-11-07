@@ -390,6 +390,165 @@ describe("offers arriving from peers", () => {
 });
 
 describe("greeting and answering peers", () => {
+  it("reclaims the part-file lock immediately when a paused download restarts", () => {
+    withManager(({ manager, bridge, dir }) => {
+      const data = new Uint8Array(2048).fill(7);
+      const manifest = buildManifest(data, "pause.bin", "application/octet-stream", 1024);
+      bridge.deliver("seed", "swarm_offer", manifest);
+      manager.fetch(manifest.fileId);
+      bridge.deliver("seed", "swarm_chunk", {
+        fileId: manifest.fileId, index: 0, data: Buffer.from(data.subarray(0, 1024)).toString("base64"),
+      });
+      manager.stop();
+      manager.start();
+      assert.equal(manager.sessionFor(manifest.fileId)!.progress().haveChunks, 1);
+      assert.equal(readdirSync(path.join(dir, "work")).filter((name) => name.endsWith(".lock")).length, 1);
+    });
+  });
+
+  it("rescans chunks received by another download while this manager was stopped", () => {
+    withManager(({ manager, bridge, dir }) => {
+      const data = new Uint8Array(3072).fill(9);
+      const manifest = buildManifest(data, "shared-pause.bin", "application/octet-stream", 1024);
+      bridge.deliver("seed", "swarm_offer", manifest);
+      manager.fetch(manifest.fileId);
+      bridge.deliver("seed", "swarm_chunk", {
+        fileId: manifest.fileId, index: 0, data: Buffer.from(data.subarray(0, 1024)).toString("base64"),
+      });
+      manager.stop();
+      const otherBridge = new FakeBridge();
+      const other = new SwarmManager({
+        bridge: otherBridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+        downloadDir: path.join(dir, "dl"), workDir: path.join(dir, "work"),
+      });
+      try {
+        other.start();
+        otherBridge.deliver("seed", "swarm_offer", manifest);
+        other.fetch(manifest.fileId);
+        otherBridge.deliver("seed", "swarm_chunk", {
+          fileId: manifest.fileId, index: 1, data: Buffer.from(data.subarray(1024, 2048)).toString("base64"),
+        });
+      } finally { other.stop(); }
+      manager.start();
+      assert.equal(manager.sessionFor(manifest.fileId)!.progress().haveChunks, 2);
+    });
+  });
+
+  it("does not reuse stale verified chunks when another downloader finished during a pause", () => {
+    withManager(({ manager, bridge, dir, logs }) => {
+      const data = new Uint8Array(2048).fill(13);
+      const manifest = buildManifest(data, "finished-pause.bin", "application/octet-stream", 1024);
+      const deliver = (target: FakeBridge, index: number): void => {
+        target.deliver("seed", "swarm_chunk", {
+          fileId: manifest.fileId, index,
+          data: Buffer.from(data.subarray(index * 1024, (index + 1) * 1024)).toString("base64"),
+        });
+      };
+      bridge.deliver("seed", "swarm_offer", manifest);
+      manager.fetch(manifest.fileId);
+      deliver(bridge, 0);
+      manager.stop();
+      const otherBridge = new FakeBridge();
+      const other = new SwarmManager({
+        bridge: otherBridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+        downloadDir: path.join(dir, "dl"), workDir: path.join(dir, "work"),
+      });
+      try {
+        other.start();
+        otherBridge.deliver("seed", "swarm_offer", manifest);
+        other.fetch(manifest.fileId);
+        assert.equal(other.sessionFor(manifest.fileId)!.progress().haveChunks, 1);
+        deliver(otherBridge, 1);
+        assert.equal(other.sessionFor(manifest.fileId)!.isComplete(), true);
+      } finally { other.stop(); }
+      const original = path.join(dir, "dl", manifest.name);
+      assert.deepEqual(readFileSync(original), Buffer.from(data));
+      manager.start();
+      const restarted = manager.sessionFor(manifest.fileId)!;
+      assert.equal(restarted.progress().haveChunks, 0, "the old part was moved, so no chunks remain verified");
+      assert.notEqual(restarted.savedPath, original, "the completed destination must not be overwritten");
+      deliver(bridge, 0);
+      deliver(bridge, 1);
+      assert.equal(manager.sessionFor(manifest.fileId)!.isComplete(), true);
+      assert.deepEqual(readFileSync(restarted.savedPath), Buffer.from(data));
+      assert.deepEqual(readFileSync(original), Buffer.from(data));
+      assert.equal(logs.some((line) => /finish failed/.test(line)), false);
+    });
+  });
+
+  it("reports a competing downloader before resuming requests after a pause", () => {
+    withManager(({ manager, bridge, dir, logs }) => {
+      const manifest = buildManifest(new Uint8Array(2048).fill(17), "owned-pause.bin", "application/octet-stream", 1024);
+      bridge.deliver("seed", "swarm_offer", manifest);
+      manager.fetch(manifest.fileId);
+      manager.stop();
+      const otherBridge = new FakeBridge();
+      const other = new SwarmManager({
+        bridge: otherBridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+        downloadDir: path.join(dir, "dl"), workDir: path.join(dir, "work"),
+      });
+      try {
+        other.start();
+        otherBridge.deliver("seed", "swarm_offer", manifest);
+        other.fetch(manifest.fileId);
+        manager.start();
+        assert.equal(manager.sessionFor(manifest.fileId), undefined);
+        assert.ok(logs.some((line) => /another download/.test(line)));
+        assert.equal(other.sessionFor(manifest.fileId)!.progress().haveChunks, 0);
+      } finally { other.stop(); }
+    });
+  });
+
+  it("does not leak timers if a resume error callback stops and restarts the manager", (t) => {
+    withManager(({ manager: other, bridge: otherBridge, dir }) => {
+      const manifest = buildManifest(new Uint8Array(2048).fill(19), "reentrant-pause.bin", "application/octet-stream", 1024);
+      const bridge = new FakeBridge();
+      let restartInCallback = false;
+      let callbackRestarts = 0;
+      const manager = new SwarmManager({
+        bridge: bridge as unknown as import("../src/vdo-bridge.js").VDOBridge,
+        downloadDir: path.join(dir, "dl"), workDir: path.join(dir, "work"),
+        onError: () => {
+          if (!restartInCallback) return;
+          restartInCallback = false;
+          callbackRestarts += 1;
+          manager.stop();
+          manager.start();
+        },
+      });
+      const active = new Set<ReturnType<typeof setInterval>>();
+      const schedule = globalThis.setInterval;
+      const cancel = globalThis.clearInterval;
+      t.mock.method(globalThis, "setInterval", (...args: Parameters<typeof setInterval>) => {
+        const timer = schedule(...args);
+        active.add(timer);
+        return timer;
+      });
+      t.mock.method(globalThis, "clearInterval", (timer: ReturnType<typeof setInterval>) => {
+        active.delete(timer);
+        cancel(timer);
+      });
+      try {
+        manager.start();
+        bridge.deliver("seed", "swarm_offer", manifest);
+        manager.fetch(manifest.fileId);
+        manager.stop();
+        otherBridge.deliver("seed", "swarm_offer", manifest);
+        other.fetch(manifest.fileId);
+        restartInCallback = true;
+        manager.start();
+        assert.equal(callbackRestarts, 1);
+        assert.equal(active.size, 2, "only the inner restart's timers remain active");
+        manager.stop();
+        assert.equal(active.size, 0);
+      } finally {
+        manager.stop();
+        for (const timer of active) cancel(timer);
+        t.mock.restoreAll();
+      }
+    });
+  });
+
   it("restart can retry manifest pages without waiting for stopped requests to time out", () => {
     withManager(({ manager, bridge }) => {
       const manifest = buildManifest(new Uint8Array(257 * 1024), "paged.bin", "application/octet-stream", 1024);
@@ -421,8 +580,13 @@ describe("greeting and answering peers", () => {
         bridge.deliver("seed", "swarm_chunk", { fileId: manifest.fileId, index, data: Buffer.from(data.subarray(index * 1024, (index + 1) * 1024)).toString("base64") });
       }
       manager.start();
+      const restarted = manager.sessionFor(manifest.fileId)!;
+      bridge.deliver("seed", "swarm_announce", {
+        fileId: manifest.fileId, totalChunks: manifest.totalChunks,
+        chunks: ChunkMap.full(manifest.totalChunks).toBase64(),
+      });
       bridge.sent.length = 0;
-      assert.equal(session.pump(), 2);
+      assert.equal(restarted.pump(), 2);
       assert.equal(bridge.ofType("swarm_request").length, 2);
     });
   });

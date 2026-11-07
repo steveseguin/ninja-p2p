@@ -165,6 +165,7 @@ export class SwarmManager {
     mkdirSync(this.workDir, { recursive: true });
     this.started = true;
     this.lifecycleGeneration += 1;
+    const generation = this.lifecycleGeneration;
 
     const listen = <T>(emitter: EventEmitter, name: string, handler: (event: T) => void): void => {
       emitter.on(name, handler);
@@ -229,6 +230,16 @@ export class SwarmManager {
       this.schedulePump();
     });
 
+    // stop() relinquishes ownership of download parts. Reconstruct them before
+    // requesting or advertising chunks, since another downloader may have
+    // changed or completed them while this manager was paused.
+    for (const fileId of [...this.wanted]) {
+      if (!this.started || this.lifecycleGeneration !== generation) return;
+      const offer = this.offers.get(fileId);
+      if (offer?.manifest) this.startDownload(offer.manifest);
+    }
+    if (!this.started || this.lifecycleGeneration !== generation) return;
+
     this.pumpTimer = setInterval(() => this.pump(), this.pumpIntervalMs);
     if (this.pumpTimer.unref) this.pumpTimer.unref();
     this.announceTimer = setInterval(() => this.announceAll(), this.announceIntervalMs);
@@ -250,9 +261,15 @@ export class SwarmManager {
     // Replies arriving while stopped are ignored. Do not carry their pending
     // slots across restart or charge peers a timeout for our own pause.
     for (const offer of this.offers.values()) offer.requestedAt.clear();
-    for (const session of this.sessions.values()) {
+    for (const [fileId, session] of this.sessions) {
       session.abandonInFlight();
       session.close();
+      if (!this.seeding.has(fileId)) {
+        // Once the part lock is released, its verified bitfield is no longer
+        // ours to trust. Preserve the request, not the old download session.
+        this.sessions.delete(fileId);
+        this.wanted.add(fileId);
+      }
     }
   }
 
